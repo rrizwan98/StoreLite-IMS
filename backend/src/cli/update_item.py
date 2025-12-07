@@ -50,18 +50,23 @@ def update_item_menu(db_session):
         print("  1. Update Price")
         print("  2. Update Stock Quantity")
         print("  3. Update Both")
-        print("  4. Cancel")
+        print("  4. Delete Item (Soft Delete)")
+        print("  5. Cancel")
 
         choice = get_numeric_input(
-            prompt="Select option (1-4): ",
+            prompt="Select option (1-5): ",
             min_val=1,
-            max_val=4,
-            error_message="Please select a valid option (1-4)"
+            max_val=5,
+            error_message="Please select a valid option (1-5)"
         )
 
-        if choice == 4:
+        if choice == 5:
             display_error("Update cancelled.")
             return
+
+        if choice == 4:
+            # Soft delete operation
+            return _soft_delete_item(inventory_service, item, item_id)
 
         new_price = None
         new_stock = None
@@ -117,3 +122,30 @@ def update_item_menu(db_session):
         display_error(f"Database Error: {str(e)}")
     except Exception as e:
         display_error(f"Unexpected error: {str(e)}")
+
+
+def _soft_delete_item(inventory_service, item, item_id):
+    """
+    Soft delete an item with confirmation
+    Items are marked as inactive rather than physically deleted
+    """
+    display_header("SOFT DELETE ITEM")
+    print(f"\nWarning: You are about to delete item:")
+    print(f"  ID: {item.id}")
+    print(f"  Name: {item.name}")
+    print(f"  Price: {item.unit_price}")
+    print(f"\nThis item will be marked as inactive and hidden from searches.")
+    print("Historical data will be preserved for billing records.\n")
+
+    if not confirm("Proceed with deletion?"):
+        display_error("Deletion cancelled.")
+        return None
+
+    # Perform soft delete
+    updated_item = inventory_service.update_item(item_id, is_active=False)
+
+    display_header("DELETION COMPLETE")
+    print(f"Item {item_id} ({item.name}) has been marked as inactive.")
+    display_success(f"Item {item_id} deleted successfully!")
+
+    return updated_item
