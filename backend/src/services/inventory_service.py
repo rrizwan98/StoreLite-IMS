@@ -4,7 +4,7 @@ Inventory management service for items
 
 import logging
 from decimal import Decimal
-from typing import List, Optional
+from typing import List, Optional, Union
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 
@@ -151,19 +151,80 @@ class InventoryService:
             logger.error(f"Failed to search items: {e}")
             raise DatabaseError(f"Failed to search items: {str(e)}")
 
+    def search_by_category(self, category: str) -> List[Item]:
+        """
+        Search for items by category (case-insensitive)
+
+        Args:
+            category: Category name to search for
+
+        Returns:
+            List of active items matching the category
+        """
+        # Validate category exists
+        valid_categories = ["Grocery", "Garments", "Beauty", "Utilities", "Other"]
+        category_lower = category.lower()
+
+        if category_lower not in [c.lower() for c in valid_categories]:
+            return []  # Invalid category returns empty list
+
+        # Search case-insensitive, only active items
+        items = self.session.query(Item).filter(
+            Item.is_active == True,
+            Item.category.ilike(category)
+        ).all()
+
+        logger.info(f"Searched items by category '{category}': found {len(items)} items")
+        return items
+
+    def search_by_price_range(self, min_price: Decimal, max_price: Decimal) -> List[Item]:
+        """
+        Search for items by price range (inclusive)
+
+        Args:
+            min_price: Minimum unit price (inclusive)
+            max_price: Maximum unit price (inclusive)
+
+        Returns:
+            List of active items within price range
+
+        Raises:
+            ValueError: If min_price > max_price
+        """
+        if min_price > max_price:
+            raise ValueError("min_price must be <= max_price")
+
+        # Search within price range, only active items
+        items = self.session.query(Item).filter(
+            Item.is_active == True,
+            Item.unit_price >= min_price,
+            Item.unit_price <= max_price
+        ).all()
+
+        logger.info(f"Searched items by price range [{min_price}-{max_price}]: found {len(items)} items")
+        return items
+
     def update_item(
         self,
         item_id: int,
-        unit_price: Optional[str | float | Decimal] = None,
-        stock_qty: Optional[str | float | Decimal] = None,
+        name: Optional[str] = None,
+        category: Optional[str] = None,
+        unit: Optional[str] = None,
+        unit_price: Optional[Union[str, float, Decimal]] = None,
+        stock_qty: Optional[Union[str, float, Decimal]] = None,
+        is_active: Optional[bool] = None,
     ) -> Item:
         """
-        Update item price and/or stock
+        Update item fields
 
         Args:
             item_id: Item ID
-            unit_price: New unit price (optional)
+            name: New name (optional)
+            category: New category (optional)
+            unit: New unit (optional)
+            unit_price: New price (optional)
             stock_qty: New stock quantity (optional)
+            is_active: New active status (optional) - False = soft delete
 
         Returns:
             Updated Item object
@@ -174,7 +235,28 @@ class InventoryService:
             DatabaseError: If database operation fails
         """
         try:
-            item = self.get_item(item_id)
+            item = self.session.query(Item).filter(Item.id == item_id).first()
+            if not item:
+                raise ItemNotFoundError(f"Item {item_id} not found")
+
+            # Update fields only if provided
+            if name is not None:
+                is_valid, error_msg = ValidationService.validate_item_name(name)
+                if not is_valid:
+                    raise ValidationError(error_msg)
+                item.name = name
+
+            if category is not None:
+                is_valid, error_msg = ValidationService.validate_category(category)
+                if not is_valid:
+                    raise ValidationError(error_msg)
+                item.category = category
+
+            if unit is not None:
+                is_valid, error_msg = ValidationService.validate_unit(unit)
+                if not is_valid:
+                    raise ValidationError(error_msg)
+                item.unit = unit
 
             # Validate and update price
             if unit_price is not None:
@@ -190,8 +272,12 @@ class InventoryService:
                     raise ValidationError(error_msg)
                 item.stock_qty = Decimal(str(stock_qty))
 
+            if is_active is not None:
+                item.is_active = is_active
+
             self.session.flush()
-            logger.info(f"Item updated: {item.id}")
+            action = "deactivated" if is_active == False else "updated"
+            logger.info(f"Item {item_id} {action}")
             return item
         except (ValidationError, ItemNotFoundError):
             raise
