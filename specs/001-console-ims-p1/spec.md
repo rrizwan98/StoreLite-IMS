@@ -5,6 +5,18 @@
 **Status**: Draft
 **Input**: Console-based Python inventory and billing system with PostgreSQL backend for Phase 1. Database URL configured in .env file. Python 3.12+.
 
+## Clarifications
+
+### Session 2025-12-07
+
+- Q: How should users select/enter categories during item creation? → A: Searchable dropdown with predefined categories (Grocery, Garments, Beauty, Utilities, Other). As user types, matching categories are suggested. User can only select from the filtered list; custom/non-existent categories are rejected. This prevents data entry errors and ensures data consistency.
+
+- Q: How should users select/enter units (kg, liter, piece, etc.) during item creation? → A: Searchable dropdown with predefined units (kg, g, liter, ml, piece, box, pack, other). As user types, matching units are suggested. User can only select from the list; attempting to enter custom units must be rejected. This ensures consistency with categories and prevents inventory data quality issues.
+
+- Q: When should customer_name be prompted during bill creation (required, optional, or not at all)? → A: Optional; system prompts user for customer_name during bill creation, but user can press Enter/skip to leave it blank. This allows tracking known customers while respecting privacy for cash sales and walk-in customers.
+
+- Q: How should invalid menu selections be handled (re-prompt, return to main, silent ignore, or crash)? → A: Re-prompt with error message in the same menu context. Invalid input shows "Invalid choice. Please select from the menu above." and loops back to the current menu. This maintains user context and prevents frustration from restarting workflows.
+
 ## User Scenarios & Testing *(mandatory)*
 
 <!--
@@ -30,7 +42,9 @@ A store owner needs to add new products to the inventory system via a simple con
 
 **Acceptance Scenarios**:
 
-1. **Given** the app is running and user is in Manage Inventory menu, **When** user selects "Add new item" and enters name="Sugar", category="Grocery", unit="kg", unit_price=150, stock_qty=100, **Then** the item is inserted into the `items` table and a success message is displayed.
+1. **Given** the app is running and user is in Manage Inventory menu, **When** user selects "Add new item" and enters name="Sugar", searches for category by typing "groc" (sees "Grocery" in suggestions), selects it, searches for unit by typing "k" (sees "kg" in suggestions), selects it, unit_price=150, stock_qty=100, **Then** the item is inserted into the `items` table and a success message is displayed.
+
+1b. **Given** user is adding a new item and types a category or unit that doesn't exist (e.g., category="Electronic" or unit="tons"), **When** they attempt to confirm, **Then** the system shows a validation error requiring them to select from the predefined list.
 
 2. **Given** user enters invalid data (unit_price=-5 or stock_qty="abc"), **When** submitting, **Then** the system shows a validation error and asks for re-entry without saving.
 
@@ -76,9 +90,11 @@ A salesperson creates an invoice by searching for products, selecting quantities
 
 4. **Given** user has added 2 items to cart, **When** they choose "Finish adding items", **Then** the system shows a bill preview with all items, unit prices, quantities, line totals, and grand total.
 
-5. **Given** bill preview is shown, **When** user confirms (y/n), **Then**: Bill is inserted into `bills` table, each cart item is inserted into `bill_items` with snapshots of price/name, inventory stock is decremented for each item, and invoice is printed to console.
+5. **Given** bill preview is shown, **When** user confirms (y/n), **Then**: System prompts for optional customer_name (user can press Enter to skip), prompts for optional store_name (user can press Enter to skip), then inserts bill into `bills` table, inserts each cart item into `bill_items` with snapshots of price/name, decrements inventory stock for each item, and prints invoice to console.
 
-6. **Given** bill is created, **When** invoice prints, **Then** it shows: bill ID, date/time, customer name (if provided), store name (if provided), line items (name, unit, qty, unit_price, line_total), and grand total.
+5b. **Given** user is asked for customer_name during bill confirmation, **When** they press Enter (no input), **Then** the bill is saved with customer_name as NULL, allowing tracking of anonymous customers.
+
+6. **Given** bill is created, **When** invoice prints, **Then** it shows: bill ID, date/time, customer name (if provided, otherwise blank), store name (if provided, otherwise blank), line items (name, unit, qty, unit_price, line_total), and grand total.
 
 ---
 
@@ -89,6 +105,8 @@ A salesperson creates an invoice by searching for products, selecting quantities
 - What if the database connection is lost during bill confirmation? (User is informed; partial bill not saved)
 - Can a user create a bill with zero items? (No; system should require at least one item before confirming)
 - What if unit_price is 0? (Allowed; system should not reject, as some stores may have free items)
+- What if user types a category name that partially matches (e.g., "groc" matching "Grocery")? (Suggestions shown; user must select exact match from dropdown, not free-form entry allowed)
+- What if user types a unit name that partially matches (e.g., "ki" matching "kg")? (Suggestions shown; user must select exact match from dropdown, not free-form entry allowed)
 
 ## Requirements *(mandatory)*
 
@@ -101,7 +119,13 @@ A salesperson creates an invoice by searching for products, selecting quantities
 
 - **FR-001**: System MUST display a main menu with options: "Manage Inventory", "Create New Bill", "Exit"
 
-- **FR-002**: System MUST allow users to add items to inventory with fields: name (required), category, unit (required), unit_price (required, ≥0), stock_qty (required, ≥0)
+- **FR-001a**: System MUST validate all menu selections and re-prompt with "Invalid choice. Please select from the menu above." if user enters an invalid option. The system MUST remain in the current menu context (not return to main menu) until valid input is received.
+
+- **FR-002**: System MUST allow users to add items to inventory with fields: name (required), category (required, selected from predefined list), unit (required), unit_price (required, ≥0), stock_qty (required, ≥0)
+
+- **FR-002a**: System MUST provide a searchable category dropdown during item creation with predefined categories (Grocery, Garments, Beauty, Utilities, Other). As user types, matching categories are suggested. User can only select from the list; attempting to confirm with a non-existent category must show a validation error.
+
+- **FR-002b**: System MUST provide a searchable unit dropdown during item creation with predefined units (kg, g, liter, ml, piece, box, pack, other). As user types, matching units are suggested. User can only select from the list; attempting to confirm with a non-existent unit must show a validation error.
 
 - **FR-003**: System MUST validate all item input fields before saving to database
 
@@ -122,6 +146,8 @@ A salesperson creates an invoice by searching for products, selecting quantities
 - **FR-011**: System MUST show a bill preview with all line items, quantities, prices, line totals, and grand total before confirmation
 
 - **FR-012**: System MUST allow user to confirm or cancel bill creation before persisting to database
+
+- **FR-012a**: System MUST prompt user for optional customer_name and store_name after bill confirmation. User can press Enter to skip either field, leaving it NULL in the database.
 
 - **FR-013**: System MUST insert bill into `bills` table and each line item into `bill_items` table with price/name snapshots on confirmation
 
