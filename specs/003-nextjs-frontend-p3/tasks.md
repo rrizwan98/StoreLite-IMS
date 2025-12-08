@@ -1,9 +1,9 @@
 ---
 feature: 003-nextjs-frontend-p3
 date: 2025-12-08
-status: Phase 1-6 Complete - Basic POS Done, Ready for Enhancements
+status: Phase 1-8 Complete - POS Core Features Done, Ready for Invoice
 total_tasks: 56
-completed_tasks: 38
+completed_tasks: 44
 ---
 
 # Tasks: Next.js Frontend UI (Phase 3) - StoreLite IMS
@@ -204,7 +204,7 @@ completed_tasks: 38
 
 ---
 
-## Phase 7: User Story 5 - Salesperson: Adjust Item Quantity and Remove Items (Priority: P1)
+## Phase 7: User Story 5 - Salesperson: Adjust Item Quantity and Remove Items (Priority: P1) ✅ COMPLETE
 
 **Goal**: Allow quantity editing and item removal from bill with automatic total recalculation (FR-009, FR-010)
 
@@ -212,26 +212,26 @@ completed_tasks: 38
 
 ### Implementation for User Story 5
 
-- [ ] T039 [P] [US5] Update BillItems component `frontend/components/pos/BillItems.tsx` to:
+- [x] T039 [P] [US5] Update BillItems component `frontend/components/pos/BillItems.tsx` to:
   - Make Quantity field editable (input type="number" with validation)
   - Add Delete/Remove button per row
   - On quantity change: call updateQuantity() from useBill hook
   - On delete: call removeItem() from useBill hook
   - Show warning if quantity exceeds available stock (FR-005 from spec: "stock limit warning")
   - Prevent quantity > available stock (client-side validation per FR-005)
-- [ ] T040 [US5] Update useBill hook in `frontend/lib/hooks.ts` to:
+- [x] T040 [US5] Update useBill hook in `frontend/lib/hooks.ts` to:
   - Implement updateQuantity(itemIndex, newQty) - updates quantity, validates against stock
   - Implement removeItem(itemIndex) - removes item from bill
   - Both methods trigger bill summary re-render
-- [ ] T041 [US5] Update POS page `frontend/app/pos/page.tsx` to:
+- [x] T041 [US5] Update POS page `frontend/app/pos/page.tsx` to:
   - Pass updateQuantity and removeItem callbacks from useBill to BillItems component
   - Ensure bill total updates in real-time when quantities change
 
-**Checkpoint**: User Story 5 complete - salesperson can adjust quantities and remove items
+**Checkpoint**: User Story 5 complete - salesperson can adjust quantities and remove items ✅
 
 ---
 
-## Phase 8: User Story 6 - Salesperson: View and Confirm Bill Total (Priority: P1)
+## Phase 8: User Story 6 - Salesperson: View and Confirm Bill Total (Priority: P1) ✅ COMPLETE
 
 **Goal**: Display running bill total that updates as items are added/removed/modified (FR-011)
 
@@ -239,23 +239,23 @@ completed_tasks: 38
 
 ### Implementation for User Story 6
 
-- [ ] T042 [P] [US6] Create BillSummary component `frontend/components/pos/BillSummary.tsx` with:
+- [x] T042 [P] [US6] Create BillSummary component `frontend/components/pos/BillSummary.tsx` with:
   - Display Subtotal (sum of all line totals)
   - Display Grand Total (currently same as subtotal - no tax/discount in Phase 3)
   - Format currency properly (e.g., $123.45)
   - Show "No items yet" or "$0.00" when bill is empty (FR-011 empty state)
   - Accepts bill object as prop with items array
   - Re-renders when bill changes
-- [ ] T043 [US6] Update POS page `frontend/app/pos/page.tsx` to:
+- [x] T043 [US6] Update POS page `frontend/app/pos/page.tsx` to:
   - Import and render BillSummary component below BillItems
   - Pass current bill from useBill hook to BillSummary
   - Verify totals update automatically when quantities change or items added/removed
-- [ ] T044 [US6] Create utility function in `frontend/lib/validation.ts` or new `frontend/lib/calculations.ts`:
+- [x] T044 [US6] Create utility function in `frontend/lib/validation.ts` or new `frontend/lib/calculations.ts`:
   - calculateLineTotal(unitPrice, quantity) - returns line total
   - calculateSubtotal(billItems) - sums all line totals
   - calculateGrandTotal(subtotal) - returns subtotal (no tax/discount for Phase 3)
 
-**Checkpoint**: User Story 6 complete - bill totals display and update in real-time
+**Checkpoint**: User Story 6 complete - bill totals display and update in real-time ✅
 
 ---
 
