@@ -108,7 +108,7 @@ export default function ItemSearch({ onAddItem }: ItemSearchProps) {
 
           {!loading && results.length === 0 && query.length > 0 && (
             <div className="p-4 text-center text-gray-600">
-              <p className="text-sm">No items found matching "{query}"</p>
+              <p className="text-sm">No items found matching &quot;{query}&quot;</p>
             </div>
           )}
 

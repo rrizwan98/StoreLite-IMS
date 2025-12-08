@@ -1,21 +1,26 @@
 /**
  * POS Page
  * Main point of sale interface for processing customer purchases
- * Implements US4 (Search and Add Items to Bill) with foundation for US5-US8
+ * Implements US4-US8: Search, Add, Edit, Remove, Total, Generate Bill, Print Invoice
  */
 
 'use client';
 
-import { useCallback } from 'react';
-import { Item } from '@/lib/types';
-import { useBill } from '@/lib/hooks';
+import { useCallback, useState } from 'react';
+import { Item, Bill } from '@/lib/types';
+import { useBill, useStockMonitor } from '@/lib/hooks';
 import ItemSearch from '@/components/pos/ItemSearch';
 import BillItems from '@/components/pos/BillItems';
 import BillSummary from '@/components/pos/BillSummary';
+import GenerateBillButton from '@/components/pos/GenerateBillButton';
+import InvoiceView from '@/components/pos/InvoiceView';
+import StockWarning from '@/components/pos/StockWarning';
 import ErrorBoundary from '@/components/shared/ErrorBoundary';
 
 export default function POSPage() {
-  const { items, addItem, updateQuantity, removeItem, subtotal, total } = useBill();
+  const { items, addItem, updateQuantity, removeItem, subtotal, total, clearBill } = useBill();
+  const { warning: stockWarning } = useStockMonitor(items);
+  const [generatedBill, setGeneratedBill] = useState<Bill | null>(null);
 
   const handleAddItem = useCallback(
     (item: Item) => {
@@ -38,8 +43,41 @@ export default function POSPage() {
     [removeItem]
   );
 
+  const handleBillGenerated = useCallback((billId: number) => {
+    // For now, create a temporary bill object
+    // In production, you'd fetch the full bill from the API
+    setGeneratedBill({
+      id: billId,
+      total_amount: total,
+      created_at: new Date().toISOString(),
+    });
+  }, [total]);
+
+  const handleNewBill = useCallback(() => {
+    clearBill();
+    setGeneratedBill(null);
+  }, [clearBill]);
+
+  // Show invoice view if bill is generated
+  if (generatedBill) {
+    return (
+      <ErrorBoundary>
+        <InvoiceView
+          bill={generatedBill}
+          billItems={items}
+          onNewBill={handleNewBill}
+          storeName="StoreLite IMS"
+        />
+      </ErrorBoundary>
+    );
+  }
+
+  // Show bill entry form
   return (
     <ErrorBoundary>
+      {/* Stock Warning Overlay */}
+      <StockWarning warning={stockWarning} />
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Main Bill Area */}
         <div className="lg:col-span-2 space-y-6">
@@ -65,13 +103,13 @@ export default function POSPage() {
           <div className="sticky top-6">
             <BillSummary items={items} subtotal={subtotal} total={total} />
 
-            {/* Coming Soon - Generate Bill Button */}
-            <button
-              disabled={items.length === 0}
-              className="w-full mt-4 px-4 py-3 bg-primary text-white font-bold rounded-md hover:bg-opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              💳 Generate Bill
-            </button>
+            {/* Generate Bill Button */}
+            <div className="mt-4">
+              <GenerateBillButton
+                billItems={items}
+                onSuccess={handleBillGenerated}
+              />
+            </div>
 
             {/* Info */}
             <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-900">
@@ -79,7 +117,7 @@ export default function POSPage() {
               <ul className="list-disc list-inside space-y-1 text-xs">
                 <li>Edit quantities if needed</li>
                 <li>Remove any unwanted items</li>
-                <li>Click "Generate Bill" to create invoice</li>
+                <li>Click &quot;Generate Bill&quot; to create invoice</li>
                 <li>Review and print the invoice</li>
               </ul>
             </div>

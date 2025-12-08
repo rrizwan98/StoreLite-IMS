@@ -272,3 +272,78 @@ export const useAsync = <T,>(
 
   return { execute, status, data, error };
 };
+
+/**
+ * useStockMonitor - Monitor stock levels of items in current bill (FR-021)
+ * Polls items every 5-10 seconds to detect if any become unavailable
+ * Returns warning messages and unavailable items list
+ */
+export const useStockMonitor = (billItems: BillItem[], pollIntervalMs: number = 5000) => {
+  const [warning, setWarning] = useState<string | null>(null);
+  const [unavailableItems, setUnavailableItems] = useState<number[]>([]);
+  const pollTimerRef = useRef<NodeJS.Timeout>();
+
+  useEffect(() => {
+    // Don't poll if bill is empty
+    if (billItems.length === 0) {
+      setWarning(null);
+      setUnavailableItems([]);
+      return;
+    }
+
+    const pollStockLevels = async () => {
+      try {
+        // Fetch fresh item data to check stock levels
+        const itemIds = billItems.map((bi) => bi.item_id);
+        const freshItems = await api.getItems();
+
+        // Check if any items in bill are now out of stock
+        const nowUnavailable: number[] = [];
+        const itemsInBill = new Map(billItems.map((bi) => [bi.item_id, bi]));
+
+        freshItems.forEach((item) => {
+          if (itemsInBill.has(item.id) && item.stock_qty <= 0) {
+            nowUnavailable.push(item.id);
+          }
+        });
+
+        setUnavailableItems(nowUnavailable);
+
+        // Generate warning message if items became unavailable
+        if (nowUnavailable.length > 0) {
+          const unavailableNames = freshItems
+            .filter((item) => nowUnavailable.includes(item.id))
+            .map((item) => item.name)
+            .join(', ');
+
+          setWarning(
+            `⚠️ ${unavailableNames} ${nowUnavailable.length === 1 ? 'is' : 'are'} now out of stock`
+          );
+        } else {
+          setWarning(null);
+        }
+      } catch (err) {
+        // Silently fail on polling errors to avoid disrupting user workflow
+        console.debug('Stock monitor polling error:', err);
+      }
+    };
+
+    // Initial poll
+    pollStockLevels();
+
+    // Set up polling interval
+    pollTimerRef.current = setInterval(pollStockLevels, pollIntervalMs);
+
+    // Cleanup
+    return () => {
+      if (pollTimerRef.current) {
+        clearInterval(pollTimerRef.current);
+      }
+    };
+  }, [billItems, pollIntervalMs]);
+
+  return {
+    warning,
+    unavailableItems,
+  };
+};

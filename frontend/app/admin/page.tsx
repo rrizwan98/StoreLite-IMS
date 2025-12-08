@@ -86,7 +86,7 @@ export default function AdminPage() {
           {!loading && items.length > 0 && (
             <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-900">
               <strong>{items.length}</strong> item{items.length !== 1 ? 's' : ''} in inventory
-              {filters.name && <span>, filtered by name: <strong>"{filters.name}"</strong></span>}
+              {filters.name && <span>, filtered by name: <strong>&quot;{filters.name}&quot;</strong></span>}
               {filters.category && <span>, filtered by category: <strong>{filters.category}</strong></span>}
             </div>
           )}
