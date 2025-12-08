@@ -258,10 +258,10 @@ def _display_receipt(final_bill):
     # Itemized list
     total = Decimal("0")
     for bill_item in final_bill.bill_items:
-        item_name = bill_item.item.name
+        item_name = bill_item.item_name
         qty = bill_item.quantity
         unit_price = bill_item.unit_price
-        line_total = bill_item.quantity * bill_item.unit_price
+        line_total = bill_item.line_total
 
         print(f"  {item_name:<17} {qty:>6}  {unit_price:>10}  {line_total:>10}")
         total += line_total
