@@ -53,12 +53,16 @@ def main_menu(db_session):
         print("  6. [X] Exit")
 
         try:
-            choice = get_numeric_input(
+            choice_str = get_numeric_input(
                 prompt="Select option (1-6): ",
-                min_val=1,
-                max_val=6,
-                error_message="Please select a valid option (1-6)"
+                allow_decimal=False
             )
+            choice = int(choice_str)
+
+            if not (1 <= choice <= 6):
+                display_error("Please select a valid option (1-6)")
+                input("\nPress Enter to continue...")
+                continue
 
             if choice == 1:
                 add_item_menu(db_session)

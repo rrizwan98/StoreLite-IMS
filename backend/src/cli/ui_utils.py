@@ -15,17 +15,17 @@ def display_header(title: str) -> None:
 
 def display_error(message: str) -> None:
     """Display an error message"""
-    print(f"\n❌ ERROR: {message}\n")
+    print(f"\n[ERROR] {message}\n")
 
 
 def display_success(message: str) -> None:
     """Display a success message"""
-    print(f"\n✅ SUCCESS: {message}\n")
+    print(f"\n[SUCCESS] {message}\n")
 
 
 def display_info(message: str) -> None:
     """Display an info message"""
-    print(f"ℹ️  {message}")
+    print(f"[INFO] {message}")
 
 
 def display_message(message: str) -> None:
@@ -50,10 +50,10 @@ def format_items_table(items: List) -> None:
 
     # Print header
     print("\n" + "-" * (sum(col_widths) + 7))  # 7 for separators
-    header_row = "│ " + " │ ".join(
+    header_row = "| " + " | ".join(
         h.ljust(w) for h, w in zip(headers, col_widths)
     )
-    print(header_row + " │")
+    print(header_row + " |")
     print("-" * (sum(col_widths) + 7))
 
     # Print rows
@@ -66,10 +66,10 @@ def format_items_table(items: List) -> None:
             f"${float(item.unit_price):.2f}",
             f"{float(item.stock_qty):.2f}",
         ]
-        row_str = "│ " + " │ ".join(
+        row_str = "| " + " | ".join(
             cell.ljust(w) for cell, w in zip(row, col_widths)
         )
-        print(row_str + " │")
+        print(row_str + " |")
 
     print("-" * (sum(col_widths) + 7) + "\n")
 
@@ -180,13 +180,16 @@ def get_input_with_validation(
         return user_input
 
 
-def get_numeric_input(prompt: str, allow_decimal: bool = True) -> Optional[str]:
+def get_numeric_input(prompt: str, allow_decimal: bool = True, min_val=None, max_val=None, error_message: str = None) -> Optional[str]:
     """
-    Get numeric input from user
+    Get numeric input from user with optional range validation
 
     Args:
         prompt: Prompt to display
         allow_decimal: Whether to allow decimal numbers
+        min_val: Minimum value allowed (optional)
+        max_val: Maximum value allowed (optional)
+        error_message: Custom error message for range validation
 
     Returns:
         Numeric string or None if invalid
@@ -200,9 +203,21 @@ def get_numeric_input(prompt: str, allow_decimal: bool = True) -> Optional[str]:
 
         try:
             if allow_decimal:
-                float(user_input)
+                num_val = float(user_input)
             else:
-                int(user_input)
+                num_val = int(user_input)
+
+            # Validate range if specified
+            if min_val is not None and num_val < min_val:
+                err_msg = error_message or f"Please enter a value >= {min_val}"
+                print(f"{err_msg}\n")
+                continue
+
+            if max_val is not None and num_val > max_val:
+                err_msg = error_message or f"Please enter a value <= {max_val}"
+                print(f"{err_msg}\n")
+                continue
+
             return user_input
         except ValueError:
             print(
@@ -230,10 +245,10 @@ def display_bill_preview(cart: List[dict], total: float) -> None:
     print("BILL PREVIEW")
     print("=" * 70)
     print("-" * 70)
-    header_row = "│ " + " │ ".join(
+    header_row = "| " + " | ".join(
         h.ljust(w) for h, w in zip(headers, col_widths)
     )
-    print(header_row + " │")
+    print(header_row + " |")
     print("-" * 70)
 
     for item in cart:
@@ -244,10 +259,10 @@ def display_bill_preview(cart: List[dict], total: float) -> None:
             f"${float(item['unit_price']):.2f}",
             f"${float(item['line_total']):.2f}",
         ]
-        row_str = "│ " + " │ ".join(
+        row_str = "| " + " | ".join(
             cell.ljust(w) for cell, w in zip(row, col_widths)
         )
-        print(row_str + " │")
+        print(row_str + " |")
 
     print("-" * 70)
     total_str = f"TOTAL: ${total:.2f}"
@@ -273,10 +288,10 @@ def display_invoice(bill, bill_items: List) -> None:
     headers = ["Item", "Unit", "Qty", "Unit Price", "Line Total"]
     col_widths = [18, 8, 8, 12, 12]
 
-    header_row = "│ " + " │ ".join(
+    header_row = "| " + " | ".join(
         h.ljust(w) for h, w in zip(headers, col_widths)
     )
-    print(header_row + " │")
+    print(header_row + " |")
     print("-" * 70)
 
     for item in bill_items:
@@ -287,10 +302,10 @@ def display_invoice(bill, bill_items: List) -> None:
             f"${float(item.unit_price):.2f}",
             f"${float(item.line_total):.2f}",
         ]
-        row_str = "│ " + " │ ".join(
+        row_str = "| " + " | ".join(
             cell.ljust(w) for cell, w in zip(row, col_widths)
         )
-        print(row_str + " │")
+        print(row_str + " |")
 
     print("-" * 70)
     total_str = f"TOTAL: ${float(bill.total_amount):.2f}"
