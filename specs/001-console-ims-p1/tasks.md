@@ -1,13 +1,61 @@
-# Tasks: Console-Based Inventory & Billing System (Phase 1)
+# Tasks: Console-Based Inventory & Billing System (Phases 1-7)
 
 **Input**: Design documents from `/specs/001-console-ims-p1/`
 **Prerequisites**: plan.md (architecture & decisions), spec.md (user stories), data-model.md (entities & schema), quickstart.md (setup guide)
 
 **Tests**: TDD-driven; tests written FIRST, executed BEFORE implementation (Red-Green-Refactor cycle per Constitution Principle II)
 
-**Organization**: Tasks grouped by user story to enable independent implementation and testing. All three user stories are P1 priority; can be implemented sequentially (MVP-first) or in parallel (if team capacity allows).
+**Organization**: Tasks grouped by phase and user story to enable independent implementation and testing. All three Phase 1 user stories are P1 priority; Phases 4-7 enhance and extend functionality.
 
 **Path Convention**: `backend/src/` and `backend/tests/` (monolithic console app structure per plan.md)
+
+**Status**:
+- ✅ **Phase 1 Tasks**: COMPLETE (Core inventory & billing) - All tests PASSING
+- ✅ **Phase 4 Tasks**: COMPLETE (Search enhancements & soft-delete) - All tests PASSING
+- ✅ **Phase 5 Tasks**: COMPLETE (Shopping cart management) - All tests PASSING
+- ✅ **Phase 6 Tasks**: COMPLETE (Main menu & statistics) - All tests PASSING
+- ✅ **Phase 7 Tasks**: COMPLETE (Receipt formatting & comprehensive testing) - All tests PASSING
+- 🚀 **Phase 2 Tasks**: IN PROGRESS (FastAPI Backend) - Specification & Planning COMPLETE
+
+**Total Progress**:
+- ✅ **Phases 1, 4-7**: 121 unit tests passing | All functionality implemented and tested
+- 🚀 **Phase 2**: Spec complete, Plan complete, Ready for implementation
+- ⏳ **Phase 3+**: Scheduled for future phases
+
+---
+
+## Phases 4-7 Summary
+
+### Phase 4: Search Enhancements & Soft-Delete
+- ✅ Search items by category (case-insensitive)
+- ✅ Search items by price range (min/max validation)
+- ✅ Soft-delete items (mark inactive, preserve history)
+- ✅ Exclude inactive items from all operations
+- ✅ Unit tests + integration tests
+
+### Phase 5: Shopping Cart Management
+- ✅ In-memory cart with add/view/update/remove operations
+- ✅ Stock validation during cart operations
+- ✅ Automatic line total and cart total calculation
+- ✅ Itemized cart display format
+- ✅ Prevention of empty cart confirmation
+- ✅ Unit tests + integration tests
+
+### Phase 6: Main Menu & System Statistics
+- ✅ Enhanced main menu with category headers
+- ✅ System statistics display (active item count)
+- ✅ Improved UI formatting and spacing
+- ✅ Contract tests for output format consistency
+
+### Phase 7: Receipt Formatting & Testing
+- ✅ Professional receipt format with:
+  - Bill ID and timestamp
+  - Customer name and store name (if provided)
+  - Itemized list showing: item name, quantity, unit price, line total
+  - Grand total amount
+- ✅ End-to-end workflow tests (11 tests)
+- ✅ Contract tests (25 tests)
+- ✅ All tests passing
 
 ---
 

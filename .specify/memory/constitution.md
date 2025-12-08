@@ -28,115 +28,216 @@ Follow-up TODOs: None
 
 ### I. Separation of Concerns (NON-NEGOTIABLE)
 
-Backend and frontend code MUST reside in separate directories at the repository root.
+**What this means:** Keep backend and frontend code completely separate. They talk to each other through API contracts only, never by importing code directly.
 
-**Rules:**
-- `backend/` directory for all Python/FastAPI/MCP/Agent code
-- `frontend/` directory for all Next.js/React code
-- No cross-directory imports; communication via API contracts only
-- Each directory maintains its own dependency management
+**Simple Rules:**
+- **Backend folder**: Put all Python, FastAPI, and AI/Agent code here
+- **Frontend folder**: Put all web app (Next.js/React) code here
+- **No shortcuts**: Never import code from one folder into the other
+- **Own dependencies**: Each folder manages its own packages separately
 
-**Rationale:** Clear boundaries enable independent development, testing, and deployment cycles. Teams can work in parallel without merge conflicts on unrelated code.
+**Why this matters:** When code is separated, teams can work on the backend and frontend at the same time without stepping on each other's toes. It's easier to test, deploy, and fix problems when things are organized this way.
 
 ### II. Test-Driven Development (NON-NEGOTIABLE)
 
-All backend code (console, FastAPI, MCP tools, agent logic) MUST follow TDD methodology.
+**What this means:** Write tests BEFORE you write the real code. This catches bugs early and makes your code more reliable.
 
-**Rules:**
-- Red-Green-Refactor cycle strictly enforced for all backend modules
-- Tests MUST be written before implementation code
-- Tests MUST fail before implementation begins (Red phase)
-- Implementation MUST make tests pass without modifying test assertions (Green phase)
-- Refactoring MUST NOT break existing tests (Refactor phase)
-- Minimum test coverage: 80% for all backend code
-- Test categories: unit, integration, contract (for API endpoints)
+**The 3-Step Process (Red → Green → Refactor):**
 
-**Rationale:** TDD ensures correctness, prevents regressions, and produces maintainable code. The 80% threshold balances thoroughness with practical velocity.
+1. **RED** - Write a test that describes what you want the code to do (it will fail because the code doesn't exist yet)
+2. **GREEN** - Write the simplest code to make the test pass
+3. **REFACTOR** - Clean up the code without breaking the test
+
+**Simple Rules:**
+- Always write the test first, code second
+- Aim for 80% or more of your code to be covered by tests (this means 80% of your code is tested)
+- Don't skip this step to go faster - it actually saves time later
+
+**Example:**
+```python
+# RED: Write test first (will fail)
+def test_add_item():
+    item = add_item("Sugar", "Grocery", 150.00)
+    assert item.name == "Sugar"
+
+# GREEN: Write code to make it pass
+def add_item(name, category, price):
+    return Item(name=name, category=category, unit_price=price)
+
+# REFACTOR: Make it cleaner (test still passes)
+def add_item(name, category, price):
+    validate_inputs(name, category, price)
+    item = Item(name=name, category=category, unit_price=price)
+    save_to_database(item)
+    return item
+```
+
+**Why this matters:** Tests are like a safety net. They catch mistakes before your users do. 80% coverage means most of your code is tested - not perfect, but good enough to catch real problems.
 
 ### III. Phased Implementation
 
-Features MUST be implemented in the defined 6-phase progression.
+**What this means:** Build the system in steps, one piece at a time. Each piece is tested before moving to the next.
 
-**Phases:**
-1. Phase 1: Console Python + PostgreSQL (CLI inventory/billing)
-2. Phase 2: FastAPI Backend (REST API over same logic)
-3. Phase 3: Next.js Frontend (admin + POS pages)
-4. Phase 4: FastMCP Server (MCP tools wrapping business logic)
-5. Phase 5: OpenAI Agents SDK (Gemini-lite + local MCP tools)
-6. Phase 6: ChatKit Frontend (agent UI integration)
+**The 6 Phases (Build in Order):**
+1. **Phase 1**: Command-line app (Python) + Database (PostgreSQL)
+   - ✅ COMPLETED: Users can add products, search, create bills, print receipts
+   - ✅ 121 tests passing
 
-**Rules:**
-- Each phase MUST have passing tests before proceeding to next
-- Console logic (Phase 1) forms the foundation; later phases reuse it
-- FastAPI (Phase 2) wraps Phase 1 logic; does not duplicate it
-- MCP tools (Phase 4) call FastAPI services; no direct DB access from tools
+2. **Phase 2**: Web API (FastAPI) - connects to Phase 1 code
+   - 🚀 CURRENT: Building REST API endpoints to let apps talk to Phase 1
 
-**Rationale:** Incremental delivery reduces risk, allows early validation, and ensures each layer is stable before building upon it.
+3. **Phase 3**: Web Dashboard (Next.js) - pretty interface for people to use
+
+4. **Phase 4**: AI Tools Server - lets AI assistants use the system
+
+5. **Phase 5**: AI Agents - smart assistants that help users
+
+6. **Phase 6**: ChatBot Interface - talk to AI like a chatbot
+
+**Simple Rules:**
+- Each phase must work and be tested before starting the next
+- Don't repeat code - Phase 2 reuses Phase 1's code, doesn't rewrite it
+- Each phase builds on the previous one
+- All tests must pass before moving forward
+
+**Why this matters:** Building step-by-step is safer and faster. You catch mistakes early. Each phase is proven to work before the next team member starts building on top of it.
 
 ### IV. Database-First Design
 
-PostgreSQL (Neon) is the single source of truth for all application state.
+**What this means:** The database is the "one source of truth". Everything important gets saved there, not just in memory.
 
-**Rules:**
-- All data models MUST be defined with explicit schemas
-- Schema migrations MUST be versioned and reversible
-- No in-memory state that bypasses the database for persistent data
-- Snapshots of item name/price in `bill_items` for historical accuracy
-- `is_active` soft-delete pattern for items; no hard deletes
+**Simple Rules:**
+- **Central database**: All data lives in PostgreSQL (our database)
+- **Clear structure**: Data is organized in clearly defined tables (items, bills, bill_items)
+- **Snapshots**: When you sell something, save a copy of its name and price in that sale record (for history)
+- **Soft deletes**: Don't erase items - just mark them as "inactive" so you can still see what was sold
+- **Reversible changes**: Any change to the database structure can be undone if needed
 
-**Rationale:** A single database ensures consistency across phases and prevents data synchronization issues between console, API, and agent interfaces.
+**Example:**
+```
+Items Table:
+- ID: 1, Name: "Sugar", Price: 150.00, Stock: 100, Active: Yes
+- ID: 2, Name: "Rice", Price: 50.00, Stock: 0, Active: No  ← marked inactive
+
+Bills Table:
+- Bill ID: 101, Customer: "John", Total: 300.00
+
+Bill Items Table:
+- Item from Bill 101: Name: "Sugar", Quantity: 2, Price: 150.00 ← snapshot saved
+  (Even if the actual Sugar price changed later, the bill record stays the same)
+```
+
+**Why this matters:** Having one place where all data lives means nobody has to guess what the real information is. It also means you can see the history of what was sold and when, even if prices changed later.
 
 ### V. Contract-First APIs
 
-All API endpoints MUST have defined contracts before implementation.
+**What this means:** Decide exactly what data goes in and comes out of each API endpoint BEFORE you write the code. This prevents surprises and lets frontend and backend teams work at the same time.
 
-**Rules:**
-- Pydantic schemas for all request/response bodies
-- OpenAPI/Swagger documentation auto-generated and maintained
-- Breaking changes require MAJOR version bump
-- MCP tool schemas derived from type hints and docstrings
-- Frontend MUST consume only documented API contracts
+**Simple Rules:**
+- **Contracts first**: Write down what each API endpoint expects and returns
+- **Documentation**: Auto-generate pretty docs (Swagger) so everyone sees the same contract
+- **Structured data**: Use clear formats for requests and responses
+- **No surprises**: If you change an API in a breaking way, bump the version number
 
-**Rationale:** Contract-first prevents integration surprises and enables parallel frontend/backend development.
+**Example:**
+```
+API: POST /items (Add a new item)
+
+What goes in (Request):
+{
+  "name": "Sugar",
+  "category": "Grocery",
+  "price": 150.00,
+  "stock_qty": 100
+}
+
+What comes back (Response - Success):
+{
+  "id": 1,
+  "name": "Sugar",
+  "category": "Grocery",
+  "price": "150.00",
+  "stock_qty": 100,
+  "created_at": "2025-12-08T10:30:00Z"
+}
+
+What comes back (Response - Error):
+{
+  "error": "Validation failed",
+  "fields": {
+    "price": "Price must be a positive number"
+  }
+}
+```
+
+**Why this matters:** When frontend and backend agree on the contract, they can work independently. Frontend doesn't have to wait for backend, and vice versa. Also, when new team members join, they know exactly how to use the API.
 
 ### VI. Local-First Development
 
-All services MUST run locally without external dependencies beyond the database.
+**What this means:** Everything runs on your computer (or a local server), not in the cloud during development. This is faster and cheaper.
 
-**Rules:**
-- MCP servers run via `stdio` or `localhost` HTTP only
-- No hosted MCP tools (agent uses local MCP server)
-- Agent model: `gemini-2.5-flash-lite` (not OpenAI models)
-- Environment variables via `.env` files; never hardcode credentials
-- Neon PostgreSQL connection string via `DATABASE_URL` env var
+**Simple Rules:**
+- **Run locally**: AI tools, API server, all run on your machine during development
+- **Database connection**: Use `DATABASE_URL` in a `.env` file (hidden file with secrets)
+- **No hardcoded secrets**: Never put passwords or connection strings in your code
+- **Simple setup**: Everything should work on a laptop with just a few commands
 
-**Rationale:** Local-first enables offline development, faster iteration, and avoids vendor lock-in during the testing phase.
+**Example Setup:**
+```bash
+# Create .env file (never commit this!)
+echo "DATABASE_URL=postgresql://user:pass@localhost/ims_db" > .env
+
+# Start the app
+python backend/main.py
+
+# AI tools run locally too
+python backend/mcp_server.py
+```
+
+**Why this matters:** Local development is way faster - no waiting for cloud servers. You can work offline. You save money. And if something breaks, it only breaks on your machine, not for everyone.
 
 ### VII. Simplicity Over Abstraction
 
-Start with the simplest solution; add complexity only when justified.
+**What this means:** Write code that works today, not code that might be useful someday. Simple is better than clever.
 
-**Rules:**
-- No premature optimization or speculative features
-- Prefer direct SQL/ORM queries over repository patterns initially
-- Single `items` table serves all store types (no premature multi-tenancy)
-- Agent tools call services directly; no additional abstraction layers
-- YAGNI: Do not build for hypothetical future requirements
+**Simple Rules:**
+- **Don't guess the future**: Build for what you need now, not what you might need later
+- **Write it simply**: If a simple solution works, use it - don't add fancy patterns
+- **Use one items table**: Don't create separate tables for different store types unless you really need to
+- **Direct database access**: Query the database directly when it makes sense, don't create extra layers
 
-**Rationale:** Complexity has carrying costs. Simple code is easier to test, debug, and modify.
+**What NOT to do:**
+```python
+# ❌ Too complicated (might be needed someday?)
+class AbstractRepositoryPattern:
+    def get_by_category(self, filter_strategy, cache_engine):
+        # ... 50 lines of code
+
+# ✅ Simple and clear (does the job)
+def get_items_by_category(category):
+    return db.session.query(Item).filter(Item.category == category).all()
+```
+
+**Why this matters:** Simple code is easier to read, test, and fix. Complicated code hides bugs. When you actually need the fancy stuff later, you'll know exactly what you need (not just guessing).
 
 ### VIII. Observability by Default
 
-All components MUST emit structured logs and handle errors gracefully.
+**What this means:** Keep detailed records of what your app is doing. When something breaks, the records help you fix it fast.
 
-**Rules:**
-- Structured JSON logging for all backend services
-- Each API request MUST log: timestamp, endpoint, duration, status
-- Errors MUST include context sufficient for debugging
-- Console output MUST be human-readable; JSON for programmatic use
-- Agent interactions MUST be traceable (session_id, tool calls, responses)
+**Simple Rules:**
+- **Log everything important**: Record when API requests come in, how long they take, and what the result was
+- **Smart errors**: When something goes wrong, log enough information to figure out why
+- **Readable logs**: When looking at logs, you should understand what happened
+- **Track AI interactions**: When AI tools run, record what they did and what they said
 
-**Rationale:** Observability enables rapid debugging and supports future analytics features.
+**Example Logs:**
+```
+[2025-12-08 10:30:45] POST /items - Status: 201 - Duration: 45ms - Item "Sugar" created
+[2025-12-08 10:31:22] GET /items - Status: 200 - Duration: 12ms - Returned 25 items
+[2025-12-08 10:32:10] POST /bills - Status: 400 - Duration: 89ms - Error: Insufficient stock for item ID 5
+```
+
+**Why this matters:** Logs are like a security camera for your app. When something goes wrong, you can watch the recording and see exactly what happened. It makes fixing bugs 10x faster.
 
 ## Technology Stack
 
@@ -247,4 +348,4 @@ For day-to-day development decisions not covered here, consult:
 - `.specify/templates/` for spec/plan/task templates
 - `README.md` for project setup and quickstart
 
-**Version**: 1.0.0 | **Ratified**: 2025-12-07 | **Last Amended**: 2025-12-07
+**Version**: 1.1.0 | **Ratified**: 2025-12-07 | **Last Amended**: 2025-12-08

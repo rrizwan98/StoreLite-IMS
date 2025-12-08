@@ -1,9 +1,19 @@
-# Feature Specification: Console-Based Inventory & Billing System (Phase 1)
+# Feature Specification: Console-Based Inventory & Billing System (Phases 1-7)
 
 **Feature Branch**: `001-console-ims-p1`
 **Created**: 2025-12-07
-**Status**: Draft
-**Input**: Console-based Python inventory and billing system with PostgreSQL backend for Phase 1. Database URL configured in .env file. Python 3.12+.
+**Status**: Complete (Phases 1-7)
+**Input**: Console-based Python inventory and billing system with PostgreSQL backend. Database URL configured in .env file. Python 3.12+.
+
+## Phase Overview
+
+- **Phase 1 (Completed)**: Core inventory (add, list, search, update) and basic billing
+- **Phase 2 (Planned)**: REST API endpoints for inventory and billing operations
+- **Phase 3 (Planned)**: Next.js frontend for web-based access
+- **Phase 4 (Completed)**: Search enhancements (category, price range) and soft-delete operations
+- **Phase 5 (Completed)**: Advanced billing with shopping cart management and itemized display
+- **Phase 6 (Completed)**: Main menu with system statistics and enhanced UI formatting
+- **Phase 7 (Completed)**: End-to-end workflow testing, contract tests, and professional receipt formatting
 
 ## Clarifications
 
@@ -160,6 +170,41 @@ A salesperson creates an invoice by searching for products, selecting quantities
 - **FR-017**: System MUST establish connection to PostgreSQL using DATABASE_URL from environment variables
 
 - **FR-018**: System MUST create all required tables on first run if they don't exist (items, bills, bill_items)
+
+### Phase 4 Functional Requirements (Search Enhancements & Soft-Delete)
+
+- **FR-019**: System MUST support searching items by category with case-insensitive matching
+- **FR-020**: System MUST support searching items by price range (min and max) with Decimal validation
+- **FR-021**: System MUST support soft-delete of items (marking as is_active=FALSE) instead of physical deletion
+- **FR-022**: System MUST exclude inactive items from all search results, list displays, and billing operations
+- **FR-023**: System MUST preserve historical data of deleted items for billing/audit purposes (no physical deletion)
+- **FR-024**: System MUST display appropriate confirmation warnings when soft-deleting items
+
+### Phase 5 Functional Requirements (Shopping Cart Management)
+
+- **FR-025**: System MUST support in-memory shopping cart with add, view, update quantity, and remove operations
+- **FR-026**: System MUST validate stock availability during cart operations (prevent adding more than available)
+- **FR-027**: System MUST calculate line totals (quantity × unit_price) and cart total automatically
+- **FR-028**: System MUST display itemized cart view showing item name, unit price, quantity, and line total
+- **FR-029**: System MUST allow updating item quantities in cart with real-time stock validation
+- **FR-030**: System MUST allow removing items from cart before bill confirmation
+- **FR-031**: System MUST prevent bill confirmation with an empty cart (require at least one item)
+
+### Phase 6 Functional Requirements (Main Menu & System Statistics)
+
+- **FR-032**: System MUST display enhanced main menu with category headers and system statistics
+- **FR-033**: System MUST show count of active items in inventory on main menu
+- **FR-034**: System MUST format menu output for clarity with improved spacing and visual hierarchy
+
+### Phase 7 Functional Requirements (Receipt Formatting & Testing)
+
+- **FR-035**: System MUST display professional receipt format on bill confirmation with:
+  - Bill ID and timestamp
+  - Customer name and store name (if provided)
+  - Itemized list showing: item name, quantity, unit price, and line total
+  - Grand total amount
+- **FR-036**: System MUST pass end-to-end workflow tests covering complete user journeys
+- **FR-037**: System MUST pass contract tests validating CLI output format consistency
 
 ### Key Entities *(include if feature involves data)*
 
