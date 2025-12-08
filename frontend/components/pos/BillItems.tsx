@@ -65,16 +65,34 @@ export default function BillItems({
                 </td>
                 <td className="px-6 py-4 text-center">
                   {onUpdateQuantity ? (
-                    <input
-                      type="number"
-                      min="1"
-                      value={item.quantity}
-                      onChange={(e) => {
-                        const newQty = parseInt(e.target.value) || 1;
-                        onUpdateQuantity(index, newQty);
-                      }}
-                      className="w-16 px-2 py-1 border border-gray-300 rounded-md text-center text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
-                    />
+                    <div className="flex flex-col items-center gap-1">
+                      <input
+                        type="number"
+                        min="1"
+                        max={Math.floor(parseFloat(item.stock_qty as any) || 0)}
+                        value={item.quantity}
+                        onChange={(e) => {
+                          const newQty = parseInt(e.target.value) || 1;
+                          const maxQty = Math.floor(parseFloat(item.stock_qty as any) || 0);
+
+                          // Only allow quantity up to available stock
+                          if (newQty > maxQty) {
+                            return; // Reject if exceeds stock
+                          }
+
+                          onUpdateQuantity(index, newQty);
+                        }}
+                        className="w-16 px-2 py-1 border border-gray-300 rounded-md text-center text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                      />
+                      {item.stock_qty !== undefined && (
+                        <span className="text-xs text-gray-500">
+                          max: {Math.floor(parseFloat(item.stock_qty as any) || 0)}
+                        </span>
+                      )}
+                      {item.quantity > parseFloat(item.stock_qty as any || 0) && (
+                        <span className="text-xs text-error font-medium">⚠️ Exceeds stock</span>
+                      )}
+                    </div>
                   ) : (
                     <span className="text-sm font-medium">{item.quantity}</span>
                   )}

@@ -77,6 +77,7 @@ export const useBill = () => {
         }
 
         // New item
+        const itemStock = parseFloat(item.stock_qty as any) || 0;
         return [
           ...prevItems,
           {
@@ -84,6 +85,7 @@ export const useBill = () => {
             item_name: item.name,
             unit: item.unit,
             unit_price: unitPrice,
+            stock_qty: itemStock, // Store original stock for validation
             quantity: 1,
             line_total: unitPrice,
           },
