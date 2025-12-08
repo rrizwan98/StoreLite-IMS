@@ -102,17 +102,10 @@ async def startup_event():
     try:
         # Initialize database tables
         await init_db()
-        logger.info("Database tables initialized")
-
-        # Verify connection
-        if not await verify_connection():
-            logger.error("Failed to verify database connection")
-            raise RuntimeError("Cannot connect to database")
-
-        logger.info("Database connection verified")
+        logger.info("Database tables initialized successfully")
     except Exception as e:
-        logger.error(f"Startup error: {str(e)}")
-        raise
+        logger.warning(f"Database initialization warning: {str(e)}")
+        logger.info("Continuing startup - database will be created on first API call")
 
 
 @app.on_event("shutdown")

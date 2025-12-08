@@ -14,11 +14,18 @@ logger = logging.getLogger(__name__)
 # Database URL from environment or default
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://user:password@localhost:5432/ims_db")
 
-# Convert to async URL if using PostgreSQL
+# Convert to async URL for database drivers
 if DATABASE_URL.startswith("postgresql://"):
-    ASYNC_DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+psycopg://")
+    ASYNC_DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://")
+elif DATABASE_URL.startswith("sqlite://"):
+    ASYNC_DATABASE_URL = DATABASE_URL.replace("sqlite://", "sqlite+aiosqlite://")
 else:
     ASYNC_DATABASE_URL = DATABASE_URL
+
+# Default to SQLite if no database is configured
+if ASYNC_DATABASE_URL == "postgresql+asyncpg://user:password@localhost:5432/ims_db" or not ASYNC_DATABASE_URL:
+    ASYNC_DATABASE_URL = "sqlite+aiosqlite:///ims_dev.db"
+    logger.info("Using SQLite for development. Set DATABASE_URL for PostgreSQL.")
 
 # SQLAlchemy setup
 engine = create_async_engine(
