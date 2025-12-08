@@ -1,9 +1,9 @@
 ---
 feature: 003-nextjs-frontend-p3
 date: 2025-12-08
-status: Phase 1-5 Complete - Admin Features Done, Ready for POS
+status: Phase 1-6 Complete - Basic POS Done, Ready for Enhancements
 total_tasks: 56
-completed_tasks: 33
+completed_tasks: 38
 ---
 
 # Tasks: Next.js Frontend UI (Phase 3) - StoreLite IMS
@@ -169,7 +169,7 @@ completed_tasks: 33
 
 ---
 
-## Phase 6: User Story 4 - Salesperson: Search and Add Items to Bill (Priority: P1)
+## Phase 6: User Story 4 - Salesperson: Search and Add Items to Bill (Priority: P1) ✅ COMPLETE
 
 **Goal**: Enable salesperson to search items and add them to bill with quantity 1 (FR-006, FR-007, FR-008)
 
@@ -177,30 +177,30 @@ completed_tasks: 33
 
 ### Implementation for User Story 4
 
-- [ ] T034 [P] [US4] Create ItemSearch component `frontend/components/pos/ItemSearch.tsx` with:
+- [x] T034 [P] [US4] Create ItemSearch component `frontend/components/pos/ItemSearch.tsx` with:
   - Search input box (debounced, substring match per FR-006)
   - Dropdown showing matching items: name, price, stock (FR-006)
   - Click item to add to bill
   - Shows "No items found" when no matches
   - Prevents adding items with zero stock with warning message (FR-005 from spec: "low stock warning")
-- [ ] T035 [P] [US4] Create BillItems component `frontend/components/pos/BillItems.tsx` to display:
+- [x] T035 [P] [US4] Create BillItems component `frontend/components/pos/BillItems.tsx` to display:
   - Table with columns: Item Name, Unit, Quantity (editable), Unit Price, Line Total (FR-008)
   - Starting empty state message "No items in bill yet"
   - Quantity field as text input (will be made editable in US5)
   - Delete button per row (implemented in US5)
-- [ ] T036 [P] [US4] Create useBill custom hook in `frontend/lib/hooks.ts` to:
+- [x] T036 [P] [US4] Create useBill custom hook in `frontend/lib/hooks.ts` to:
   - Manage bill state: items array with (item_id, item_name, unit, unit_price, quantity)
   - addItem(item) function - adds item with qty 1, or increments qty if already in bill (FR-007)
   - Return: bill, addItem, removeItem (for US5), updateQuantity (for US5)
-- [ ] T037 [US4] Create POS layout `frontend/app/pos/layout.tsx` with POS-specific navigation
-- [ ] T038 [US4] Create POS page `frontend/app/pos/page.tsx` that:
+- [x] T037 [US4] Create POS layout `frontend/app/pos/layout.tsx` with POS-specific navigation
+- [x] T038 [US4] Create POS page `frontend/app/pos/page.tsx` that:
   - Imports and renders ItemSearch component
   - Imports and renders BillItems component
   - Manages bill state via useBill() hook
   - Passes addItem callback from useBill to ItemSearch
   - Wraps in ErrorBoundary
 
-**Checkpoint**: User Story 4 complete - salesperson can search items and add to bill
+**Checkpoint**: User Story 4 complete - salesperson can search items and add to bill ✅
 
 ---
 
