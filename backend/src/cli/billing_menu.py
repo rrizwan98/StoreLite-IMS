@@ -103,13 +103,7 @@ def billing_menu(db_session):
                     customer_name=customer_name,
                     store_name=store_name
                 )
-                display_header("BILL FINALIZED")
-                print(f"\n  Bill ID: {final_bill.id}")
-                print(f"  Customer: {final_bill.customer_name or 'N/A'}")
-                print(f"  Store: {final_bill.store_name or 'N/A'}")
-                print(f"  Total: {final_bill.total_amount}")
-                print(f"  Items: {len(final_bill.bill_items)}")
-                display_success("Bill created successfully!")
+                _display_receipt(final_bill)
                 return final_bill
 
             elif choice == 6:
@@ -238,3 +232,43 @@ def _remove_from_cart(billing_service):
         display_error(f"Error: {str(e)}")
     except Exception as e:
         display_error(f"Error removing item: {str(e)}")
+
+
+def _display_receipt(final_bill):
+    """
+    Display a professional receipt format for the finalized bill
+
+    Args:
+        final_bill: Bill object with id, customer_name, store_name, bill_items, total_amount
+    """
+    from datetime import datetime
+
+    display_header("RECEIPT")
+
+    # Receipt header with bill ID and date
+    bill_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    print(f"\n  Bill ID: {final_bill.id:<30} Date: {bill_date}")
+    print(f"  Customer: {final_bill.customer_name or 'N/A':<24} Store: {final_bill.store_name or 'N/A'}")
+
+    # Column headers
+    print("\n  " + "-" * 70)
+    print("  Item Name           Qty    Unit Price  Line Total")
+    print("  " + "-" * 70)
+
+    # Itemized list
+    total = Decimal("0")
+    for bill_item in final_bill.bill_items:
+        item_name = bill_item.item.name
+        qty = bill_item.quantity
+        unit_price = bill_item.unit_price
+        line_total = bill_item.quantity * bill_item.unit_price
+
+        print(f"  {item_name:<17} {qty:>6}  {unit_price:>10}  {line_total:>10}")
+        total += line_total
+
+    # Total
+    print("  " + "-" * 70)
+    print(f"  {'TOTAL':<17} {' ':>6}  {' ':>10}  {total:>10}\n")
+
+    display_success("Receipt generated successfully!")
+    display_success("Bill created and saved to database!")

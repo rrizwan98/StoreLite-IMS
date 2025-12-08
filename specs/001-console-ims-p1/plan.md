@@ -1,11 +1,17 @@
-# Implementation Plan: Console-Based Inventory & Billing System (Phase 1)
+# Implementation Plan: Console-Based Inventory & Billing System (Phases 1-7)
 
-**Branch**: `001-console-ims-p1` | **Date**: 2025-12-07 | **Spec**: `/specs/001-console-ims-p1/spec.md`
+**Branch**: `001-console-ims-p1` | **Date**: 2025-12-07 | **Status**: Complete | **Spec**: `/specs/001-console-ims-p1/spec.md`
 **Input**: Feature specification from `/specs/001-console-ims-p1/spec.md`
 
 ## Summary
 
-Phase 1 delivers a console-based Python inventory and billing system with PostgreSQL persistence. Users can add/search/update products, create invoices with automatic stock management, and print receipts. The system uses searchable dropdowns for categories/units, validates all input before persistence, and maintains strict ACID transactions for bill operations. This forms the foundation for later FastAPI wrapping and agent integration.
+Phases 1-7 deliver a complete console-based Python inventory and billing system with PostgreSQL persistence, enhanced search capabilities, shopping cart management, system statistics, and professional receipt formatting.
+
+- **Phase 1**: Core inventory (add, list, search, update) and basic billing
+- **Phase 4**: Search enhancements (category, price range) and soft-delete operations
+- **Phase 5**: Shopping cart management with full item lifecycle (add, view, update, remove)
+- **Phase 6**: Main menu with system statistics and enhanced UI formatting
+- **Phase 7**: Professional receipt formatting and comprehensive test coverage (e2e + contract tests)
 
 ## Technical Context
 
@@ -231,8 +237,9 @@ backend/
 
 ---
 
-## Success Criteria for Phase 1
+## Success Criteria - All Phases
 
+### Phase 1 Completion ✅
 1. ✅ All three user stories independently testable and working
 2. ✅ Inventory operations (add/list/search/update) validated & persisted
 3. ✅ Bill creation calculates totals, validates stock, updates inventory atomically
@@ -241,10 +248,39 @@ backend/
 6. ✅ Data persists in PostgreSQL across app restarts
 7. ✅ Invalid input rejected before DB (validation in application layer)
 
+### Phase 4 Completion ✅
+1. ✅ Search by category (case-insensitive)
+2. ✅ Search by price range (min/max validation)
+3. ✅ Soft-delete items (marked as inactive)
+4. ✅ Excluded inactive items from all operations
+5. ✅ Preserved historical data for audit/billing
+
+### Phase 5 Completion ✅
+1. ✅ Shopping cart with add/view/update/remove operations
+2. ✅ Stock validation during cart operations
+3. ✅ Automatic line total and cart total calculation
+4. ✅ Itemized cart display format
+5. ✅ Prevention of empty cart confirmation
+
+### Phase 6 Completion ✅
+1. ✅ Enhanced main menu with category headers
+2. ✅ System statistics (active item count)
+3. ✅ Improved UI formatting and spacing
+
+### Phase 7 Completion ✅
+1. ✅ Professional receipt format with itemized details
+2. ✅ End-to-end workflow tests (11 tests, all passing)
+3. ✅ Contract tests for CLI output format (25 tests, all passing)
+4. ✅ 121 total unit tests passing
+
 ---
 
-## Next Steps
+## Implementation Status
 
-1. Finalize Phase 1 design documents (research.md, data-model.md, quickstart.md)
-2. Generate tasks.md via /sp.tasks command
-3. Begin Red-Green-Refactor cycle on first task
+- **Phase 1**: COMPLETE - Core inventory and billing functionality
+- **Phase 4**: COMPLETE - Search enhancements and soft-delete
+- **Phase 5**: COMPLETE - Shopping cart management
+- **Phase 6**: COMPLETE - Main menu and system statistics
+- **Phase 7**: COMPLETE - Receipt formatting and comprehensive testing
+
+**Overall Status**: All Phases 1, 4-7 are implemented and tested. Ready for Phase 2 (REST API) development.

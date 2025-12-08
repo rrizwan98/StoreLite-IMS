@@ -33,30 +33,36 @@ def display_message(message: str) -> None:
     print(f"\n{message}\n")
 
 
-def format_items_table(items: List) -> None:
+def format_items_table(items: List) -> Optional[str]:
     """
     Display items as a formatted table
 
     Args:
         items: List of Item objects
+
+    Returns:
+        Formatted table string
     """
     if not items:
-        print("No items found.\n")
-        return
+        output = "No items found.\n"
+        print(output)
+        return output
 
     # Table headers
     headers = ["ID", "Name", "Category", "Unit", "Price", "Stock"]
     col_widths = [5, 25, 15, 10, 12, 12]
 
-    # Print header
-    print("\n" + "-" * (sum(col_widths) + 7))  # 7 for separators
+    output_lines = []
+
+    # Header
+    output_lines.append("-" * (sum(col_widths) + 7))
     header_row = "| " + " | ".join(
         h.ljust(w) for h, w in zip(headers, col_widths)
     )
-    print(header_row + " |")
-    print("-" * (sum(col_widths) + 7))
+    output_lines.append(header_row + " |")
+    output_lines.append("-" * (sum(col_widths) + 7))
 
-    # Print rows
+    # Rows
     for item in items:
         row = [
             str(item.id),
@@ -69,29 +75,38 @@ def format_items_table(items: List) -> None:
         row_str = "| " + " | ".join(
             cell.ljust(w) for cell, w in zip(row, col_widths)
         )
-        print(row_str + " |")
+        output_lines.append(row_str + " |")
 
-    print("-" * (sum(col_widths) + 7) + "\n")
+    output_lines.append("-" * (sum(col_widths) + 7))
+
+    output = "\n" + "\n".join(output_lines) + "\n\n"
+    print(output)
+    return output
 
 
-def format_single_item(item) -> None:
+def format_single_item(item) -> str:
     """
     Display a single item's details
 
     Args:
         item: Item object
+
+    Returns:
+        Formatted item details string
     """
-    print("\n" + "=" * 60)
-    print(f"Item ID: {item.id}")
-    print(f"Name: {item.name}")
-    print(f"Category: {item.category}")
-    print(f"Unit: {item.unit}")
-    print(f"Unit Price: ${float(item.unit_price):.2f}")
-    print(f"Stock Quantity: {float(item.stock_qty):.2f}")
-    print(f"Active: {'Yes' if item.is_active else 'No'}")
-    print(f"Created: {item.created_at}")
-    print(f"Updated: {item.updated_at}")
-    print("=" * 60 + "\n")
+    output = "\n" + "=" * 60 + "\n"
+    output += f"Item ID: {item.id}\n"
+    output += f"Name: {item.name}\n"
+    output += f"Category: {item.category}\n"
+    output += f"Unit: {item.unit}\n"
+    output += f"Unit Price: ${float(item.unit_price):.2f}\n"
+    output += f"Stock Quantity: {float(item.stock_qty):.2f}\n"
+    output += f"Active: {'Yes' if item.is_active else 'No'}\n"
+    output += f"Created: {item.created_at}\n"
+    output += f"Updated: {item.updated_at}\n"
+    output += "=" * 60 + "\n"
+    print(output)
+    return output
 
 
 def searchable_dropdown(options: List[str], prompt: str = "Select an option") -> Optional[str]:
