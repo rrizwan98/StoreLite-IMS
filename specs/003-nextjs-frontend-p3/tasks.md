@@ -1,8 +1,9 @@
 ---
 feature: 003-nextjs-frontend-p3
 date: 2025-12-08
-status: Ready for Implementation
+status: Phase 1-3 Complete - Ready for User Story 2
 total_tasks: 56
+completed_tasks: 25
 ---
 
 # Tasks: Next.js Frontend UI (Phase 3) - StoreLite IMS
@@ -25,52 +26,52 @@ total_tasks: 56
 
 **Purpose**: Initialize Next.js project structure, dependencies, and configuration
 
-- [ ] T001 Create folder structure per plan.md: `frontend/app`, `frontend/components`, `frontend/lib`, `frontend/styles`, `frontend/public`
-- [ ] T002 [P] Initialize Next.js 14+ project with `npx create-next-app@latest` in frontend directory
-- [ ] T003 [P] Install core dependencies: TypeScript, Tailwind CSS, Axios in `frontend/package.json`
-- [ ] T004 [P] Configure TypeScript: Enable strict mode in `frontend/tsconfig.json`
-- [ ] T005 [P] Configure Tailwind CSS in `frontend/tailwind.config.js` with Next.js integration
-- [ ] T006 [P] Set up ESLint and Prettier configs in `frontend/.eslintrc.json` and `frontend/.prettierrc`
-- [ ] T007 Create `.env.local.example` with `NEXT_PUBLIC_API_URL=http://localhost:8000`
-- [ ] T008 [P] Create `frontend/package.json` scripts: `dev`, `build`, `start`, `lint`, `type-check`
-- [ ] T009 Create `frontend/README.md` with setup and getting-started instructions
+- [x] T001 Create folder structure per plan.md: `frontend/app`, `frontend/components`, `frontend/lib`, `frontend/styles`, `frontend/public`
+- [x] T002 [P] Initialize Next.js 14+ project with `npx create-next-app@latest` in frontend directory
+- [x] T003 [P] Install core dependencies: TypeScript, Tailwind CSS, Axios in `frontend/package.json`
+- [x] T004 [P] Configure TypeScript: Enable strict mode in `frontend/tsconfig.json`
+- [x] T005 [P] Configure Tailwind CSS in `frontend/tailwind.config.js` with Next.js integration
+- [x] T006 [P] Set up ESLint and Prettier configs in `frontend/.eslintrc.json` and `frontend/.prettierrc`
+- [x] T007 Create `.env.local.example` with `NEXT_PUBLIC_API_URL=http://localhost:8000`
+- [x] T008 [P] Create `frontend/package.json` scripts: `dev`, `build`, `start`, `lint`, `type-check`
+- [x] T009 Create `frontend/README.md` with setup and getting-started instructions
 
 ---
 
-## Phase 2: Foundational (Blocking Prerequisites)
+## Phase 2: Foundational (Blocking Prerequisites) ✅ COMPLETE
 
 **Purpose**: Core utilities and infrastructure that ALL user stories depend on
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete
 
-- [ ] T010 [P] Create type definitions file `frontend/lib/types.ts` with interfaces: Item, Bill, BillItem, APIError
-- [ ] T011 [P] Create constants file `frontend/lib/constants.ts` with API_URL, categories, error codes
-- [ ] T012 [P] Create validation rules file `frontend/lib/validation.ts` with validateItem(), validateBillItem() functions
-- [ ] T013 Create API client wrapper `frontend/lib/api.ts` with:
+- [x] T010 [P] Create type definitions file `frontend/lib/types.ts` with interfaces: Item, Bill, BillItem, APIError
+- [x] T011 [P] Create constants file `frontend/lib/constants.ts` with API_URL, categories, error codes
+- [x] T012 [P] Create validation rules file `frontend/lib/validation.ts` with validateItem(), validateBillItem() functions
+- [x] T013 Create API client wrapper `frontend/lib/api.ts` with:
   - APIClient class with retry logic (3 attempts, exponential backoff)
   - Methods: getItems(), getItem(), addItem(), updateItem(), createBill(), getBill()
   - Error mapping function mapError() per FR-019
   - Retry status indicator callback
-- [ ] T014 [P] Create custom hooks file `frontend/lib/hooks.ts` with:
+- [x] T014 [P] Create custom hooks file `frontend/lib/hooks.ts` with:
   - useItems() - fetch and cache items
   - useBill() - manage bill state
   - useSearch() - debounced search functionality
-- [ ] T015 [P] Create shared components in `frontend/components/shared/`:
+- [x] T015 [P] Create shared components in `frontend/components/shared/`:
   - LoadingSpinner.tsx - simple loading indicator
   - ErrorMessage.tsx - user-friendly error display
   - SuccessToast.tsx - transient success messages
   - ErrorBoundary.tsx - React error boundary wrapper
-- [ ] T016 [P] Create Header component in `frontend/components/shared/Header.tsx` with app title and logo
-- [ ] T017 [P] Create Navigation component in `frontend/components/shared/Navigation.tsx` with /admin and /pos links
-- [ ] T018 Create root layout `frontend/app/layout.tsx` with Header, Navigation, globals.css import
-- [ ] T019 Create `frontend/app/globals.css` with Tailwind imports and base styles
-- [ ] T020 [P] Create environment configuration loader in `frontend/lib/constants.ts` (read NEXT_PUBLIC_API_URL)
-- [ ] T021 [P] Create error mapping service `frontend/lib/errorMap.ts` with ERROR_MESSAGES constant per FR-019
+- [x] T016 [P] Create Header component in `frontend/components/shared/Header.tsx` with app title and logo
+- [x] T017 [P] Create Navigation component in `frontend/components/shared/Navigation.tsx` with /admin and /pos links
+- [x] T018 Create root layout `frontend/app/layout.tsx` with Header, Navigation, globals.css import
+- [x] T019 Create `frontend/app/globals.css` with Tailwind imports and base styles
+- [x] T020 [P] Create environment configuration loader in `frontend/lib/constants.ts` (read NEXT_PUBLIC_API_URL)
+- [x] T021 [P] Create error mapping service `frontend/lib/errorMap.ts` with ERROR_MESSAGES constant per FR-019
 
-**Checkpoint**: Foundation ready - all user story tasks can now proceed in parallel
+**Checkpoint**: Foundation ready - all user story tasks can now proceed in parallel ✅
 
 ---
 
-## Phase 3: User Story 1 - Store Admin: Add New Inventory Item (Priority: P1)
+## Phase 3: User Story 1 - Store Admin: Add New Inventory Item (Priority: P1) ✅ COMPLETE
 
 **Goal**: Enable admin users to add new products via form in Admin page; form validates client-side before API submission (FR-002, FR-017)
 
@@ -78,20 +79,20 @@ total_tasks: 56
 
 ### Implementation for User Story 1
 
-- [ ] T022 [P] [US1] Create AddItemForm component `frontend/components/admin/AddItemForm.tsx` with:
+- [x] T022 [P] [US1] Create AddItemForm component `frontend/components/admin/AddItemForm.tsx` with:
   - Form fields: name, category (dropdown), unit, unit_price, stock_qty
   - Client-side validation via validateItem() from lib/validation.ts
   - Submit handler calls api.addItem()
   - Shows field-level validation errors (FR-017)
   - Disables button during submission (FR-018)
-- [ ] T023 [P] [US1] Create SuccessToast integration in AddItemForm to show "Item added successfully" message
-- [ ] T024 [US1] Create admin layout `frontend/app/admin/layout.tsx` with admin-specific navigation
-- [ ] T025 [US1] Create admin page `frontend/app/admin/page.tsx` that:
+- [x] T023 [P] [US1] Create SuccessToast integration in AddItemForm to show "Item added successfully" message
+- [x] T024 [US1] Create admin layout `frontend/app/admin/layout.tsx` with admin-specific navigation
+- [x] T025 [US1] Create admin page `frontend/app/admin/page.tsx` that:
   - Imports and renders AddItemForm component
   - Implements onItemAdded callback to refresh inventory table (will be added in US2)
   - Wraps components in ErrorBoundary
 
-**Checkpoint**: User Story 1 complete - admin can add items via form with validation and success feedback
+**Checkpoint**: User Story 1 complete - admin can add items via form with validation and success feedback ✅
 
 ---
 
