@@ -59,7 +59,7 @@ export default function ItemsTable({ items, loading = false, onEdit, onDelete }:
                 </td>
                 <td className="px-6 py-4 text-sm text-gray-600">{item.unit}</td>
                 <td className="px-6 py-4 text-sm text-gray-900 text-right font-medium">
-                  ₹{(item.unit_price || 0).toFixed(2)}
+                  ₹{(parseFloat(item.unit_price as any) || 0).toFixed(2)}
                 </td>
                 <td className="px-6 py-4 text-sm text-right">
                   {item.stock_qty === 0 ? (

@@ -124,7 +124,7 @@ export default function ItemSearch({ onAddItem }: ItemSearchProps) {
                     <div className="flex-1">
                       <p className="font-medium text-gray-900">{item.name}</p>
                       <p className="text-sm text-gray-600">
-                        ₹{item.unit_price.toFixed(2)} / {item.unit}
+                        ₹{(parseFloat(item.unit_price as any) || 0).toFixed(2)} / {item.unit}
                       </p>
                     </div>
                     <div className="text-right ml-4">

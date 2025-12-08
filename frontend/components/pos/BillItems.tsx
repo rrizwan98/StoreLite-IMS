@@ -61,7 +61,7 @@ export default function BillItems({
                 <td className="px-6 py-4 text-sm text-gray-900 font-medium">{item.item_name}</td>
                 <td className="px-6 py-4 text-sm text-gray-600">{item.unit || '-'}</td>
                 <td className="px-6 py-4 text-sm text-gray-900 text-right font-medium">
-                  ₹{item.unit_price.toFixed(2)}
+                  ₹{(parseFloat(item.unit_price as any) || 0).toFixed(2)}
                 </td>
                 <td className="px-6 py-4 text-center">
                   {onUpdateQuantity ? (
@@ -80,7 +80,7 @@ export default function BillItems({
                   )}
                 </td>
                 <td className="px-6 py-4 text-sm text-gray-900 text-right font-medium">
-                  ₹{((item.line_total || 0) || item.quantity * item.unit_price).toFixed(2)}
+                  ₹{((item.line_total || 0) || item.quantity * parseFloat(item.unit_price as any)).toFixed(2)}
                 </td>
                 <td className="px-6 py-4 text-center">
                   {onRemoveItem && (
