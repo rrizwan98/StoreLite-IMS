@@ -32,8 +32,8 @@ export default function ItemSearch({ onAddItem }: ItemSearchProps) {
 
   const handleSelectItem = useCallback(
     (item: Item) => {
-      // Check stock
-      if (item.stock_qty === 0) {
+      // Check stock (convert string to number for comparison)
+      if (parseFloat(item.stock_qty as any) <= 0) {
         alert(`⚠️  "${item.name}" is out of stock`);
         return;
       }
@@ -118,7 +118,7 @@ export default function ItemSearch({ onAddItem }: ItemSearchProps) {
                 <li key={item.id}>
                   <button
                     onClick={() => handleSelectItem(item)}
-                    disabled={item.stock_qty === 0}
+                    disabled={parseFloat(item.stock_qty as any) <= 0}
                     className="w-full px-4 py-3 text-left hover:bg-gray-50 disabled:bg-gray-100 disabled:cursor-not-allowed transition-colors flex justify-between items-center group"
                   >
                     <div className="flex-1">
@@ -128,11 +128,11 @@ export default function ItemSearch({ onAddItem }: ItemSearchProps) {
                       </p>
                     </div>
                     <div className="text-right ml-4">
-                      {item.stock_qty === 0 ? (
+                      {parseFloat(item.stock_qty as any) <= 0 ? (
                         <span className="text-xs font-medium text-error">Out of Stock</span>
-                      ) : item.stock_qty < 10 ? (
+                      ) : parseFloat(item.stock_qty as any) < 10 ? (
                         <span className="text-xs font-medium text-warning">
-                          {item.stock_qty} left
+                          {Math.floor(parseFloat(item.stock_qty as any))} left
                         </span>
                       ) : (
                         <span className="text-xs font-medium text-success">In Stock</span>

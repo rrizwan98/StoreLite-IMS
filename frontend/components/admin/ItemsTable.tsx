@@ -62,12 +62,12 @@ export default function ItemsTable({ items, loading = false, onEdit, onDelete }:
                   ₹{(parseFloat(item.unit_price as any) || 0).toFixed(2)}
                 </td>
                 <td className="px-6 py-4 text-sm text-right">
-                  {item.stock_qty === 0 ? (
+                  {parseFloat(item.stock_qty as any) <= 0 ? (
                     <span className="text-error font-medium">Out of Stock</span>
-                  ) : item.stock_qty < 10 ? (
-                    <span className="text-warning font-medium">{item.stock_qty} (Low)</span>
+                  ) : parseFloat(item.stock_qty as any) < 10 ? (
+                    <span className="text-warning font-medium">{Math.floor(parseFloat(item.stock_qty as any))} (Low)</span>
                   ) : (
-                    <span className="text-success font-medium">{item.stock_qty}</span>
+                    <span className="text-success font-medium">{Math.floor(parseFloat(item.stock_qty as any))}</span>
                   )}
                 </td>
                 <td className="px-6 py-4 text-sm text-center">

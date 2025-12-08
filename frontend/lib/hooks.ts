@@ -58,16 +58,20 @@ export const useBill = () => {
   const addItem = useCallback(
     (item: Item) => {
       setItems((prevItems) => {
+        // Convert unit_price from string to number (backend returns as string)
+        const unitPrice = parseFloat(item.unit_price as any) || 0;
+
         // Check if item already in bill
         const existingIndex = prevItems.findIndex((bi) => bi.item_id === item.id);
 
         if (existingIndex >= 0) {
           // Item exists, increment quantity
           const updated = [...prevItems];
+          const newQuantity = updated[existingIndex].quantity + 1;
           updated[existingIndex] = {
             ...updated[existingIndex],
-            quantity: updated[existingIndex].quantity + 1,
-            line_total: (updated[existingIndex].quantity + 1) * item.unit_price,
+            quantity: newQuantity,
+            line_total: newQuantity * unitPrice,
           };
           return updated;
         }
@@ -79,9 +83,9 @@ export const useBill = () => {
             item_id: item.id,
             item_name: item.name,
             unit: item.unit,
-            unit_price: item.unit_price,
+            unit_price: unitPrice,
             quantity: 1,
-            line_total: item.unit_price,
+            line_total: unitPrice,
           },
         ];
       });
@@ -99,10 +103,12 @@ export const useBill = () => {
         // Remove item if quantity is 0 or negative
         updated.splice(index, 1);
       } else {
+        // Convert unit_price from string to number if needed
+        const unitPrice = parseFloat(updated[index].unit_price as any) || 0;
         updated[index] = {
           ...updated[index],
           quantity,
-          line_total: quantity * updated[index].unit_price,
+          line_total: quantity * unitPrice,
         };
       }
       return updated;
@@ -302,7 +308,9 @@ export const useStockMonitor = (billItems: BillItem[], pollIntervalMs: number = 
         const itemsInBill = new Map(billItems.map((bi) => [bi.item_id, bi]));
 
         freshItems.forEach((item) => {
-          if (itemsInBill.has(item.id) && item.stock_qty <= 0) {
+          // Convert stock_qty from string to number for comparison
+          const stockQty = parseFloat(item.stock_qty as any) || 0;
+          if (itemsInBill.has(item.id) && stockQty <= 0) {
             nowUnavailable.push(item.id);
           }
         });
