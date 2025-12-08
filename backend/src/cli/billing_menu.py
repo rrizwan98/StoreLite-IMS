@@ -65,32 +65,29 @@ def billing_menu(db_session):
 
             choice_str = get_numeric_input(
                 prompt="Select option (1-6): ",
+                allow_decimal=False,
                 min_val=1,
                 max_val=6
             )
-
             choice = int(choice_str)
-        if choice == 1:
+
+            if choice == 1:
                 # Add item to cart
                 _add_item_to_cart(inventory_service, billing_service)
 
-            elchoice = int(choice_str)
-        if choice == 2:
+            elif choice == 2:
                 # View cart
                 _view_cart(billing_service)
 
-            elchoice = int(choice_str)
-        if choice == 3:
+            elif choice == 3:
                 # Update item quantity
                 _update_cart_quantity(billing_service)
 
-            elchoice = int(choice_str)
-        if choice == 4:
+            elif choice == 4:
                 # Remove item from cart
                 _remove_from_cart(billing_service)
 
-            elchoice = int(choice_str)
-        if choice == 5:
+            elif choice == 5:
                 # Confirm bill
                 cart = billing_service.get_cart()
                 if not cart:
@@ -115,8 +112,7 @@ def billing_menu(db_session):
                 display_success("Bill created successfully!")
                 return final_bill
 
-            elchoice = int(choice_str)
-        if choice == 6:
+            elif choice == 6:
                 # Cancel bill
                 if confirm("Cancel this bill?"):
                     billing_service.clear_cart()
@@ -138,20 +134,22 @@ def billing_menu(db_session):
 def _add_item_to_cart(inventory_service, billing_service):
     """Add an item to the cart"""
     try:
-        item_id = get_numeric_input(
+        item_id_str = get_numeric_input(
             prompt="Enter Item ID: ",
+            allow_decimal=False,
             min_val=1,
             max_val=999999
         )
+        item_id = int(item_id_str)
 
         item = inventory_service.get_item(item_id)
 
-        quantity = get_numeric_input(
+        quantity_str = get_numeric_input(
             prompt=f"Quantity (available: {item.stock_qty}): ",
             min_val=Decimal("0.01"),
-            max_val=item.stock_qty,
-            error_message=f"Quantity must be between 0.01 and {item.stock_qty}"
+            max_val=item.stock_qty
         )
+        quantity = Decimal(quantity_str)
 
         cart_item = billing_service.add_to_cart(item_id, quantity)
         display_success(f"Added {quantity} x {item.name} to cart")
@@ -192,17 +190,20 @@ def _update_cart_quantity(billing_service):
             display_message("Cart is empty")
             return
 
-        item_id = get_numeric_input(
+        item_id_str = get_numeric_input(
             prompt="Enter Item ID to update: ",
+            allow_decimal=False,
             min_val=1,
             max_val=999999
         )
+        item_id = int(item_id_str)
 
-        new_quantity = get_numeric_input(
+        new_quantity_str = get_numeric_input(
             prompt="New Quantity: ",
             min_val=Decimal("0.01"),
             max_val=Decimal("999999")
         )
+        new_quantity = Decimal(new_quantity_str)
 
         updated_item = billing_service.update_cart_item_quantity(item_id, new_quantity)
         display_success(f"Updated {updated_item['item_name']} to {new_quantity} units")
@@ -221,11 +222,13 @@ def _remove_from_cart(billing_service):
             display_message("Cart is empty")
             return
 
-        item_id = get_numeric_input(
+        item_id_str = get_numeric_input(
             prompt="Enter Item ID to remove: ",
+            allow_decimal=False,
             min_val=1,
             max_val=999999
         )
+        item_id = int(item_id_str)
 
         if confirm(f"Remove item {item_id} from cart?"):
             billing_service.remove_from_cart(item_id)
