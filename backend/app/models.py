@@ -4,7 +4,7 @@ SQLAlchemy ORM models for IMS FastAPI backend
 
 from datetime import datetime
 from decimal import Decimal
-from sqlalchemy import Column, Integer, String, Numeric, Boolean, DateTime, ForeignKey, Text
+from sqlalchemy import Column, Integer, String, Numeric, Boolean, DateTime, ForeignKey, Text, CheckConstraint
 from sqlalchemy.orm import relationship
 from app.database import Base
 
@@ -22,6 +22,14 @@ class Item(Base):
     is_active = Column(Boolean, default=True, index=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    # Check constraint: category must be one of the allowed values
+    __table_args__ = (
+        CheckConstraint(
+            "category IN ('Grocery', 'Beauty', 'Garments', 'Utilities')",
+            name="items_category_check"
+        ),
+    )
 
     # Relationships
     bill_items = relationship("BillItem", back_populates="item", cascade="all, delete-orphan")
