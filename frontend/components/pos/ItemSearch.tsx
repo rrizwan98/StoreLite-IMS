@@ -6,7 +6,7 @@
 
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { Item } from '@/lib/types';
 import { useSearch } from '@/lib/hooks';
 import { api } from '@/lib/api';
@@ -18,6 +18,7 @@ export interface ItemSearchProps {
 
 export default function ItemSearch({ onAddItem }: ItemSearchProps) {
   const [showDropdown, setShowDropdown] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   // Search function to be used by useSearch hook
   const searchFunction = useCallback(async (query: string) => {
@@ -59,6 +60,18 @@ export default function ItemSearch({ onAddItem }: ItemSearchProps) {
     setShowDropdown(true);
   };
 
+  const handleInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    // Enter key: select first result if available
+    if (e.key === 'Enter' && results.length > 0) {
+      e.preventDefault();
+      handleSelectItem(results[0]);
+    }
+    // Escape key: close dropdown
+    else if (e.key === 'Escape') {
+      setShowDropdown(false);
+    }
+  };
+
   const handleInputBlur = () => {
     // Delay to allow click on dropdown item
     setTimeout(() => {
@@ -80,6 +93,7 @@ export default function ItemSearch({ onAddItem }: ItemSearchProps) {
             onChange={handleInputChange}
             onFocus={handleInputFocus}
             onBlur={handleInputBlur}
+            onKeyDown={handleInputKeyDown}
             placeholder="Search by item name..."
             className="w-full px-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
           />
@@ -93,7 +107,11 @@ export default function ItemSearch({ onAddItem }: ItemSearchProps) {
 
       {/* Dropdown Results */}
       {showDropdown && (
-        <div className="absolute z-10 w-full bg-white border border-gray-300 rounded-md shadow-lg max-h-64 overflow-y-auto">
+        <div
+          ref={dropdownRef}
+          className="absolute z-10 w-full bg-white border border-gray-300 rounded-md shadow-lg max-h-64 overflow-y-auto"
+          onMouseDown={(e) => e.preventDefault()}
+        >
           {loading && (
             <div className="p-4 text-center">
               <LoadingSpinner size="sm" message="Searching..." />
