@@ -23,6 +23,7 @@ class TestE2EAddItemWorkflow:
         item = inventory_service.add_item(
             name="Test Product",
             category="Grocery",
+            unit="piece",
             unit_price=Decimal("100.00"),
             stock_qty=Decimal("50")
         )
@@ -42,7 +43,7 @@ class TestE2EAddItemWorkflow:
         items_data = [
             ("Sugar", "Grocery", Decimal("50.00"), Decimal("100")),
             ("Rice", "Grocery", Decimal("40.00"), Decimal("150")),
-            ("Milk", "Dairy", Decimal("60.00"), Decimal("200")),
+            ("Milk", "Grocery", Decimal("60.00"), Decimal("200")),
         ]
 
         added_items = []
@@ -50,6 +51,7 @@ class TestE2EAddItemWorkflow:
             item = inventory_service.add_item(
                 name=name,
                 category=category,
+                unit="piece",
                 unit_price=price,
                 stock_qty=stock
             )
@@ -77,18 +79,20 @@ class TestE2ESearchWorkflow:
         item1 = inventory_service.add_item(
             name="Premium Sugar",
             category="Grocery",
+            unit="piece",
             unit_price=Decimal("100.00"),
             stock_qty=Decimal("50")
         )
         item2 = inventory_service.add_item(
             name="Regular Sugar",
             category="Grocery",
+            unit="piece",
             unit_price=Decimal("80.00"),
             stock_qty=Decimal("100")
         )
 
         # Step 2: Search by name
-        results = inventory_service.search_by_name("Sugar")
+        results = inventory_service.search_items("Sugar")
 
         # Step 3: Verify search results
         assert len(results) >= 2
@@ -105,12 +109,14 @@ class TestE2ESearchWorkflow:
             inventory_service.add_item(
                 name="Rice",
                 category="Grocery",
+                unit="piece",
                 unit_price=Decimal("40.00"),
                 stock_qty=Decimal("100")
             ),
             inventory_service.add_item(
                 name="Oil",
                 category="Grocery",
+                unit="piece",
                 unit_price=Decimal("200.00"),
                 stock_qty=Decimal("50")
             ),
@@ -120,6 +126,7 @@ class TestE2ESearchWorkflow:
             inventory_service.add_item(
                 name="Shampoo",
                 category="Beauty",
+                unit="piece",
                 unit_price=Decimal("150.00"),
                 stock_qty=Decimal("30")
             ),
@@ -142,18 +149,21 @@ class TestE2ESearchWorkflow:
         cheap = inventory_service.add_item(
             name="Budget Item",
             category="Grocery",
+            unit="piece",
             unit_price=Decimal("25.00"),
             stock_qty=Decimal("100")
         )
         medium = inventory_service.add_item(
             name="Standard Item",
             category="Grocery",
+            unit="piece",
             unit_price=Decimal("50.00"),
             stock_qty=Decimal("100")
         )
         expensive = inventory_service.add_item(
             name="Premium Item",
             category="Grocery",
+            unit="piece",
             unit_price=Decimal("200.00"),
             stock_qty=Decimal("50")
         )
@@ -182,6 +192,7 @@ class TestE2ESoftDeleteWorkflow:
         item = inventory_service.add_item(
             name="Temporary Item",
             category="Grocery",
+            unit="piece",
             unit_price=Decimal("50.00"),
             stock_qty=Decimal("100")
         )
@@ -210,19 +221,20 @@ class TestE2ESoftDeleteWorkflow:
         item = inventory_service.add_item(
             name="Search Test Item",
             category="Grocery",
+            unit="piece",
             unit_price=Decimal("50.00"),
             stock_qty=Decimal("100")
         )
 
         # Step 2: Verify in search
-        results = inventory_service.search_by_name("Search Test Item")
+        results = inventory_service.search_items("Search Test Item")
         assert len(results) >= 1
 
         # Step 3: Soft delete
         inventory_service.update_item(item.id, is_active=False)
 
         # Step 4: Verify not in search results
-        results_after = inventory_service.search_by_name("Search Test Item")
+        results_after = inventory_service.search_items("Search Test Item")
         result_ids = [i.id for i in results_after]
         assert item.id not in result_ids
 
@@ -239,12 +251,14 @@ class TestE2EBillingWorkflow:
         item1 = inventory_service.add_item(
             name="Sugar",
             category="Grocery",
+            unit="piece",
             unit_price=Decimal("50.00"),
             stock_qty=Decimal("100")
         )
         item2 = inventory_service.add_item(
             name="Rice",
             category="Grocery",
+            unit="piece",
             unit_price=Decimal("40.00"),
             stock_qty=Decimal("150")
         )
@@ -281,6 +295,7 @@ class TestE2EBillingWorkflow:
         item = inventory_service.add_item(
             name="Test Item",
             category="Grocery",
+            unit="piece",
             unit_price=Decimal("100.00"),
             stock_qty=Decimal("100")
         )
@@ -315,6 +330,7 @@ class TestE2EBillingWorkflow:
         item = inventory_service.add_item(
             name="Limited Item",
             category="Grocery",
+            unit="piece",
             unit_price=Decimal("100.00"),
             stock_qty=Decimal("5")
         )
@@ -343,14 +359,17 @@ class TestE2ECompleteJourney:
 
         # Step 1: Add items
         items = []
+        original_stocks = []
         for i in range(3):
             item = inventory_service.add_item(
                 name=f"Item {i+1}",
                 category="Grocery",
+                unit="piece",
                 unit_price=Decimal(f"{50 + i*20}.00"),
                 stock_qty=Decimal(f"{100 + i*50}")
             )
             items.append(item)
+            original_stocks.append(item.stock_qty)
 
         # Step 2: Search by category
         grocery_items = inventory_service.search_by_category("Grocery")
@@ -376,7 +395,6 @@ class TestE2ECompleteJourney:
         assert len(bill.bill_items) == 3
 
         # Step 7: Verify stock deducted for all
-        for item in items:
+        for idx, item in enumerate(items):
             updated_item = inventory_service.get_item(item.id)
-            original_stock = [i.stock_qty for i in items if i.id == item.id][0]
-            assert updated_item.stock_qty == original_stock - Decimal("5")
+            assert updated_item.stock_qty == original_stocks[idx] - Decimal("5")

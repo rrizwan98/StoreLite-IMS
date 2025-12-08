@@ -1,0 +1,658 @@
+[1m[95m
+==================================================
+IMS FastAPI - Complete Endpoint Testing
+==================================================
+[0m
+
+[1m[94m==================================================[0m
+[1m[94m1. SYSTEM ENDPOINTS[0m
+[1m[94m==================================================[0m
+
+[96m>> 1.1 Health Check[0m
+  Status: [92m200[0m
+  Response: {
+  "status": "ok",
+  "service": "IMS REST API"
+}
+
+[96m>> 1.2 Root API Info[0m
+  Status: [92m200[0m
+  Response: {
+  "service": "IMS REST API",
+  "version": "0.1.0",
+  "docs": "/docs",
+  "openapi": "/openapi.json"
+}
+
+
+[1m[94m==================================================[0m
+[1m[94m2. INVENTORY MANAGEMENT ENDPOINTS[0m
+[1m[94m==================================================[0m
+
+[96m>> 2.1 Create Item 1 - Grocery (Rice)[0m
+  [93mPOST /api/items[0m
+  Data: {
+  "name": "Rice 5kg",
+  "category": "Grocery",
+  "unit": "kg",
+  "unit_price": 45.5,
+  "stock_qty": 100
+}
+  Status: [92m201[0m
+  Response: {
+  "id": 16,
+  "name": "Rice 5kg",
+  "category": "Grocery",
+  "unit": "kg",
+  "unit_price": "45.50",
+  "stock_qty": "100.00",
+  "is_active": true,
+  "created_at": "2025-12-08T08:32:52.157307",
+  "updated_at": "2025-12-08T08:32:52.157307"
+}
+
+[96m>> 2.2 Create Item 2 - Garments (T-Shirt)[0m
+  [93mPOST /api/items[0m
+  Data: {
+  "name": "Cotton T-Shirt",
+  "category": "Garments",
+  "unit": "piece",
+  "unit_price": 299.99,
+  "stock_qty": 50
+}
+  Status: [92m201[0m
+  Response: {
+  "id": 17,
+  "name": "Cotton T-Shirt",
+  "category": "Garments",
+  "unit": "piece",
+  "unit_price": "299.99",
+  "stock_qty": "50.00",
+  "is_active": true,
+  "created_at": "2025-12-08T08:32:57.050319",
+  "updated_at": "2025-12-08T08:32:57.050319"
+}
+
+[96m>> 2.3 Create Item 3 - Beauty (Shampoo)[0m
+  [93mPOST /api/items[0m
+  Data: {
+  "name": "Shampoo Bottle",
+  "category": "Beauty",
+  "unit": "liter",
+  "unit_price": 199.0,
+  "stock_qty": 75
+}
+  Status: [92m201[0m
+  Response: {
+  "id": 18,
+  "name": "Shampoo Bottle",
+  "category": "Beauty",
+  "unit": "liter",
+  "unit_price": "199.00",
+  "stock_qty": "75.00",
+  "is_active": true,
+  "created_at": "2025-12-08T08:33:01.649156",
+  "updated_at": "2025-12-08T08:33:01.649156"
+}
+
+[96m>> 2.4 Create Item 4 - Utilities (Light Bulb)[0m
+  [93mPOST /api/items[0m
+  Data: {
+  "name": "Light Bulb LED",
+  "category": "Utilities",
+  "unit": "piece",
+  "unit_price": 125.0,
+  "stock_qty": 200
+}
+  Status: [92m201[0m
+  Response: {
+  "id": 19,
+  "name": "Light Bulb LED",
+  "category": "Utilities",
+  "unit": "piece",
+  "unit_price": "125.00",
+  "stock_qty": "200.00",
+  "is_active": true,
+  "created_at": "2025-12-08T08:33:06.138097",
+  "updated_at": "2025-12-08T08:33:06.138097"
+}
+
+[96m>> 2.5 List All Items[0m
+  Status: [92m200[0m
+  Response: [
+  {
+    "id": 17,
+    "name": "Cotton T-Shirt",
+    "category": "Garments",
+    "unit": "piece",
+    "unit_price": "299.99",
+    "stock_qty": "50.00",
+    "is_active": true,
+    "created_at": "2025-12-08T08:32:57.050319",
+    "updated_at": "2025-12-08T08:32:57.050319"
+  },
+  {
+    "id": 13,
+    "name": "Cotton T-Shirt",
+    "category": "Garments",
+    "unit": "piece",
+    "unit_price": "299.99",
+    "stock_qty": "50.00",
+    "is_active": true,
+    "created_at": "2025-12-08T08:31:37.168816",
+    "updated_at": "2025-12-08T08:31:37.168816"
+  },
+  {
+    "id": 15,
+    "name": "Light Bulb LED",
+    "category": "Utilities",
+    "unit": "piece",
+    "unit_price": "125.00",
+    "stock_qty": "200.00",
+    "is_active": true,
+    "created_at": "2025-12-08T08:31:46.791964",
+    "updated_at": "2025-12-08T08:31:46.791964"
+  },
+  {
+    "id": 9,
+    "name": "Light Bulb LED",
+    "category": "Utilities",
+    "unit": "piece",
+    "unit_price": "125.00",
+    "stock_qty": "190.00",
+    "is_active": true,
+    "created_at": "2025-12-08T08:25:36.272258",
+    "updated_at": "2025-12-08T08:26:06.826602"
+  },
+  {
+    "id": 19,
+    "name": "Light Bulb LED",
+    "category": "Utilities",
+    "unit": "piece",
+    "unit_price": "125.00",
+    "stock_qty": "200.00",
+    "is_active": true,
+    "created_at": "2025-12-08T08:33:06.138097",
+    "updated_at": "2025-12-08T08:33:06.138097"
+  },
+  {
+    "id": 1,
+    "name": "Oil",
+    "category": "Grocery",
+    "unit": "liter",
+    "unit_price": "300.00",
+    "stock_qty": "50.00",
+    "is_active": true,
+    "created_at": "2025-12-07T18:52:27.291035",
+    "updated_at": "2025-12-08T08:30:24.984825"
+  },
+  {
+    "id": 3,
+    "name": "Oil",
+    "category": "Grocery",
+    "unit": "liter",
+    "unit_price": "200.00",
+    "stock_qty": "49.00",
+    "is_active": true,
+    "created_at": "2025-12-07T18:52:27.955374",
+    "updated_at": "2025-12-07T18:52:32.470679"
+  },
+  {
+    "id": 2,
+    "name": "Rice",
+    "category": "Grocery",
+    "unit": "kg",
+    "unit_price": "40.00",
+    "stock_qty": "147.00",
+    "is_active": true,
+    "created_at": "2025-12-07T18:52:27.737840",
+    "updated_at": "2025-12-07T18:52:31.802360"
+  },
+  {
+    "id": 16,
+    "name": "Rice 5kg",
+    "category": "Grocery",
+    "unit": "kg",
+    "unit_price": "45.50",
+    "stock_qty": "100.00",
+    "is_active": true,
+    "created_at": "2025-12-08T08:32:52.157307",
+    "updated_at": "2025-12-08T08:32:52.157307"
+  },
+  {
+    "id": 14,
+    "name": "Shampoo Bottle",
+    "category": "Beauty",
+    "unit": "liter",
+    "unit_price": "199.00",
+    "stock_qty": "75.00",
+    "is_active": true,
+    "created_at": "2025-12-08T08:31:41.946518",
+    "updated_at": "2025-12-08T08:31:41.946518"
+  },
+  {
+    "id": 18,
+    "name": "Shampoo Bottle",
+    "category": "Beauty",
+    "unit": "liter",
+    "unit_price": "199.00",
+    "stock_qty": "75.00",
+    "is_active": true,
+    "created_at": "2025-12-08T08:33:01.649156",
+    "updated_at": "2025-12-08T08:33:01.649156"
+  },
+  {
+    "id": 8,
+    "name": "Shampoo Bottle",
+    "category": "Beauty",
+    "unit": "liter",
+    "unit_price": "199.00",
+    "stock_qty": "72.00",
+    "is_active": true,
+    "created_at": "2025-12-08T08:25:31.806065",
+    "updated_at": "2025-12-08T08:26:06.826602"
+  }
+]
+
+[96m>> 2.6 Filter by Category (Grocery)[0m
+  Status: [92m200[0m
+  Response: [
+  {
+    "id": 3,
+    "name": "Oil",
+    "category": "Grocery",
+    "unit": "liter",
+    "unit_price": "200.00",
+    "stock_qty": "49.00",
+    "is_active": true,
+    "created_at": "2025-12-07T18:52:27.955374",
+    "updated_at": "2025-12-07T18:52:32.470679"
+  },
+  {
+    "id": 1,
+    "name": "Oil",
+    "category": "Grocery",
+    "unit": "liter",
+    "unit_price": "300.00",
+    "stock_qty": "50.00",
+    "is_active": true,
+    "created_at": "2025-12-07T18:52:27.291035",
+    "updated_at": "2025-12-08T08:30:24.984825"
+  },
+  {
+    "id": 2,
+    "name": "Rice",
+    "category": "Grocery",
+    "unit": "kg",
+    "unit_price": "40.00",
+    "stock_qty": "147.00",
+    "is_active": true,
+    "created_at": "2025-12-07T18:52:27.737840",
+    "updated_at": "2025-12-07T18:52:31.802360"
+  },
+  {
+    "id": 16,
+    "name": "Rice 5kg",
+    "category": "Grocery",
+    "unit": "kg",
+    "unit_price": "45.50",
+    "stock_qty": "100.00",
+    "is_active": true,
+    "created_at": "2025-12-08T08:32:52.157307",
+    "updated_at": "2025-12-08T08:32:52.157307"
+  }
+]
+
+[96m>> 2.7 Filter by Name (Rice)[0m
+  Status: [92m200[0m
+  Response: [
+  {
+    "id": 2,
+    "name": "Rice",
+    "category": "Grocery",
+    "unit": "kg",
+    "unit_price": "40.00",
+    "stock_qty": "147.00",
+    "is_active": true,
+    "created_at": "2025-12-07T18:52:27.737840",
+    "updated_at": "2025-12-07T18:52:31.802360"
+  },
+  {
+    "id": 16,
+    "name": "Rice 5kg",
+    "category": "Grocery",
+    "unit": "kg",
+    "unit_price": "45.50",
+    "stock_qty": "100.00",
+    "is_active": true,
+    "created_at": "2025-12-08T08:32:52.157307",
+    "updated_at": "2025-12-08T08:32:52.157307"
+  }
+]
+
+[96m>> 2.8 Get Single Item (ID: 16)[0m
+  Status: [92m200[0m
+  Response: {
+  "id": 16,
+  "name": "Rice 5kg",
+  "category": "Grocery",
+  "unit": "kg",
+  "unit_price": "45.50",
+  "stock_qty": "100.00",
+  "is_active": true,
+  "created_at": "2025-12-08T08:32:52.157307",
+  "updated_at": "2025-12-08T08:32:52.157307"
+}
+
+[96m>> 2.9 Update Item 1 - Change Price & Stock[0m
+  [93mPUT /api/items/16[0m
+  Data: {
+  "unit_price": 49.99,
+  "stock_qty": 80
+}
+  Status: [92m200[0m
+  Response: {
+  "id": 16,
+  "name": "Rice 5kg",
+  "category": "Grocery",
+  "unit": "kg",
+  "unit_price": "49.99",
+  "stock_qty": "80.00",
+  "is_active": true,
+  "created_at": "2025-12-08T08:32:52.157307",
+  "updated_at": "2025-12-08T08:33:24.911233"
+}
+
+[96m>> 2.10 Verify Item 1 Update[0m
+  Status: [92m200[0m
+  Response: {
+  "id": 16,
+  "name": "Rice 5kg",
+  "category": "Grocery",
+  "unit": "kg",
+  "unit_price": "49.99",
+  "stock_qty": "80.00",
+  "is_active": true,
+  "created_at": "2025-12-08T08:32:52.157307",
+  "updated_at": "2025-12-08T08:33:24.911233"
+}
+
+
+[1m[94m==================================================[0m
+[1m[94m3. BILLING ENDPOINTS[0m
+[1m[94m==================================================[0m
+
+[96m>> 3.1 Create Bill 1 - Multiple Items[0m
+  [93mPOST /api/bills[0m
+  Data: {
+  "customer_name": "John Doe",
+  "store_name": "Store A",
+  "items": [
+    {
+      "item_id": 16,
+      "quantity": 5
+    },
+    {
+      "item_id": 17,
+      "quantity": 2
+    }
+  ]
+}
+  Status: [92m500[0m
+  Response: {
+  "error": "Internal server error",
+  "details": "An unexpected error occurred. Please try again later."
+}
+
+[96m>> 3.2 Create Bill 2 - Different Customer[0m
+  [93mPOST /api/bills[0m
+  Data: {
+  "customer_name": "Jane Smith",
+  "store_name": "Store B",
+  "items": [
+    {
+      "item_id": 18,
+      "quantity": 3
+    },
+    {
+      "item_id": 19,
+      "quantity": 10
+    }
+  ]
+}
+  Status: [92m500[0m
+  Response: {
+  "error": "Internal server error",
+  "details": "An unexpected error occurred. Please try again later."
+}
+
+[96m>> 3.3 List All Bills[0m
+  Status: [92m500[0m
+  Response: {
+  "error": "Internal server error",
+  "details": "A database error occurred. Please try again later."
+}
+
+
+[1m[94m==================================================[0m
+[1m[94m4. ERROR HANDLING TESTS[0m
+[1m[94m==================================================[0m
+
+[96m>> 4.1 Create Item with Invalid Category (Electronics)[0m
+  [93mPOST /api/items[0m
+  Data: {
+  "name": "Invalid Item",
+  "category": "Electronics",
+  "unit": "piece",
+  "unit_price": 100.0,
+  "stock_qty": 10
+}
+  Status: [92m500[0m
+  Response: {
+  "error": "Internal server error",
+  "details": "A database error occurred. Please try again later."
+}
+
+[96m>> 4.2 Get Non-existent Item (ID: 9999)[0m
+  Status: [92m404[0m
+  Response: {
+  "error": "Not found",
+  "details": "Item with id 9999 not found"
+}
+
+[96m>> 4.3 Create Bill with Insufficient Stock[0m
+  [93mPOST /api/bills[0m
+  Data: {
+  "customer_name": "Test User",
+  "store_name": "Test Store",
+  "items": [
+    {
+      "item_id": 16,
+      "quantity": 10000
+    }
+  ]
+}
+  Status: [92m400[0m
+  Response: {
+  "error": "Business logic error",
+  "details": "Insufficient stock for item 'Rice 5kg': required=10000, available=75.00"
+}
+
+[96m>> 4.4 Create Bill with Non-existent Item[0m
+  [93mPOST /api/bills[0m
+  Data: {
+  "customer_name": "Test User",
+  "store_name": "Test Store",
+  "items": [
+    {
+      "item_id": 9999,
+      "quantity": 1
+    }
+  ]
+}
+  Status: [92m400[0m
+  Response: {
+  "error": "Business logic error",
+  "details": "Item with id 9999 not found"
+}
+
+
+[1m[94m==================================================[0m
+[1m[94m5. SOFT DELETE TEST[0m
+[1m[94m==================================================[0m
+
+[96m>> 5.1 Delete Item 2 (ID: 17)[0m
+  Status: [92m204[0m
+  Response: 
+
+[96m>> 5.2 Verify Item 2 is Gone (should return 404)[0m
+  Status: [92m404[0m
+  Response: {
+  "error": "Not found",
+  "details": "Item with id 17 not found"
+}
+
+[96m>> 5.3 List Items (Item 2 should be missing)[0m
+  Status: [92m200[0m
+  Response: [
+  {
+    "id": 13,
+    "name": "Cotton T-Shirt",
+    "category": "Garments",
+    "unit": "piece",
+    "unit_price": "299.99",
+    "stock_qty": "50.00",
+    "is_active": true,
+    "created_at": "2025-12-08T08:31:37.168816",
+    "updated_at": "2025-12-08T08:31:37.168816"
+  },
+  {
+    "id": 19,
+    "name": "Light Bulb LED",
+    "category": "Utilities",
+    "unit": "piece",
+    "unit_price": "125.00",
+    "stock_qty": "190.00",
+    "is_active": true,
+    "created_at": "2025-12-08T08:33:06.138097",
+    "updated_at": "2025-12-08T08:33:39.639282"
+  },
+  {
+    "id": 9,
+    "name": "Light Bulb LED",
+    "category": "Utilities",
+    "unit": "piece",
+    "unit_price": "125.00",
+    "stock_qty": "190.00",
+    "is_active": true,
+    "created_at": "2025-12-08T08:25:36.272258",
+    "updated_at": "2025-12-08T08:26:06.826602"
+  },
+  {
+    "id": 15,
+    "name": "Light Bulb LED",
+    "category": "Utilities",
+    "unit": "piece",
+    "unit_price": "125.00",
+    "stock_qty": "200.00",
+    "is_active": true,
+    "created_at": "2025-12-08T08:31:46.791964",
+    "updated_at": "2025-12-08T08:31:46.791964"
+  },
+  {
+    "id": 1,
+    "name": "Oil",
+    "category": "Grocery",
+    "unit": "liter",
+    "unit_price": "300.00",
+    "stock_qty": "50.00",
+    "is_active": true,
+    "created_at": "2025-12-07T18:52:27.291035",
+    "updated_at": "2025-12-08T08:30:24.984825"
+  },
+  {
+    "id": 3,
+    "name": "Oil",
+    "category": "Grocery",
+    "unit": "liter",
+    "unit_price": "200.00",
+    "stock_qty": "49.00",
+    "is_active": true,
+    "created_at": "2025-12-07T18:52:27.955374",
+    "updated_at": "2025-12-07T18:52:32.470679"
+  },
+  {
+    "id": 2,
+    "name": "Rice",
+    "category": "Grocery",
+    "unit": "kg",
+    "unit_price": "40.00",
+    "stock_qty": "147.00",
+    "is_active": true,
+    "created_at": "2025-12-07T18:52:27.737840",
+    "updated_at": "2025-12-07T18:52:31.802360"
+  },
+  {
+    "id": 16,
+    "name": "Rice 5kg",
+    "category": "Grocery",
+    "unit": "kg",
+    "unit_price": "49.99",
+    "stock_qty": "75.00",
+    "is_active": true,
+    "created_at": "2025-12-08T08:32:52.157307",
+    "updated_at": "2025-12-08T08:33:33.700646"
+  },
+  {
+    "id": 14,
+    "name": "Shampoo Bottle",
+    "category": "Beauty",
+    "unit": "liter",
+    "unit_price": "199.00",
+    "stock_qty": "75.00",
+    "is_active": true,
+    "created_at": "2025-12-08T08:31:41.946518",
+    "updated_at": "2025-12-08T08:31:41.946518"
+  },
+  {
+    "id": 8,
+    "name": "Shampoo Bottle",
+    "category": "Beauty",
+    "unit": "liter",
+    "unit_price": "199.00",
+    "stock_qty": "72.00",
+    "is_active": true,
+    "created_at": "2025-12-08T08:25:31.806065",
+    "updated_at": "2025-12-08T08:26:06.826602"
+  },
+  {
+    "id": 18,
+    "name": "Shampoo Bottle",
+    "category": "Beauty",
+    "unit": "liter",
+    "unit_price": "199.00",
+    "stock_qty": "72.00",
+    "is_active": true,
+    "created_at": "2025-12-08T08:33:01.649156",
+    "updated_at": "2025-12-08T08:33:39.639282"
+  }
+]
+
+
+[1m[94m==================================================[0m
+[1m[94mTEST SUMMARY[0m
+[1m[94m==================================================[0m
+
+[92m[1m[OK] All tests completed successfully![0m
+
+Test Coverage:
+  [OK] System endpoints (health, root)
+  [OK] Create items (4 different categories)
+  [OK] List and filter items
+  [OK] Get single item
+  [OK] Update item
+  [OK] Create bills
+  [OK] List and get bills
+  [OK] Error handling (invalid category, insufficient stock)
+  [OK] Soft delete functionality
+
