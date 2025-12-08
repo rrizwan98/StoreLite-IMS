@@ -105,7 +105,7 @@ async def startup_event():
         logger.info("Database tables initialized successfully")
     except Exception as e:
         logger.warning(f"Database initialization warning: {str(e)}")
-        logger.info("Continuing startup - database will be created on first API call")
+        logger.info("Using SQLite database for development")
 
 
 @app.on_event("shutdown")

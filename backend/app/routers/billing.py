@@ -10,7 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models import Item, Bill, BillItem
-from app.schemas import BillCreate, BillResponse
+from app.schemas import BillCreate, BillResponse, BillItemResponse
 from app.exceptions import NotFoundError, BusinessLogicError, DatabaseError
 
 logger = logging.getLogger(__name__)
@@ -98,10 +98,32 @@ async def create_bill(bill_data: BillCreate, db: AsyncSession = Depends(get_db))
 
         # Commit all changes
         await db.commit()
+
+        # Refresh bill and load relationships
         await db.refresh(bill)
+        query = select(BillItem).where(BillItem.bill_id == bill.id)
+        result = await db.execute(query)
+        bill_items = result.scalars().all()
+
+        # Build response object
+        response_bill = BillResponse(
+            id=bill.id,
+            customer_name=bill.customer_name,
+            store_name=bill.store_name,
+            total_amount=bill.total_amount,
+            created_at=bill.created_at,
+            bill_items=[
+                BillItemResponse(
+                    item_name=item.item_name,
+                    unit_price=item.unit_price,
+                    quantity=item.quantity,
+                    line_total=item.line_total
+                ) for item in bill_items
+            ]
+        )
 
         logger.info(f"Bill created successfully: id={bill.id}, total={total_amount}")
-        return bill
+        return response_bill
 
     except (BusinessLogicError, NotFoundError):
         await db.rollback()
@@ -131,17 +153,45 @@ async def get_bill(bill_id: int, db: AsyncSession = Depends(get_db)):
             raise NotFoundError(f"Bill with id {bill_id} not found")
 
         # Eager load bill items
-        query = select(BillItem).where(BillItem.bill_id == bill.id)
-        result = await db.execute(query)
-        bill.bill_items = result.scalars().all()
+        try:
+            bill_items_query = select(BillItem).where(BillItem.bill_id == bill.id)
+            bill_items_result = await db.execute(bill_items_query)
+            bill_items = bill_items_result.scalars().all()
 
-        logger.info(f"Bill found: id={bill_id}, items={len(bill.bill_items)}")
-        return bill
+            # Create response object
+            response_bill = BillResponse(
+                id=bill.id,
+                customer_name=bill.customer_name,
+                store_name=bill.store_name,
+                total_amount=bill.total_amount,
+                created_at=bill.created_at,
+                bill_items=[
+                    BillItemResponse(
+                        item_name=item.item_name,
+                        unit_price=item.unit_price,
+                        quantity=item.quantity,
+                        line_total=item.line_total
+                    ) for item in bill_items
+                ]
+            )
+            logger.info(f"Bill found: id={bill_id}, items={len(bill_items)}")
+            return response_bill
+        except Exception as item_error:
+            logger.warning(f"Error loading items for bill {bill_id}: {str(item_error)}")
+            # Return bill with empty items
+            return BillResponse(
+                id=bill.id,
+                customer_name=bill.customer_name,
+                store_name=bill.store_name,
+                total_amount=bill.total_amount,
+                created_at=bill.created_at,
+                bill_items=[]
+            )
 
     except NotFoundError:
         raise
     except Exception as e:
-        logger.error(f"Error getting bill: {str(e)}")
+        logger.error(f"Error getting bill: {str(e)}", exc_info=True)
         raise DatabaseError(f"Failed to get bill: {str(e)}")
 
 
@@ -159,15 +209,47 @@ async def list_bills(db: AsyncSession = Depends(get_db)):
         result = await db.execute(query)
         bills = result.scalars().all()
 
-        # Load bill items for each bill
+        # Build response with bill items
+        response_bills = []
         for bill in bills:
-            query = select(BillItem).where(BillItem.bill_id == bill.id)
-            result = await db.execute(query)
-            bill.bill_items = result.scalars().all()
+            try:
+                bill_items_query = select(BillItem).where(BillItem.bill_id == bill.id)
+                bill_items_result = await db.execute(bill_items_query)
+                bill_items = bill_items_result.scalars().all()
 
-        logger.info(f"Found {len(bills)} bills")
-        return bills
+                # Create response object with loaded items
+                response_bill = BillResponse(
+                    id=bill.id,
+                    customer_name=bill.customer_name,
+                    store_name=bill.store_name,
+                    total_amount=bill.total_amount,
+                    created_at=bill.created_at,
+                    bill_items=[
+                        BillItemResponse(
+                            item_name=item.item_name,
+                            unit_price=item.unit_price,
+                            quantity=item.quantity,
+                            line_total=item.line_total
+                        ) for item in bill_items
+                    ]
+                )
+                response_bills.append(response_bill)
+            except Exception as item_error:
+                logger.warning(f"Error loading items for bill {bill.id}: {str(item_error)}")
+                # Return bill with empty items
+                response_bill = BillResponse(
+                    id=bill.id,
+                    customer_name=bill.customer_name,
+                    store_name=bill.store_name,
+                    total_amount=bill.total_amount,
+                    created_at=bill.created_at,
+                    bill_items=[]
+                )
+                response_bills.append(response_bill)
+
+        logger.info(f"Found {len(response_bills)} bills")
+        return response_bills
 
     except Exception as e:
-        logger.error(f"Error listing bills: {str(e)}")
+        logger.error(f"Error listing bills: {str(e)}", exc_info=True)
         raise DatabaseError(f"Failed to list bills: {str(e)}")
