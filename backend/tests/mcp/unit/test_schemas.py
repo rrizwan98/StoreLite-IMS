@@ -12,7 +12,7 @@ class TestErrorResponse:
 
     def test_error_response_creation(self):
         """Test creating an error response."""
-        from backend.app.mcp_server.schemas import ErrorResponse
+        from app.mcp_server.schemas import ErrorResponse
 
         error = ErrorResponse(
             error="INSUFFICIENT_STOCK",
@@ -30,7 +30,7 @@ class TestPaginationInfo:
 
     def test_pagination_info_creation(self):
         """Test creating pagination info."""
-        from backend.app.mcp_server.schemas import PaginationInfo
+        from app.mcp_server.schemas import PaginationInfo
 
         page = PaginationInfo(page=1, limit=20, total=45, total_pages=3)
         assert page.total_pages == 3
@@ -43,7 +43,7 @@ class TestItemCreate:
 
     def test_item_create_success(self):
         """Test creating a valid item."""
-        from backend.app.mcp_server.schemas import ItemCreate
+        from app.mcp_server.schemas import ItemCreate
 
         item = ItemCreate(
             name="Sugar",
@@ -59,7 +59,7 @@ class TestItemCreate:
 
     def test_item_create_validates_category(self):
         """Test category validation."""
-        from backend.app.mcp_server.schemas import ItemCreate
+        from app.mcp_server.schemas import ItemCreate
 
         with pytest.raises(ValidationError):
             ItemCreate(
@@ -72,7 +72,7 @@ class TestItemCreate:
 
     def test_item_create_validates_unit(self):
         """Test unit validation."""
-        from backend.app.mcp_server.schemas import ItemCreate
+        from app.mcp_server.schemas import ItemCreate
 
         with pytest.raises(ValidationError):
             ItemCreate(
@@ -85,7 +85,7 @@ class TestItemCreate:
 
     def test_item_create_validates_positive_price(self):
         """Test price validation."""
-        from backend.app.mcp_server.schemas import ItemCreate
+        from app.mcp_server.schemas import ItemCreate
 
         with pytest.raises(ValidationError):
             ItemCreate(
@@ -98,7 +98,7 @@ class TestItemCreate:
 
     def test_item_create_validates_nonnegative_stock(self):
         """Test stock quantity validation."""
-        from backend.app.mcp_server.schemas import ItemCreate
+        from app.mcp_server.schemas import ItemCreate
 
         with pytest.raises(ValidationError):
             ItemCreate(
@@ -111,7 +111,7 @@ class TestItemCreate:
 
     def test_item_create_validates_name_length(self):
         """Test name validation."""
-        from backend.app.mcp_server.schemas import ItemCreate
+        from app.mcp_server.schemas import ItemCreate
 
         # Empty name should fail
         with pytest.raises(ValidationError):
@@ -129,7 +129,7 @@ class TestItemRead:
 
     def test_item_read_creation(self):
         """Test creating an ItemRead response."""
-        from backend.app.mcp_server.schemas import ItemRead
+        from app.mcp_server.schemas import ItemRead
 
         item = ItemRead(
             id=1,
@@ -152,7 +152,7 @@ class TestItemListResponse:
 
     def test_item_list_response_with_pagination(self):
         """Test ItemListResponse with pagination."""
-        from backend.app.mcp_server.schemas import ItemListResponse, ItemRead, PaginationInfo
+        from app.mcp_server.schemas import ItemListResponse, ItemRead, PaginationInfo
 
         items = [
             ItemRead(
@@ -177,7 +177,7 @@ class TestBillCreate:
 
     def test_bill_create_success(self):
         """Test creating a bill."""
-        from backend.app.mcp_server.schemas import BillCreate, BillItemCreate
+        from app.mcp_server.schemas import BillCreate, BillItemCreate
 
         bill = BillCreate(
             customer_name="John Doe",
@@ -190,7 +190,7 @@ class TestBillCreate:
 
     def test_bill_create_requires_items(self):
         """Test that bills require at least one item."""
-        from backend.app.mcp_server.schemas import BillCreate
+        from app.mcp_server.schemas import BillCreate
 
         with pytest.raises(ValidationError):
             BillCreate(
@@ -201,7 +201,7 @@ class TestBillCreate:
 
     def test_bill_create_validates_quantities(self):
         """Test quantity validation in bill items."""
-        from backend.app.mcp_server.schemas import BillCreate, BillItemCreate
+        from app.mcp_server.schemas import BillCreate, BillItemCreate
 
         with pytest.raises(ValidationError):
             BillCreate(
@@ -216,7 +216,7 @@ class TestBillRead:
 
     def test_bill_read_creation(self):
         """Test creating a BillRead response."""
-        from backend.app.mcp_server.schemas import BillRead
+        from app.mcp_server.schemas import BillRead
 
         bill = BillRead(
             id=1,
@@ -236,7 +236,7 @@ class TestErrorCodes:
 
     def test_error_codes_defined(self):
         """Test that all required error codes are defined."""
-        from backend.app.mcp_server.schemas import ERROR_CODES
+        from app.mcp_server.schemas import ERROR_CODES
 
         required_codes = [
             "ITEM_NOT_FOUND",
@@ -250,7 +250,7 @@ class TestErrorCodes:
 
     def test_error_codes_are_screaming_snake_case(self):
         """Test that error codes follow naming convention."""
-        from backend.app.mcp_server.schemas import ERROR_CODES
+        from app.mcp_server.schemas import ERROR_CODES
 
         for code in ERROR_CODES.values():
             assert code == code.upper()

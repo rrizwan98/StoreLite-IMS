@@ -25,14 +25,34 @@ async def run_server():
     """
     Start the MCP server with stdio transport (for Claude Code).
     """
+    from app.mcp_server.tools_inventory import (
+        inventory_add_item,
+        inventory_update_item,
+        inventory_delete_item,
+        inventory_list_items,
+    )
+    from app.mcp_server.tools_billing import (
+        billing_create_bill,
+        billing_get_bill,
+        billing_list_bills,
+    )
+
     server = create_server()
 
-    # Register tools will be added here in subsequent tasks
+    # Register tools excluding 'session' parameter (managed internally)
+    # Inventory tools
+    server.tool(exclude_args=["session"])(inventory_add_item)
+    server.tool(exclude_args=["session"])(inventory_update_item)
+    server.tool(exclude_args=["session"])(inventory_delete_item)
+    server.tool(exclude_args=["session"])(inventory_list_items)
+
+    # Billing tools
+    server.tool(exclude_args=["session"])(billing_create_bill)
+    server.tool(exclude_args=["session"])(billing_get_bill)
+    server.tool(exclude_args=["session"])(billing_list_bills)
 
     # Run server with stdio transport
-    async with server.stdio():
-        # Server is now listening on stdio
-        pass
+    await server.run_stdio_async()
 
 
 if __name__ == "__main__":

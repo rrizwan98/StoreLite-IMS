@@ -2,12 +2,18 @@
 Pytest fixtures for MCP tests
 """
 import pytest
+import sys
+import os
 from decimal import Decimal
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-from backend.app.database import Base
+
+# Add backend directory to path for imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+
+from app.database import Base
 
 # Register models once at module load time
-from backend.app.models import Item, Bill, BillItem
+from app.models import Item, Bill, BillItem
 
 
 def pytest_configure(config):
@@ -54,7 +60,7 @@ async def test_session(test_db):
 @pytest.fixture
 async def sample_items(test_session):
     """Pre-populate test database with sample items."""
-    from backend.app.models import Item
+    from app.models import Item
 
     items = [
         Item(
@@ -90,7 +96,7 @@ async def sample_items(test_session):
 @pytest.fixture
 async def sample_bills(test_session, sample_items):
     """Pre-populate test database with sample bills."""
-    from backend.app.models import Bill, BillItem
+    from app.models import Bill, BillItem
     from decimal import Decimal
 
     bills = []

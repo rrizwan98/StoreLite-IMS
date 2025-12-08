@@ -6,14 +6,14 @@ from decimal import Decimal
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
-from backend.app.models import Item
-from backend.app.mcp_server.exceptions import (
+from app.models import Item
+from app.mcp_server.exceptions import (
     MCPValidationError,
     MCPNotFoundError,
     MCPDatabaseError,
 )
-from backend.app.mcp_server.utils import mcp_error_handler
-from backend.app.mcp_server.schemas import ItemRead, ItemListResponse, PaginationInfo
+from app.mcp_server.utils import mcp_error_handler
+from app.mcp_server.schemas import ItemRead, ItemListResponse, PaginationInfo
 
 logger = logging.getLogger(__name__)
 

@@ -6,7 +6,7 @@ import pytest
 
 def test_server_initializes_without_error():
     """Test that MCP server initializes successfully."""
-    from backend.app.mcp_server.server import create_server
+    from app.mcp_server.server import create_server
 
     server = create_server()
     assert server is not None
@@ -16,7 +16,7 @@ def test_server_initializes_without_error():
 
 def test_server_supports_stdio_transport():
     """Test that server supports stdio transport."""
-    from backend.app.mcp_server.server import create_server
+    from app.mcp_server.server import create_server
 
     server = create_server()
     # Verify server exists and has capabilities

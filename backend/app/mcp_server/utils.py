@@ -7,8 +7,8 @@ from functools import wraps
 from typing import Dict, Any
 from decimal import Decimal
 
-from backend.app.database import async_session
-from backend.app.mcp_server.exceptions import (
+from app.database import async_session
+from app.mcp_server.exceptions import (
     MCPException,
     MCPValidationError,
     MCPNotFoundError,

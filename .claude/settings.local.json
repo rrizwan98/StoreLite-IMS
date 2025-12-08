@@ -1,7 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "Bash(.specify/scripts/bash/check-prerequisites.sh:*)"
+      "Bash(.specify/scripts/bash/check-prerequisites.sh:*)",
+      "Bash(python -m pytest:*)",
+      "Bash(python:*)"
     ],
     "deny": [],
     "ask": []

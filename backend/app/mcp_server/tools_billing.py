@@ -5,16 +5,17 @@ import logging
 from decimal import Decimal
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
+from sqlalchemy.orm import selectinload
 from datetime import datetime
 
-from backend.app.models import Bill, BillItem, Item
-from backend.app.mcp_server.exceptions import (
+from app.models import Bill, BillItem, Item
+from app.mcp_server.exceptions import (
     MCPValidationError,
     MCPNotFoundError,
     MCPInsufficientStockError,
     MCPDatabaseError,
 )
-from backend.app.mcp_server.utils import mcp_error_handler
+from app.mcp_server.utils import mcp_error_handler
 
 logger = logging.getLogger(__name__)
 
@@ -222,8 +223,8 @@ async def billing_list_bills(
         if limit > 100:
             limit = 100
 
-        # Build query
-        stmt = select(Bill)
+        # Build query with eager loading of relationships
+        stmt = select(Bill).options(selectinload(Bill.bill_items))
 
         # Date filtering
         if start_date:
@@ -256,7 +257,7 @@ async def billing_list_bills(
         count_result = await session.execute(count_stmt)
         total = len(count_result.scalars().all())
 
-        # Get paginated bills
+        # Get paginated bills with eager loading
         offset = (page - 1) * limit
         stmt = stmt.offset(offset).limit(limit).order_by(Bill.created_at.desc())
 

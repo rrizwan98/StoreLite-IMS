@@ -9,7 +9,7 @@ class TestMCPExceptions:
 
     def test_mcp_validation_error_creation(self):
         """Test creating a validation error."""
-        from backend.app.mcp_server.exceptions import MCPValidationError
+        from app.mcp_server.exceptions import MCPValidationError
 
         exc = MCPValidationError(
             "CATEGORY_INVALID",
@@ -23,14 +23,14 @@ class TestMCPExceptions:
 
     def test_mcp_not_found_error_creation(self):
         """Test creating a not found error."""
-        from backend.app.mcp_server.exceptions import MCPNotFoundError
+        from app.mcp_server.exceptions import MCPNotFoundError
 
         exc = MCPNotFoundError("ITEM_NOT_FOUND", "Item 5 not found")
         assert exc.error_code == "ITEM_NOT_FOUND"
 
     def test_mcp_insufficient_stock_error_creation(self):
         """Test creating an insufficient stock error."""
-        from backend.app.mcp_server.exceptions import MCPInsufficientStockError
+        from app.mcp_server.exceptions import MCPInsufficientStockError
 
         exc = MCPInsufficientStockError(
             "INSUFFICIENT_STOCK",
@@ -47,8 +47,8 @@ class TestErrorResponseBuilder:
 
     def test_exception_to_error_response_mcp_exception(self):
         """Test converting MCPException to error response."""
-        from backend.app.mcp_server.utils import exception_to_error_response
-        from backend.app.mcp_server.exceptions import MCPValidationError
+        from app.mcp_server.utils import exception_to_error_response
+        from app.mcp_server.exceptions import MCPValidationError
 
         exc = MCPValidationError("CATEGORY_INVALID", "Invalid category")
         response = exception_to_error_response(exc)
@@ -59,7 +59,7 @@ class TestErrorResponseBuilder:
 
     def test_exception_to_error_response_generic_exception(self):
         """Test converting generic exception to DATABASE_ERROR."""
-        from backend.app.mcp_server.utils import exception_to_error_response
+        from app.mcp_server.utils import exception_to_error_response
 
         exc = Exception("Something went wrong")
         response = exception_to_error_response(exc)

@@ -11,7 +11,7 @@ class TestInventoryAddItem:
     @pytest.mark.asyncio
     async def test_inventory_add_item_success(self, test_session):
         """Test successful item creation."""
-        from backend.app.mcp_server.tools_inventory import inventory_add_item
+        from app.mcp_server.tools_inventory import inventory_add_item
 
         result = await inventory_add_item(
             name="Sugar",
@@ -31,8 +31,8 @@ class TestInventoryAddItem:
     @pytest.mark.asyncio
     async def test_inventory_add_item_validates_category(self, test_session):
         """Test validation error for invalid category."""
-        from backend.app.mcp_server.tools_inventory import inventory_add_item
-        from backend.app.mcp_server.exceptions import MCPValidationError
+        from app.mcp_server.tools_inventory import inventory_add_item
+        from app.mcp_server.exceptions import MCPValidationError
 
         with pytest.raises(MCPValidationError) as exc_info:
             await inventory_add_item(
@@ -48,8 +48,8 @@ class TestInventoryAddItem:
     @pytest.mark.asyncio
     async def test_inventory_add_item_validates_price(self, test_session):
         """Test validation error for negative price."""
-        from backend.app.mcp_server.tools_inventory import inventory_add_item
-        from backend.app.mcp_server.exceptions import MCPValidationError
+        from app.mcp_server.tools_inventory import inventory_add_item
+        from app.mcp_server.exceptions import MCPValidationError
 
         with pytest.raises(MCPValidationError):
             await inventory_add_item(
@@ -68,7 +68,7 @@ class TestInventoryUpdateItem:
     @pytest.mark.asyncio
     async def test_inventory_update_item_success(self, sample_items, test_session):
         """Test successful item update."""
-        from backend.app.mcp_server.tools_inventory import inventory_update_item
+        from app.mcp_server.tools_inventory import inventory_update_item
 
         item_id = sample_items[0].id
 
@@ -86,8 +86,8 @@ class TestInventoryUpdateItem:
     @pytest.mark.asyncio
     async def test_inventory_update_item_not_found(self, test_session):
         """Test update non-existent item."""
-        from backend.app.mcp_server.tools_inventory import inventory_update_item
-        from backend.app.mcp_server.exceptions import MCPNotFoundError
+        from app.mcp_server.tools_inventory import inventory_update_item
+        from app.mcp_server.exceptions import MCPNotFoundError
 
         with pytest.raises(MCPNotFoundError):
             await inventory_update_item(
@@ -99,7 +99,7 @@ class TestInventoryUpdateItem:
     @pytest.mark.asyncio
     async def test_inventory_update_item_partial(self, sample_items, test_session):
         """Test partial update (only name)."""
-        from backend.app.mcp_server.tools_inventory import inventory_update_item
+        from app.mcp_server.tools_inventory import inventory_update_item
 
         item_id = sample_items[0].id
         original_price = float(sample_items[0].unit_price)
@@ -120,8 +120,8 @@ class TestInventoryDeleteItem:
     @pytest.mark.asyncio
     async def test_inventory_delete_item_success(self, sample_items, test_session):
         """Test soft delete sets is_active = FALSE."""
-        from backend.app.mcp_server.tools_inventory import inventory_delete_item
-        from backend.app.models import Item
+        from app.mcp_server.tools_inventory import inventory_delete_item
+        from app.models import Item
         from sqlalchemy import select
 
         item_id = sample_items[0].id
@@ -140,8 +140,8 @@ class TestInventoryDeleteItem:
     @pytest.mark.asyncio
     async def test_inventory_delete_item_not_found(self, test_session):
         """Test delete non-existent item."""
-        from backend.app.mcp_server.tools_inventory import inventory_delete_item
-        from backend.app.mcp_server.exceptions import MCPNotFoundError
+        from app.mcp_server.tools_inventory import inventory_delete_item
+        from app.mcp_server.exceptions import MCPNotFoundError
 
         with pytest.raises(MCPNotFoundError):
             await inventory_delete_item(item_id=9999, session=test_session)
@@ -153,7 +153,7 @@ class TestInventoryListItems:
     @pytest.mark.asyncio
     async def test_inventory_list_items_success(self, sample_items, test_session):
         """Test list all items."""
-        from backend.app.mcp_server.tools_inventory import inventory_list_items
+        from app.mcp_server.tools_inventory import inventory_list_items
 
         result = await inventory_list_items(session=test_session)
 
@@ -165,7 +165,7 @@ class TestInventoryListItems:
     @pytest.mark.asyncio
     async def test_inventory_list_items_filter_by_name(self, sample_items, test_session):
         """Test filter by name."""
-        from backend.app.mcp_server.tools_inventory import inventory_list_items
+        from app.mcp_server.tools_inventory import inventory_list_items
 
         result = await inventory_list_items(
             name="Sugar",
@@ -177,7 +177,7 @@ class TestInventoryListItems:
     @pytest.mark.asyncio
     async def test_inventory_list_items_pagination_defaults(self, sample_items, test_session):
         """Test pagination defaults (20 items, max 100)."""
-        from backend.app.mcp_server.tools_inventory import inventory_list_items
+        from app.mcp_server.tools_inventory import inventory_list_items
 
         result = await inventory_list_items(session=test_session)
 
@@ -187,7 +187,7 @@ class TestInventoryListItems:
     @pytest.mark.asyncio
     async def test_inventory_list_items_excludes_inactive(self, sample_items, test_session):
         """Test inactive items excluded from list."""
-        from backend.app.mcp_server.tools_inventory import (
+        from app.mcp_server.tools_inventory import (
             inventory_delete_item,
             inventory_list_items
         )
