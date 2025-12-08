@@ -1,9 +1,9 @@
 ---
 feature: 003-nextjs-frontend-p3
 date: 2025-12-08
-status: Phase 1-4 Complete - Ready for User Story 3
+status: Phase 1-5 Complete - Admin Features Done, Ready for POS
 total_tasks: 56
-completed_tasks: 29
+completed_tasks: 33
 ---
 
 # Tasks: Next.js Frontend UI (Phase 3) - StoreLite IMS
@@ -133,7 +133,7 @@ completed_tasks: 29
 
 ---
 
-## Phase 5: User Story 3 - Store Admin: Update Item Price and Stock (Priority: P1)
+## Phase 5: User Story 3 - Store Admin: Update Item Price and Stock (Priority: P1) ✅ COMPLETE
 
 **Goal**: Allow admins to edit item price and stock via modal form (FR-005, FR-017)
 
@@ -141,7 +141,7 @@ completed_tasks: 29
 
 ### Implementation for User Story 3
 
-- [ ] T030 [P] [US3] Create EditItemModal component `frontend/components/admin/EditItemModal.tsx` with:
+- [x] T030 [P] [US3] Create EditItemModal component `frontend/components/admin/EditItemModal.tsx` with:
   - Modal/dialog showing pre-filled form with current item data (name, category, unit, unit_price, stock_qty)
   - Client-side validation on save (same validateItem rules - no negative prices/stock)
   - Save button calls api.updateItem() with item ID and new data
@@ -150,22 +150,22 @@ completed_tasks: 29
   - Disables Save button during submission (FR-018)
   - Shows error message if API call fails with retry button (FR-020 pattern)
   - Success message on successful update
-- [ ] T031 [US3] Update ItemsTable component `frontend/components/admin/ItemsTable.tsx` to:
+- [x] T031 [US3] Update ItemsTable component `frontend/components/admin/ItemsTable.tsx` to:
   - Add Edit button in Actions column that opens EditItemModal
   - Pass item data to modal as prop
   - Implement onSave callback to refresh items list after successful edit
   - Pass onEdit callback to modal
-- [ ] T032 [US3] Create ItemActions component `frontend/components/admin/ItemActions.tsx` (refactor Edit/Delete buttons)
+- [x] T032 [US3] Create ItemActions component `frontend/components/admin/ItemActions.tsx` (refactor Edit/Delete buttons)
   - Edit button triggers modal open
   - Delete button (optional for US3, but prepare structure)
   - Can be used in ItemsTable for cleaner code
-- [ ] T033 [US3] Update admin page `frontend/app/admin/page.tsx` to:
+- [x] T033 [US3] Update admin page `frontend/app/admin/page.tsx` to:
   - Manage EditItemModal visibility state
   - Pass selected item to modal
   - Implement onSave handler to refresh items via refetch()
   - Update ItemsTable to show updated items after edit
 
-**Checkpoint**: User Story 3 complete - admin can edit existing items with validation and error handling
+**Checkpoint**: User Story 3 complete - admin can edit existing items with validation and error handling ✅
 
 ---
 

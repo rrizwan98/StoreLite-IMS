@@ -75,7 +75,7 @@ export default function ItemsTable({ items, loading = false, onEdit, onDelete }:
                     {onEdit && (
                       <button
                         onClick={() => onEdit(item)}
-                        className="px-3 py-1 bg-primary text-white text-xs font-medium rounded hover:bg-opacity-90 transition-colors"
+                        className="px-3 py-1 bg-primary text-white text-xs font-medium rounded hover:bg-opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                       >
                         Edit
                       </button>
@@ -91,7 +91,7 @@ export default function ItemsTable({ items, loading = false, onEdit, onDelete }:
                             onDelete(item);
                           }
                         }}
-                        className="px-3 py-1 bg-error text-white text-xs font-medium rounded hover:bg-opacity-90 transition-colors"
+                        className="px-3 py-1 bg-error text-white text-xs font-medium rounded hover:bg-opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                       >
                         Delete
                       </button>

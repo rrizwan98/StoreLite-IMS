@@ -12,12 +12,14 @@ import { useItems } from '@/lib/hooks';
 import AddItemForm from '@/components/admin/AddItemForm';
 import ItemsTable from '@/components/admin/ItemsTable';
 import Filters from '@/components/admin/Filters';
+import EditItemModal from '@/components/admin/EditItemModal';
 import ErrorBoundary from '@/components/shared/ErrorBoundary';
 import ErrorMessage from '@/components/shared/ErrorMessage';
 
 export default function AdminPage() {
   const [filters, setFilters] = useState<{ name?: string; category?: string }>({});
   const { items, loading, error, refetch } = useItems(filters);
+  const [selectedItemForEdit, setSelectedItemForEdit] = useState<Item | null>(null);
 
   const handleItemAdded = useCallback(
     (item: Item) => {
@@ -34,6 +36,23 @@ export default function AdminPage() {
   const handleRetry = useCallback(() => {
     refetch();
   }, [refetch]);
+
+  const handleEditItem = useCallback((item: Item) => {
+    setSelectedItemForEdit(item);
+  }, []);
+
+  const handleSaveItem = useCallback(
+    (updatedItem: Item) => {
+      // Update items list with the updated item
+      refetch();
+      setSelectedItemForEdit(null);
+    },
+    [refetch]
+  );
+
+  const handleCloseModal = useCallback(() => {
+    setSelectedItemForEdit(null);
+  }, []);
 
   return (
     <ErrorBoundary>
@@ -61,7 +80,7 @@ export default function AdminPage() {
           )}
 
           {/* Items Table */}
-          <ItemsTable items={items} loading={loading} />
+          <ItemsTable items={items} loading={loading} onEdit={handleEditItem} />
 
           {/* Summary */}
           {!loading && items.length > 0 && (
@@ -73,6 +92,13 @@ export default function AdminPage() {
           )}
         </div>
       </div>
+
+      {/* Edit Item Modal */}
+      <EditItemModal
+        item={selectedItemForEdit}
+        onSave={handleSaveItem}
+        onCancel={handleCloseModal}
+      />
     </ErrorBoundary>
   );
 }
