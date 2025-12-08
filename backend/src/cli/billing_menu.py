@@ -15,7 +15,7 @@ from src.cli.ui_utils import (
     get_input_with_validation,
     confirm,
 )
-from src.services.validation_service import ValidationService
+from src.services.validation import ValidationService
 from src.cli.error_handler import (
     ItemNotFoundError,
     InsufficientStockError,

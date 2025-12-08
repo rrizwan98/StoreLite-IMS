@@ -34,7 +34,7 @@ def main():
         logger.info("Database connection established")
 
         # Get session
-        with db.session() as session:
+        with db.session_scope() as session:
             # Start main menu
             main_menu(session)
 

@@ -4,7 +4,7 @@ CLI menu for adding items to inventory (T023)
 
 from decimal import Decimal
 from src.services.inventory_service import InventoryService
-from src.services.validation_service import ValidationService
+from src.services.validation import ValidationService
 from src.cli.ui_utils import (
     display_header,
     display_error,

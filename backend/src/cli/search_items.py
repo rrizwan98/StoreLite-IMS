@@ -12,7 +12,7 @@ from src.cli.ui_utils import (
     format_items_table,
     get_input_with_validation,
 )
-from src.services.validation_service import ValidationService
+from src.services.validation import ValidationService
 from src.cli.error_handler import DatabaseError
 
 
