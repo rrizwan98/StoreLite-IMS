@@ -1,9 +1,9 @@
 ---
 feature: 003-nextjs-frontend-p3
 date: 2025-12-08
-status: Phase 1-3 Complete - Ready for User Story 2
+status: Phase 1-4 Complete - Ready for User Story 3
 total_tasks: 56
-completed_tasks: 25
+completed_tasks: 29
 ---
 
 # Tasks: Next.js Frontend UI (Phase 3) - StoreLite IMS
@@ -96,7 +96,7 @@ completed_tasks: 25
 
 ---
 
-## Phase 4: User Story 2 - Store Admin: View and Search Inventory (Priority: P1)
+## Phase 4: User Story 2 - Store Admin: View and Search Inventory (Priority: P1) ✅ COMPLETE
 
 **Goal**: Display all inventory items in searchable table with filters by name and category (FR-003, FR-004, FR-018)
 
@@ -104,23 +104,23 @@ completed_tasks: 25
 
 ### Implementation for User Story 2
 
-- [ ] T026 [P] [US2] Create ItemsTable component `frontend/components/admin/ItemsTable.tsx` with:
+- [x] T026 [P] [US2] Create ItemsTable component `frontend/components/admin/ItemsTable.tsx` with:
   - Column headers: Name, Category, Unit, Price, Stock, Actions
   - Displays items passed as prop
   - Shows loading spinner during API calls
   - Renders empty state message "No items found" when table is empty
   - Includes Edit and Delete buttons in Actions column
-- [ ] T027 [P] [US2] Create search/filter components `frontend/components/admin/Filters.tsx` with:
+- [x] T027 [P] [US2] Create search/filter components `frontend/components/admin/Filters.tsx` with:
   - Name search input (debounced, case-insensitive substring match per FR-004)
   - Category dropdown filter (exact match)
   - Clear filters button
   - Calls parent callback on filter change
-- [ ] T028 [P] [US2] Create useItems custom hook in `frontend/lib/hooks.ts` to:
+- [x] T028 [P] [US2] Create useItems custom hook in `frontend/lib/hooks.ts` to:
   - Fetch items on component mount via api.getItems()
   - Handle loading and error states
   - Support filtering by name and category (client-side or server-side query params)
   - Return: items, loading, error, refetch function
-- [ ] T029 [US2] Update admin page `frontend/app/admin/page.tsx` to:
+- [x] T029 [US2] Update admin page `frontend/app/admin/page.tsx` to:
   - Import and use useItems() hook
   - Render Filters component with state management
   - Render ItemsTable with filtered items
@@ -129,7 +129,7 @@ completed_tasks: 25
   - Show ErrorMessage with Retry button on API error (FR-007 concept)
   - Integrate real-time item updates: call refetch() when AddItemForm adds item
 
-**Checkpoint**: User Story 2 complete - admin can view all items, search by name, filter by category
+**Checkpoint**: User Story 2 complete - admin can view all items, search by name, filter by category ✅
 
 ---
 
