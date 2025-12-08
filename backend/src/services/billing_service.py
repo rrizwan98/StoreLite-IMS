@@ -88,6 +88,70 @@ class BillingService:
         """Get current cart contents"""
         return self.cart.copy()
 
+    def remove_from_cart(self, item_id: int) -> bool:
+        """
+        Remove item from cart
+
+        Args:
+            item_id: Item ID to remove
+
+        Returns:
+            True if item was removed, False if not found
+
+        Raises:
+            ValidationError: If item not in cart
+        """
+        for i, cart_item in enumerate(self.cart):
+            if cart_item["item_id"] == item_id:
+                removed_item = self.cart.pop(i)
+                logger.info(f"Item removed from cart: {removed_item['item_name']}")
+                return True
+
+        raise ValidationError(f"Item {item_id} not found in cart")
+
+    def update_cart_item_quantity(self, item_id: int, new_quantity: str | float | Decimal) -> Dict:
+        """
+        Update quantity of item already in cart
+
+        Args:
+            item_id: Item ID to update
+            new_quantity: New quantity
+
+        Returns:
+            Updated cart item dictionary
+
+        Raises:
+            ValidationError: If validation fails or item not in cart
+            ItemNotFoundError: If item not found in inventory
+        """
+        # Validate new quantity
+        is_valid, error_msg = ValidationService.validate_quantity(new_quantity)
+        if not is_valid:
+            raise ValidationError(error_msg)
+
+        new_quantity_decimal = Decimal(str(new_quantity))
+
+        # Get the original item to check stock
+        item = self.inventory_service.get_item(item_id)
+
+        # Check stock for new quantity
+        if item.stock_qty < new_quantity_decimal:
+            raise ValidationError(
+                f"Insufficient stock for {item.name}. "
+                f"Available: {item.stock_qty}, Requested: {new_quantity_decimal}"
+            )
+
+        # Find and update cart item
+        for cart_item in self.cart:
+            if cart_item["item_id"] == item_id:
+                # Update quantity and recalculate line total
+                cart_item["quantity"] = new_quantity_decimal
+                cart_item["line_total"] = item.unit_price * new_quantity_decimal
+                logger.info(f"Cart item updated: {item.name} (new qty: {new_quantity_decimal})")
+                return cart_item
+
+        raise ValidationError(f"Item {item_id} not found in cart")
+
     def clear_cart(self) -> None:
         """Clear the cart"""
         self.cart = []
