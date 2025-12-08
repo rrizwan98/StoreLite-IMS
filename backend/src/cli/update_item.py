@@ -52,16 +52,18 @@ def update_item_menu(db_session):
         print("  4. Delete Item (Soft Delete)")
         print("  5. Cancel")
 
-        choice = get_numeric_input(
+        choice_str = get_numeric_input(
             prompt="Select option (1-5): ",
             min_val=1,
             max_val=5
         )
 
+        choice = int(choice_str)
         if choice == 5:
             display_error("Update cancelled.")
             return
 
+        choice = int(choice_str)
         if choice == 4:
             # Soft delete operation
             return _soft_delete_item(inventory_service, item, item_id)

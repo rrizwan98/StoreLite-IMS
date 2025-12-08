@@ -81,7 +81,7 @@ def _search_by_category(inventory_service):
     print("\nValid categories: Grocery, Garments, Beauty, Utilities, Other")
     category = get_input_with_validation(
         prompt="Enter category: ",
-        validator_func=lambda x: x.strip() if x.strip() else None
+        validator_func=lambda x: (True, "") if x.strip() else (False, "Category cannot be empty")
     )
     results = inventory_service.search_by_category(category)
     return results
@@ -92,13 +92,13 @@ def _search_by_price_range(inventory_service):
     try:
         min_price_str = get_input_with_validation(
             prompt="Enter minimum price: ",
-            validator_func=lambda x: x.strip() if x.strip() else None
+            validator_func=lambda x: (True, "") if x.strip() else (False, "Price cannot be empty")
         )
         min_price = Decimal(min_price_str)
 
         max_price_str = get_input_with_validation(
             prompt="Enter maximum price: ",
-            validator_func=lambda x: x.strip() if x.strip() else None
+            validator_func=lambda x: (True, "") if x.strip() else (False, "Price cannot be empty")
         )
         max_price = Decimal(max_price_str)
 
@@ -108,6 +108,6 @@ def _search_by_price_range(inventory_service):
 
         results = inventory_service.search_by_price_range(min_price, max_price)
         return results
-    except (ValueError, Decimal) as e:
+    except ValueError as e:
         display_error(f"Invalid price format. Please enter valid decimal numbers.")
         return []

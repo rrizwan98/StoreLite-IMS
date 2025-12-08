@@ -63,29 +63,34 @@ def billing_menu(db_session):
             print("  5. Confirm & Finalize Bill")
             print("  6. Cancel Bill")
 
-            choice = get_numeric_input(
+            choice_str = get_numeric_input(
                 prompt="Select option (1-6): ",
                 min_val=1,
                 max_val=6
             )
 
-            if choice == 1:
+            choice = int(choice_str)
+        if choice == 1:
                 # Add item to cart
                 _add_item_to_cart(inventory_service, billing_service)
 
-            elif choice == 2:
+            elchoice = int(choice_str)
+        if choice == 2:
                 # View cart
                 _view_cart(billing_service)
 
-            elif choice == 3:
+            elchoice = int(choice_str)
+        if choice == 3:
                 # Update item quantity
                 _update_cart_quantity(billing_service)
 
-            elif choice == 4:
+            elchoice = int(choice_str)
+        if choice == 4:
                 # Remove item from cart
                 _remove_from_cart(billing_service)
 
-            elif choice == 5:
+            elchoice = int(choice_str)
+        if choice == 5:
                 # Confirm bill
                 cart = billing_service.get_cart()
                 if not cart:
@@ -110,7 +115,8 @@ def billing_menu(db_session):
                 display_success("Bill created successfully!")
                 return final_bill
 
-            elif choice == 6:
+            elchoice = int(choice_str)
+        if choice == 6:
                 # Cancel bill
                 if confirm("Cancel this bill?"):
                     billing_service.clear_cart()

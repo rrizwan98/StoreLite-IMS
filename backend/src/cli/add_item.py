@@ -40,10 +40,11 @@ def add_item_menu(db_session):
 
         category_choice = get_numeric_input(
             prompt="Select Category (1-5): ",
+            allow_decimal=False,
             min_val=1,
             max_val=5
         )
-        category = categories[category_choice - 1]
+        category = categories[int(category_choice) - 1]
 
         # Get unit
         display_header("AVAILABLE UNITS")
@@ -53,10 +54,11 @@ def add_item_menu(db_session):
 
         unit_choice = get_numeric_input(
             prompt="Select Unit (1-8): ",
+            allow_decimal=False,
             min_val=1,
             max_val=8
         )
-        unit = units[unit_choice - 1]
+        unit = units[int(unit_choice) - 1]
 
         # Get unit price
         unit_price = get_numeric_input(
@@ -91,8 +93,8 @@ def add_item_menu(db_session):
             name=item_name,
             category=category,
             unit=unit,
-            unit_price=unit_price,
-            stock_qty=stock_qty,
+            unit_price=Decimal(unit_price),
+            stock_qty=Decimal(stock_qty),
             is_active=True
         )
 
