@@ -26,7 +26,7 @@ from src.cli.error_handler import (
 
 def billing_menu(db_session):
     """
-    Display billing menu for creating invoices
+    Display billing menu for creating invoices with full cart management
 
     Args:
         db_session: SQLAlchemy session for database operations
@@ -38,56 +38,57 @@ def billing_menu(db_session):
         billing_service = BillingService(db_session)
 
         # Get customer and store info
-        customer_name = get_input_with_validation(
-            prompt="Customer Name (optional, press Enter to skip): ",
-            validator=lambda x: (True, "") if not x or len(x) <= 255 else (False, "Name too long"),
-            error_message="Invalid customer name"
-        ) or None
+        customer_name = input("Customer Name (optional, press Enter to skip): ").strip() or None
+        store_name = input("Store Name (optional, press Enter to skip): ").strip() or None
 
-        store_name = get_input_with_validation(
-            prompt="Store Name (optional, press Enter to skip): ",
-            validator=lambda x: (True, "") if not x or len(x) <= 255 else (False, "Name too long"),
-            error_message="Invalid store name"
-        ) or None
+        # Create bill draft (empty cart)
+        billing_service.create_bill_draft()
 
-        # Create bill draft
-        bill = billing_service.create_bill_draft(
-            customer_name=customer_name,
-            store_name=store_name
-        )
-
-        display_header(f"BILL #{bill.id} - ADD ITEMS")
+        display_header("BILL - ADD ITEMS TO CART")
 
         # Add items to bill
         while True:
+            cart = billing_service.get_cart()
+            cart_count = len(cart)
+
+            print(f"\n  Cart Items: {cart_count}")
+            if cart_count > 0:
+                total = billing_service.calculate_bill_total()
+                print(f"  Cart Total: {total}")
+
             print("\n  1. Add Item")
             print("  2. View Cart")
-            print("  3. Confirm & Pay")
-            print("  4. Cancel Bill")
+            print("  3. Update Item Quantity")
+            print("  4. Remove Item from Cart")
+            print("  5. Confirm & Finalize Bill")
+            print("  6. Cancel Bill")
 
             choice = get_numeric_input(
-                prompt="Select option (1-4): ",
+                prompt="Select option (1-6): ",
                 min_val=1,
-                max_val=4,
-                error_message="Please select a valid option (1-4)"
+                max_val=6,
+                error_message="Please select a valid option (1-6)"
             )
 
             if choice == 1:
-                # Add item to bill
-                _add_item_to_bill(bill, inventory_service, billing_service, db_session)
+                # Add item to cart
+                _add_item_to_cart(inventory_service, billing_service)
 
             elif choice == 2:
                 # View cart
-                cart = billing_service.get_cart(bill.id)
-                if not cart:
-                    display_message("Cart is empty")
-                else:
-                    display_header("CURRENT CART")
-                    _display_bill_items(cart)
+                _view_cart(billing_service)
 
             elif choice == 3:
+                # Update item quantity
+                _update_cart_quantity(billing_service)
+
+            elif choice == 4:
+                # Remove item from cart
+                _remove_from_cart(billing_service)
+
+            elif choice == 5:
                 # Confirm bill
-                cart = billing_service.get_cart(bill.id)
+                cart = billing_service.get_cart()
                 if not cart:
                     display_error("Cannot create bill without items")
                     continue
@@ -97,21 +98,25 @@ def billing_menu(db_session):
                     continue
 
                 # Confirm bill (deduct stock and save)
-                final_bill = billing_service.confirm_bill(bill.id)
+                final_bill = billing_service.confirm_bill(
+                    customer_name=customer_name,
+                    store_name=store_name
+                )
                 display_header("BILL FINALIZED")
-                _display_bill_items(final_bill.bill_items)
-                print(f"\n  Total: {final_bill.total_amount}")
+                print(f"\n  Bill ID: {final_bill.id}")
+                print(f"  Customer: {final_bill.customer_name or 'N/A'}")
+                print(f"  Store: {final_bill.store_name or 'N/A'}")
+                print(f"  Total: {final_bill.total_amount}")
+                print(f"  Items: {len(final_bill.bill_items)}")
                 display_success("Bill created successfully!")
                 return final_bill
 
-            elif choice == 4:
+            elif choice == 6:
                 # Cancel bill
                 if confirm("Cancel this bill?"):
-                    db_session.delete(bill)
-                    db_session.commit()
-                    display_error("Bill cancelled")
+                    billing_service.clear_cart()
+                    display_message("Bill cancelled")
                     return None
-                break
 
     except InsufficientStockError as e:
         display_error(f"Insufficient Stock: {str(e)}")
@@ -125,10 +130,9 @@ def billing_menu(db_session):
         display_error(f"Unexpected error: {str(e)}")
 
 
-def _add_item_to_bill(bill, inventory_service, billing_service, db_session):
-    """Helper function to add an item to bill"""
+def _add_item_to_cart(inventory_service, billing_service):
+    """Add an item to the cart"""
     try:
-        # Get item ID
         item_id = get_numeric_input(
             prompt="Enter Item ID: ",
             min_val=1,
@@ -137,11 +141,7 @@ def _add_item_to_bill(bill, inventory_service, billing_service, db_session):
         )
 
         item = inventory_service.get_item(item_id)
-        if not item:
-            display_error(f"Item {item_id} not found")
-            return
 
-        # Get quantity
         quantity = get_numeric_input(
             prompt=f"Quantity (available: {item.stock_qty}): ",
             min_val=Decimal("0.01"),
@@ -149,31 +149,88 @@ def _add_item_to_bill(bill, inventory_service, billing_service, db_session):
             error_message=f"Quantity must be between 0.01 and {item.stock_qty}"
         )
 
-        # Add to cart
-        bill_item = billing_service.add_to_cart(
-            bill_id=bill.id,
-            item_id=item_id,
-            quantity=quantity
-        )
-
+        cart_item = billing_service.add_to_cart(item_id, quantity)
         display_success(f"Added {quantity} x {item.name} to cart")
 
-    except InsufficientStockError as e:
-        display_error(f"Insufficient Stock: {str(e)}")
     except ItemNotFoundError as e:
         display_error(f"Item not found: {str(e)}")
+    except ValidationError as e:
+        display_error(f"Error: {str(e)}")
     except Exception as e:
         display_error(f"Error adding item: {str(e)}")
 
 
-def _display_bill_items(bill_items):
-    """Helper function to display bill items"""
-    if not bill_items:
-        display_message("No items in bill")
+def _view_cart(billing_service):
+    """Display cart contents"""
+    cart = billing_service.get_cart()
+    if not cart:
+        display_message("Cart is empty")
         return
 
-    print("\n  ID  Item Name           Unit Price  Qty    Total")
-    print("  " + "-" * 55)
-    for item in bill_items:
-        print(f"  {item.item_id:<3} {item.item_name:<17} {item.unit_price:>10}  "
-              f"{item.quantity:>6}  {item.line_total:>10}")
+    display_header("CURRENT CART")
+    print("\n  Item Name           Unit Price  Qty    Total")
+    print("  " + "-" * 50)
+    total = Decimal("0")
+    for item in cart:
+        print(f"  {item['item_name']:<17} {item['unit_price']:>10}  "
+              f"{item['quantity']:>6}  {item['line_total']:>10}")
+        total += item['line_total']
+
+    print("  " + "-" * 50)
+    print(f"  {'TOTAL':<17} {' ':>10}  {' ':>6}  {total:>10}\n")
+
+
+def _update_cart_quantity(billing_service):
+    """Update quantity of item in cart"""
+    try:
+        cart = billing_service.get_cart()
+        if not cart:
+            display_message("Cart is empty")
+            return
+
+        item_id = get_numeric_input(
+            prompt="Enter Item ID to update: ",
+            min_val=1,
+            max_val=999999,
+            error_message="Please enter a valid Item ID"
+        )
+
+        new_quantity = get_numeric_input(
+            prompt="New Quantity: ",
+            min_val=Decimal("0.01"),
+            max_val=Decimal("999999"),
+            error_message="Quantity must be between 0.01 and 999999"
+        )
+
+        updated_item = billing_service.update_cart_item_quantity(item_id, new_quantity)
+        display_success(f"Updated {updated_item['item_name']} to {new_quantity} units")
+
+    except ValidationError as e:
+        display_error(f"Error: {str(e)}")
+    except Exception as e:
+        display_error(f"Error updating item: {str(e)}")
+
+
+def _remove_from_cart(billing_service):
+    """Remove item from cart"""
+    try:
+        cart = billing_service.get_cart()
+        if not cart:
+            display_message("Cart is empty")
+            return
+
+        item_id = get_numeric_input(
+            prompt="Enter Item ID to remove: ",
+            min_val=1,
+            max_val=999999,
+            error_message="Please enter a valid Item ID"
+        )
+
+        if confirm(f"Remove item {item_id} from cart?"):
+            billing_service.remove_from_cart(item_id)
+            display_success(f"Item {item_id} removed from cart")
+
+    except ValidationError as e:
+        display_error(f"Error: {str(e)}")
+    except Exception as e:
+        display_error(f"Error removing item: {str(e)}")

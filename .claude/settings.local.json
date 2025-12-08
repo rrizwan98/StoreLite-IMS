@@ -1,7 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "Bash(python -m pytest:*)"
+      "Bash(python -m pytest:*)",
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$(cat <<''EOF''\nfeat(phase5-refactor): complete billing CLI with full cart management\n\nPhase 5 REFACTOR - Complete:\n\nEnhanced backend/src/cli/billing_menu.py:\n- Full POS workflow with 6 menu options:\n  1. Add Item to Cart\n  2. View Cart (with formatted display)\n  3. Update Item Quantity\n  4. Remove Item from Cart\n  5. Confirm & Finalize Bill\n  6. Cancel Bill\n\nFeatures:\n- Interactive cart management with real-time totals\n- Stock validation before adding to cart\n- Quantity update with inventory checks\n- Safe item removal with confirmation\n- Customer/store name capture (optional)\n- Bill finalization with transactional integrity\n- Comprehensive error handling\n\nNew Helper Functions:\n- _add_item_to_cart() - Add with stock validation\n- _view_cart() - Display formatted cart with totals\n- _update_cart_quantity() - Modify quantities with stock check\n- _remove_from_cart() - Remove with user confirmation\n\nPhase 5 Summary (COMPLETE):\n✅ RED: 17 unit tests for cart operations\n✅ GREEN: 2 new BillingService methods (remove_from_cart, update_quantity)\n✅ REFACTOR: Enhanced billing CLI + 4 helper functions\n\nTest Results: 109/109 PASSING\n- Zero regressions\n- All cart operations validated\n- Full feature parity with spec\n\nPhase 5 Ready for Integration: YES\n\n🤖 Generated with Claude Code\n\nCo-Authored-By: Claude Haiku 4.5 <noreply@anthropic.com>\nEOF\n)\")"
     ],
     "deny": [],
     "ask": []
