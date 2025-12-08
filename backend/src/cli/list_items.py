@@ -26,11 +26,8 @@ def list_items_menu(db_session, sort_by: str = "name", active_only: bool = True)
     try:
         inventory_service = InventoryService(db_session)
 
-        # Get items from inventory
-        items = inventory_service.list_items(
-            sort_by=sort_by,
-            active_only=active_only
-        )
+        # Get items from inventory (list_items only returns active items by default)
+        items = inventory_service.list_items()
 
         if not items:
             display_message(

@@ -66,8 +66,7 @@ def billing_menu(db_session):
             choice = get_numeric_input(
                 prompt="Select option (1-6): ",
                 min_val=1,
-                max_val=6,
-                error_message="Please select a valid option (1-6)"
+                max_val=6
             )
 
             if choice == 1:
@@ -136,8 +135,7 @@ def _add_item_to_cart(inventory_service, billing_service):
         item_id = get_numeric_input(
             prompt="Enter Item ID: ",
             min_val=1,
-            max_val=999999,
-            error_message="Please enter a valid Item ID"
+            max_val=999999
         )
 
         item = inventory_service.get_item(item_id)
@@ -191,15 +189,13 @@ def _update_cart_quantity(billing_service):
         item_id = get_numeric_input(
             prompt="Enter Item ID to update: ",
             min_val=1,
-            max_val=999999,
-            error_message="Please enter a valid Item ID"
+            max_val=999999
         )
 
         new_quantity = get_numeric_input(
             prompt="New Quantity: ",
             min_val=Decimal("0.01"),
-            max_val=Decimal("999999"),
-            error_message="Quantity must be between 0.01 and 999999"
+            max_val=Decimal("999999")
         )
 
         updated_item = billing_service.update_cart_item_quantity(item_id, new_quantity)
@@ -222,8 +218,7 @@ def _remove_from_cart(billing_service):
         item_id = get_numeric_input(
             prompt="Enter Item ID to remove: ",
             min_val=1,
-            max_val=999999,
-            error_message="Please enter a valid Item ID"
+            max_val=999999
         )
 
         if confirm(f"Remove item {item_id} from cart?"):

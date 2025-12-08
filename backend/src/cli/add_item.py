@@ -29,8 +29,7 @@ def add_item_menu(db_session):
         # Get item name
         item_name = get_input_with_validation(
             prompt="Item Name: ",
-            validator=ValidationService.validate_item_name,
-            error_message="Item name is required and must not exceed 255 characters"
+            validator_func=ValidationService.validate_item_name
         )
 
         # Get category
@@ -42,8 +41,7 @@ def add_item_menu(db_session):
         category_choice = get_numeric_input(
             prompt="Select Category (1-5): ",
             min_val=1,
-            max_val=5,
-            error_message="Please select a valid category (1-5)"
+            max_val=5
         )
         category = categories[category_choice - 1]
 
@@ -56,8 +54,7 @@ def add_item_menu(db_session):
         unit_choice = get_numeric_input(
             prompt="Select Unit (1-8): ",
             min_val=1,
-            max_val=8,
-            error_message="Please select a valid unit (1-8)"
+            max_val=8
         )
         unit = units[unit_choice - 1]
 
@@ -65,16 +62,14 @@ def add_item_menu(db_session):
         unit_price = get_numeric_input(
             prompt="Unit Price: ",
             min_val=Decimal("0.01"),
-            max_val=Decimal("999999.99"),
-            error_message="Price must be between 0.01 and 999999.99"
+            max_val=Decimal("999999.99")
         )
 
         # Get stock quantity
         stock_qty = get_numeric_input(
             prompt="Initial Stock Quantity: ",
             min_val=Decimal("0"),
-            max_val=Decimal("999999.99"),
-            error_message="Stock quantity must be between 0 and 999999.99"
+            max_val=Decimal("999999.99")
         )
 
         # Display summary

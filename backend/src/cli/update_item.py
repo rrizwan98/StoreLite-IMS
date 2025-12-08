@@ -29,8 +29,7 @@ def update_item_menu(db_session):
         item_id = get_numeric_input(
             prompt="Enter Item ID to update: ",
             min_val=1,
-            max_val=999999,
-            error_message="Please enter a valid Item ID"
+            max_val=999999
         )
 
         inventory_service = InventoryService(db_session)
@@ -56,8 +55,7 @@ def update_item_menu(db_session):
         choice = get_numeric_input(
             prompt="Select option (1-5): ",
             min_val=1,
-            max_val=5,
-            error_message="Please select a valid option (1-5)"
+            max_val=5
         )
 
         if choice == 5:
@@ -76,8 +74,7 @@ def update_item_menu(db_session):
             new_price = get_numeric_input(
                 prompt="New Unit Price: ",
                 min_val=Decimal("0.01"),
-                max_val=Decimal("999999.99"),
-                error_message="Price must be between 0.01 and 999999.99"
+                max_val=Decimal("999999.99")
             )
 
         # Get new stock if needed
@@ -85,8 +82,7 @@ def update_item_menu(db_session):
             new_stock = get_numeric_input(
                 prompt="New Stock Quantity: ",
                 min_val=Decimal("0"),
-                max_val=Decimal("999999.99"),
-                error_message="Stock quantity must be between 0 and 999999.99"
+                max_val=Decimal("999999.99")
             )
 
         # Display update summary

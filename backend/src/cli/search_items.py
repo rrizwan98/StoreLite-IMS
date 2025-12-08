@@ -71,8 +71,7 @@ def _search_by_name(inventory_service):
     """Search items by name"""
     search_term = get_input_with_validation(
         prompt="Enter item name to search: ",
-        validator=ValidationService.validate_item_name,
-        error_message="Search term is required"
+        validator_func=ValidationService.validate_item_name
     )
     return inventory_service.search_items(search_term)
 
@@ -82,8 +81,7 @@ def _search_by_category(inventory_service):
     print("\nValid categories: Grocery, Garments, Beauty, Utilities, Other")
     category = get_input_with_validation(
         prompt="Enter category: ",
-        validator=lambda x: x.strip() if x.strip() else None,
-        error_message="Category is required"
+        validator_func=lambda x: x.strip() if x.strip() else None
     )
     results = inventory_service.search_by_category(category)
     return results
@@ -94,15 +92,13 @@ def _search_by_price_range(inventory_service):
     try:
         min_price_str = get_input_with_validation(
             prompt="Enter minimum price: ",
-            validator=lambda x: x.strip() if x.strip() else None,
-            error_message="Minimum price is required"
+            validator_func=lambda x: x.strip() if x.strip() else None
         )
         min_price = Decimal(min_price_str)
 
         max_price_str = get_input_with_validation(
             prompt="Enter maximum price: ",
-            validator=lambda x: x.strip() if x.strip() else None,
-            error_message="Maximum price is required"
+            validator_func=lambda x: x.strip() if x.strip() else None
         )
         max_price = Decimal(max_price_str)
 
