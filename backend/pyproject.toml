@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ims-api"
-version = "0.1.0"
-description = "Console-based Inventory and Billing Management System"
+version = "0.2.0"
+description = "Intelligent Inventory and Billing Management System with Case-Insensitive Search"
 readme = "README.md"
 requires-python = ">=3.12"
 license = {text = "MIT"}
