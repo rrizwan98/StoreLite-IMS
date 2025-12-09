@@ -4,7 +4,7 @@ SQLAlchemy ORM models for IMS FastAPI backend
 
 from datetime import datetime
 from decimal import Decimal
-from sqlalchemy import Column, Integer, String, Numeric, Boolean, DateTime, ForeignKey, Text, CheckConstraint
+from sqlalchemy import Column, Integer, String, Numeric, Boolean, DateTime, ForeignKey, Text, CheckConstraint, JSON
 from sqlalchemy.orm import relationship
 from app.database import Base
 
@@ -78,3 +78,20 @@ class BillItem(Base):
 
     def __repr__(self):
         return f"<BillItem(id={self.id}, bill_id={self.bill_id}, item_name={self.item_name})>"
+
+
+class AgentSession(Base):
+    """Agent conversation session for Phase 5 OpenAI Agents SDK integration"""
+    __tablename__ = "agent_sessions"
+
+    id = Column(String(36), primary_key=True, index=True)  # UUID
+    session_id = Column(String(255), nullable=False, unique=True, index=True)
+    conversation_history = Column(JSON, nullable=False, default=[])  # Array of message dicts
+    session_metadata = Column(JSON, nullable=False, default={})  # User context, store info, etc.
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    __table_args__ = ({"extend_existing": True},)
+
+    def __repr__(self):
+        return f"<AgentSession(session_id={self.session_id}, messages={len(self.conversation_history)})>"

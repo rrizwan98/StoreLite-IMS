@@ -192,3 +192,53 @@ class BillResponse(BaseModel):
     def serialize_total_amount(self, value: Decimal) -> str:
         """Serialize total_amount to string for JSON response"""
         return str(value)
+
+
+# ============ Agent Schemas (Phase 5) ============
+
+class AgentMessageRequest(BaseModel):
+    """Request schema for agent chat endpoint"""
+    session_id: str = Field(..., min_length=1, max_length=255, description="Conversation session ID")
+    message: str = Field(..., min_length=1, max_length=4096, description="User message in natural language")
+    metadata: Optional[dict] = Field(None, description="Optional metadata (user_context, store_name, etc.)")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "session_id": "user123-session",
+                "message": "Add 10kg sugar to inventory",
+                "metadata": {"user_id": "user123", "store_name": "Store A"}
+            }
+        }
+
+
+class ToolCall(BaseModel):
+    """Tool call made by agent"""
+    tool: str = Field(..., description="Tool/function name")
+    arguments: dict = Field(..., description="Tool arguments")
+    result: Optional[dict] = Field(None, description="Tool execution result")
+
+
+class AgentMessageResponse(BaseModel):
+    """Response schema for agent chat endpoint"""
+    session_id: str = Field(..., description="Conversation session ID")
+    response: str = Field(..., description="Agent's natural language response")
+    status: str = Field(..., description="Response status: success, pending_confirmation, or error")
+    tool_calls: List[ToolCall] = Field(default_factory=list, description="List of tool calls made by agent")
+
+    class Config:
+        from_attributes = True
+        json_schema_extra = {
+            "example": {
+                "session_id": "user123-session",
+                "response": "Added 10kg sugar to inventory. Current stock: 25kg",
+                "status": "success",
+                "tool_calls": [
+                    {
+                        "tool": "add_inventory_item",
+                        "arguments": {"item_name": "sugar", "quantity": 10, "unit": "kg"},
+                        "result": {"status": "success", "item_id": 42}
+                    }
+                ]
+            }
+        }
