@@ -11,11 +11,12 @@ from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
 
-# Destructive action keywords
+# Destructive action keywords - only match actual destructive operations
 DESTRUCTIVE_KEYWORDS = {
-    "create bill": ["create", "bill", "invoice"],
-    "delete item": ["delete", "remove", "item"],
-    "clear stock": ["clear", "zero", "stock"],
+    "create bill": ["create", "bill"],  # Require both "create" and "bill"
+    "delete item": ["delete", "item"],  # Require both "delete" and "item" (not just "item")
+    "remove item": ["remove", "item"],   # Alternative: both "remove" and "item"
+    "clear stock": ["clear", "stock"],   # Require both "clear" and "stock"
 }
 
 CONFIRMATION_KEYWORDS = {
@@ -43,6 +44,9 @@ class ConfirmationFlow:
         """
         Detect if a user message represents a destructive action.
 
+        Only matches actions that require MULTIPLE keywords to avoid false positives.
+        For example, "item" alone doesn't trigger - must be "delete item" or "remove item".
+
         Args:
             user_message: User's natural language message
             agent_intent: Optional extracted intent from agent
@@ -52,24 +56,39 @@ class ConfirmationFlow:
         """
         lower_msg = user_message.lower()
 
-        # Check for bill creation keywords
+        # Check for bill creation - REQUIRES BOTH "create" AND "bill"
         bill_keywords = DESTRUCTIVE_KEYWORDS["create bill"]
         if all(keyword in lower_msg for keyword in bill_keywords):
             logger.debug(f"Detected destructive action: create bill")
             return True
 
-        # Check for delete/remove keywords
+        # Check for delete item - REQUIRES BOTH "delete" AND "item"
         delete_keywords = DESTRUCTIVE_KEYWORDS["delete item"]
-        if any(keyword in lower_msg for keyword in delete_keywords):
+        if all(keyword in lower_msg for keyword in delete_keywords):
             logger.debug(f"Detected destructive action: delete item")
             return True
 
-        # Check agent intent if available
+        # Check for remove item - REQUIRES BOTH "remove" AND "item"
+        remove_keywords = DESTRUCTIVE_KEYWORDS["remove item"]
+        if all(keyword in lower_msg for keyword in remove_keywords):
+            logger.debug(f"Detected destructive action: remove item")
+            return True
+
+        # Check for clear stock - REQUIRES BOTH "clear" AND "stock"
+        clear_keywords = DESTRUCTIVE_KEYWORDS["clear stock"]
+        if all(keyword in lower_msg for keyword in clear_keywords):
+            logger.debug(f"Detected destructive action: clear stock")
+            return True
+
+        # Check agent intent if available (more restrictive)
         if agent_intent:
             agent_intent_lower = agent_intent.lower()
-            if "delete" in agent_intent_lower or "remove" in agent_intent_lower:
+            # Only trigger if BOTH keywords present
+            if ("delete" in agent_intent_lower or "remove" in agent_intent_lower) and "item" in agent_intent_lower:
+                logger.debug(f"Detected destructive action via intent: delete/remove item")
                 return True
             if "bill" in agent_intent_lower and "create" in agent_intent_lower:
+                logger.debug(f"Detected destructive action via intent: create bill")
                 return True
 
         return False

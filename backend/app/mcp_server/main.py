@@ -20,6 +20,7 @@ from app.mcp_server.tools_billing import (
     billing_get_bill,
     billing_list_bills,
 )
+from app.database import async_session
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -143,33 +144,38 @@ async def get_tools():
 
 @app.post("/mcp/call")
 async def call_tool(request: dict):
-    """Call an MCP tool"""
+    """Call an MCP tool with database session"""
     tool_name = request.get("tool")
     arguments = request.get("arguments", {})
 
     if tool_name not in TOOLS:
         raise HTTPException(status_code=404, detail=f"Tool {tool_name} not found")
 
-    try:
-        tool_func = TOOLS[tool_name]["func"]
+    # Create a database session for this tool call
+    async with async_session() as session:
+        try:
+            tool_func = TOOLS[tool_name]["func"]
 
-        # Call the tool function
-        # Most tools are async, so we need to handle both async and sync
-        if asyncio.iscoroutinefunction(tool_func):
-            result = await tool_func(**arguments)
-        else:
-            result = tool_func(**arguments)
+            # Add session to arguments for tools that need it
+            arguments_with_session = {**arguments, "session": session}
 
-        return {
-            "status": "success",
-            "result": result,
-        }
-    except Exception as e:
-        logger.error(f"Error calling tool {tool_name}: {e}")
-        return {
-            "status": "error",
-            "error": str(e),
-        }
+            # Call the tool function with session
+            # Most tools are async, so we need to handle both async and sync
+            if asyncio.iscoroutinefunction(tool_func):
+                result = await tool_func(**arguments_with_session)
+            else:
+                result = tool_func(**arguments_with_session)
+
+            return {
+                "status": "success",
+                "result": result,
+            }
+        except Exception as e:
+            logger.error(f"Error calling tool {tool_name}: {e}", exc_info=True)
+            return {
+                "status": "error",
+                "error": str(e),
+            }
 
 
 if __name__ == "__main__":
