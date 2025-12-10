@@ -2,6 +2,33 @@
 
 Official events and methods for the ChatKit web component.
 
+## ⚠️ CRITICAL: Load from CDN, NOT npm
+
+```html
+<!-- ✅ CORRECT: Load from CDN -->
+<script src="https://cdn.platform.openai.com/deployments/chatkit/chatkit.js"></script>
+
+<!-- ❌ WRONG: npm package is types only, not the actual component -->
+<!-- import '@openai/chatkit'; -->
+```
+
+## Wait for Custom Element Registration
+
+```javascript
+// ✅ CORRECT: Wait for custom element
+await customElements.whenDefined('openai-chatkit');
+
+// OR check if registered
+if (customElements.get('openai-chatkit')) {
+  // ChatKit is ready
+}
+
+// ❌ WRONG: window.openai.ChatKit doesn't exist!
+// if (window.openai?.ChatKit) { ... }
+```
+
+---
+
 ## Event Listeners
 
 ### Available Events
@@ -10,180 +37,149 @@ Official events and methods for the ChatKit web component.
 const chatkit = document.getElementById('chat');
 
 // Message events
-chatkit.addEventListener('message', (e) => {
+chatkit.addEventListener('chatkit.message', (e) => {
   console.log('New message:', e.detail);
-  // { role: 'user' | 'assistant', content: string, id: string }
 });
 
-chatkit.addEventListener('message-start', (e) => {
+chatkit.addEventListener('chatkit.message-start', (e) => {
   console.log('Message started:', e.detail);
 });
 
-chatkit.addEventListener('message-end', (e) => {
+chatkit.addEventListener('chatkit.message-end', (e) => {
   console.log('Message completed:', e.detail);
 });
 
-// Response events
-chatkit.addEventListener('response-start', (e) => {
-  console.log('Agent started responding');
-});
-
-chatkit.addEventListener('response-end', (e) => {
-  console.log('Agent finished responding');
-});
-
 // Error events
-chatkit.addEventListener('error', (e) => {
+chatkit.addEventListener('chatkit.error', (e) => {
   console.error('ChatKit error:', e.detail);
-  // { code: string, message: string }
 });
 
 // Thread events
-chatkit.addEventListener('thread-change', (e) => {
+chatkit.addEventListener('chatkit.thread-change', (e) => {
   console.log('Thread changed:', e.detail);
-  // { threadId: string }
-});
-
-// Tool events
-chatkit.addEventListener('tool-call', (e) => {
-  console.log('Tool called:', e.detail);
-  // { name: string, arguments: object }
-});
-
-chatkit.addEventListener('tool-result', (e) => {
-  console.log('Tool result:', e.detail);
-  // { name: string, result: any }
-});
-
-// Widget events
-chatkit.addEventListener('widget-action', (e) => {
-  console.log('Widget action:', e.detail);
-  // { action: string, data: any }
-});
-
-// Attachment events
-chatkit.addEventListener('attachment-upload', (e) => {
-  console.log('File uploaded:', e.detail);
-  // { file: File, id: string }
 });
 ```
 
-## Methods
+---
 
-### setOptions()
+## setOptions() - CORRECT Format
 
-Configure ChatKit:
+### ⚠️ CRITICAL: theme is a STRING, not object!
 
 ```javascript
 chatkit.setOptions({
-  // API configuration
+  // API configuration (required for custom backend)
   api: {
-    url: '/api/chat',
-    domainKey: 'your-domain',
+    url: 'http://localhost:8000/agent/chatkit',
+    domainKey: '',  // Empty string for localhost dev
     
-    // Custom fetch for auth
+    // Optional: Custom fetch for auth/session
     fetch: async (url, options) => {
+      const body = options.body ? JSON.parse(options.body) : {};
+      body.session_id = sessionId;
       return fetch(url, {
         ...options,
-        headers: {
-          ...options.headers,
-          'Authorization': `Bearer ${token}`,
-        },
+        body: JSON.stringify(body),
+        headers: { ...options.headers, 'Content-Type': 'application/json' },
       });
     },
-    
-    // Session refresh
-    getClientSecret: async (existing) => {
-      if (existing && !isExpired(existing)) {
-        return existing;
-      }
-      const res = await fetch('/api/session');
-      const { client_secret } = await res.json();
-      return client_secret;
+  },
+  
+  // ✅ CORRECT: theme is a string literal
+  theme: 'light',  // 'light' | 'dark' | 'auto'
+  
+  // ❌ WRONG: theme as object causes "Invalid input" error
+  // theme: { colorScheme: 'light' },
+  
+  // Header configuration
+  header: {
+    enabled: true,
+    title: {
+      enabled: true,
+      text: 'AI Assistant',  // ✅ Use 'text', not 'content'
     },
   },
   
-  // Theme
-  theme: {
-    colorScheme: 'light',
-    accentColor: '#2563EB',
-    density: 'normal',
-  },
-  
-  // Header
-  header: {
-    title: 'Assistant',
-    showTitle: true,
-    icons: [
-      { type: 'theme-toggle' },
-      { type: 'new-thread' },
-    ],
-  },
-  
-  // Start screen
+  // Start screen configuration
   startScreen: {
     greeting: 'Hello! How can I help?',
     prompts: [
-      { text: 'Get started', prompt: 'Help me get started' },
+      // ✅ CORRECT: Use 'label' and 'prompt'
+      { label: 'Get Started', prompt: 'Help me get started' },
+      { label: 'Features', prompt: 'What can you do?' },
+      
+      // ❌ WRONG: 'text' instead of 'label'
+      // { text: 'Get Started', prompt: '...' },
     ],
   },
   
-  // Composer
+  // Composer configuration
   composer: {
     placeholder: 'Type a message...',
-    allowAttachments: true,
-    allowedFileTypes: ['image/*', '.pdf', '.txt'],
-    maxFileSize: 10 * 1024 * 1024, // 10MB
+    // Attachments disabled by default, no config needed
   },
   
   // Disclaimer
   disclaimer: {
     text: 'AI may make mistakes. Verify important information.',
-    position: 'bottom',
   },
-  
-  // History
-  history: {
-    enabled: true,
-    maxThreads: 50,
-  },
-  
-  // Locale
-  locale: 'en-US',
 });
 ```
+
+### Complete Configuration Reference
+
+```javascript
+chatkit.setOptions({
+  // Required for custom backend
+  api: {
+    url: string,           // Your backend URL
+    domainKey: string,     // Empty '' for localhost
+    fetch?: Function,      // Custom fetch wrapper
+  },
+  
+  // Theme
+  theme: 'light' | 'dark' | 'auto',
+  
+  // Header
+  header: {
+    enabled: boolean,
+    title: {
+      enabled: boolean,
+      text: string,
+    },
+  },
+  
+  // Start screen
+  startScreen: {
+    greeting: string,
+    prompts: Array<{
+      label: string,   // Button text
+      prompt: string,  // Message to send
+    }>,
+  },
+  
+  // Input composer
+  composer: {
+    placeholder: string,
+  },
+  
+  // Footer disclaimer
+  disclaimer: {
+    text: string,
+  },
+});
+```
+
+---
+
+## Methods
 
 ### sendMessage()
 
 Send a message programmatically:
 
 ```javascript
-// Simple text
 chatkit.sendMessage('Hello, how are you?');
-
-// With attachments
-chatkit.sendMessage('Check this file', {
-  attachments: [file],
-});
-
-// With context
-chatkit.sendMessage('Analyze this', {
-  context: {
-    pageUrl: window.location.href,
-    selectedText: getSelection().toString(),
-  },
-});
-```
-
-### sendAction()
-
-Trigger widget actions:
-
-```javascript
-chatkit.sendAction({
-  type: 'select_option',
-  value: 'option_1',
-});
 ```
 
 ### clearThread()
@@ -194,14 +190,6 @@ Start a new conversation:
 chatkit.clearThread();
 ```
 
-### setThread()
-
-Switch to a specific thread:
-
-```javascript
-chatkit.setThread('thread_abc123');
-```
-
 ### focus()
 
 Focus the input:
@@ -210,168 +198,147 @@ Focus the input:
 chatkit.focus();
 ```
 
-### blur()
+---
 
-Remove focus:
+## Complete Working Example (Next.js)
 
-```javascript
-chatkit.blur();
-```
+```tsx
+'use client';
 
-## Client Tools
+import { useEffect, useState, useRef } from 'react';
+import Script from 'next/script';
 
-Register client-side tools that ChatKit can invoke:
+export default function ChatKitWidget() {
+  const [isOpen, setIsOpen] = useState(false);
+  const [isLoaded, setIsLoaded] = useState(false);
+  const chatkitRef = useRef<HTMLElement | null>(null);
+  const configuredRef = useRef(false);
 
-```javascript
-chatkit.setOptions({
-  tools: {
-    // Tool that returns data to the model
-    get_current_page: async () => {
-      return {
-        url: window.location.href,
-        title: document.title,
-        content: document.body.innerText.slice(0, 5000),
-      };
-    },
-    
-    // Tool that performs a UI action
-    scroll_to_section: async ({ sectionId }) => {
-      document.getElementById(sectionId)?.scrollIntoView();
-      return { success: true };
-    },
-    
-    // Tool that gets user selection
-    get_selected_text: async () => {
-      return { text: window.getSelection()?.toString() || '' };
-    },
-  },
-});
-```
+  // Configure when ready
+  useEffect(() => {
+    if (!isOpen || !isLoaded || configuredRef.current) return;
 
-## Client Effects
-
-Handle effects streamed from server:
-
-```javascript
-chatkit.setOptions({
-  onEffect: (effect) => {
-    switch (effect.type) {
-      case 'highlight_element':
-        document.getElementById(effect.elementId)?.classList.add('highlight');
-        break;
-        
-      case 'navigate':
-        window.location.href = effect.url;
-        break;
-        
-      case 'show_notification':
-        showNotification(effect.message);
-        break;
-    }
-  },
-});
-```
-
-## Widget Action Handling
-
-Handle actions from widgets:
-
-```javascript
-chatkit.setOptions({
-  widgets: {
-    handleAction: async (action) => {
-      switch (action.type) {
-        case 'open_link':
-          window.open(action.url, '_blank');
-          return { handled: true };
-          
-        case 'copy_text':
-          navigator.clipboard.writeText(action.text);
-          return { handled: true };
-          
-        case 'server_action':
-          // Let server handle it
-          return { handled: false };
-          
-        default:
-          return { handled: false };
+    const initChatKit = () => {
+      const chatkit = chatkitRef.current as any;
+      if (!chatkit || typeof chatkit.setOptions !== 'function') {
+        setTimeout(initChatKit, 100);
+        return;
       }
-    },
-  },
-});
+
+      configuredRef.current = true;
+
+      chatkit.setOptions({
+        api: {
+          url: 'http://localhost:8000/agent/chatkit',
+          domainKey: '',
+        },
+        theme: 'light',
+        header: {
+          enabled: true,
+          title: { enabled: true, text: 'AI Assistant' },
+        },
+        startScreen: {
+          greeting: 'Hello! How can I help?',
+          prompts: [
+            { label: 'Get Started', prompt: 'Help me get started' },
+          ],
+        },
+      });
+
+      // Event listeners
+      chatkit.addEventListener('chatkit.message', (e: CustomEvent) => {
+        console.log('Message:', e.detail);
+      });
+      chatkit.addEventListener('chatkit.error', (e: CustomEvent) => {
+        console.error('Error:', e.detail);
+      });
+    };
+
+    setTimeout(initChatKit, 300);
+  }, [isOpen, isLoaded]);
+
+  const handleScriptLoad = () => {
+    const checkElement = () => {
+      if (customElements.get('openai-chatkit')) {
+        setIsLoaded(true);
+      } else {
+        setTimeout(checkElement, 100);
+      }
+    };
+    checkElement();
+  };
+
+  return (
+    <>
+      {/* CDN Script */}
+      <Script
+        src="https://cdn.platform.openai.com/deployments/chatkit/chatkit.js"
+        strategy="afterInteractive"
+        onLoad={handleScriptLoad}
+        onError={(e) => console.error('Failed:', e)}
+      />
+
+      {/* Toggle Button */}
+      <button onClick={() => setIsOpen(!isOpen)}>
+        {isOpen ? 'Close' : 'Chat'}
+      </button>
+
+      {/* ChatKit */}
+      {isOpen && isLoaded && (
+        <openai-chatkit
+          ref={chatkitRef as any}
+          style={{ width: '400px', height: '500px' }}
+        />
+      )}
+    </>
+  );
+}
+
+// Type declaration
+declare global {
+  namespace JSX {
+    interface IntrinsicElements {
+      'openai-chatkit': React.DetailedHTMLProps<
+        React.HTMLAttributes<HTMLElement>,
+        HTMLElement
+      >;
+    }
+  }
+}
 ```
 
-## Complete Setup Example
+---
 
-```html
-<!DOCTYPE html>
-<html>
-<head>
-  <script type="module">
-    import '@openai/chatkit';
-  </script>
-</head>
-<body>
-  <openai-chatkit id="chat"></openai-chatkit>
-  
-  <script type="module">
-    const chatkit = document.getElementById('chat');
-    
-    // Full configuration
-    chatkit.setOptions({
-      api: {
-        url: '/api/chat',
-        fetch: async (url, opts) => {
-          const token = await getToken();
-          return fetch(url, {
-            ...opts,
-            headers: { ...opts.headers, Authorization: `Bearer ${token}` },
-          });
-        },
-      },
-      
-      theme: {
-        colorScheme: 'auto',
-        accentColor: '#2563EB',
-      },
-      
-      header: {
-        title: 'Support Assistant',
-      },
-      
-      startScreen: {
-        greeting: 'Hi! How can I help you today?',
-        prompts: [
-          { text: '📦 Track order', prompt: 'Track my order' },
-          { text: '🔄 Return item', prompt: 'I want to return an item' },
-        ],
-      },
-      
-      composer: {
-        placeholder: 'Ask me anything...',
-        allowAttachments: true,
-      },
-      
-      tools: {
-        get_current_page: async () => ({
-          url: window.location.href,
-        }),
-      },
-      
-      onEffect: (effect) => {
-        console.log('Effect:', effect);
-      },
-    });
-    
-    // Event listeners
-    chatkit.addEventListener('message', (e) => {
-      analytics.track('chat_message', e.detail);
-    });
-    
-    chatkit.addEventListener('error', (e) => {
-      console.error('Chat error:', e.detail);
-    });
-  </script>
-</body>
-</html>
+## Common Errors
+
+### Error: "Invalid input" on api config
+
+**Cause:** Wrong structure for api object.
+
+**Fix:** Use correct structure:
+```javascript
+api: {
+  url: 'http://...',
+  domainKey: '',  // Required, even if empty
+}
+```
+
+### Error: "Invalid input" on theme
+
+**Cause:** `theme` is an object instead of string.
+
+**Fix:** Use string:
+```javascript
+theme: 'light'  // NOT { colorScheme: 'light' }
+```
+
+### Error: Prompts not showing
+
+**Cause:** Using `text` instead of `label`.
+
+**Fix:** Use correct field names:
+```javascript
+prompts: [
+  { label: 'Button Text', prompt: 'Message to send' }
+]
 ```
