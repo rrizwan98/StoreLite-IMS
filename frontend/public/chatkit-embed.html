@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IMS ChatKit Widget</title>
+
+    <!-- Import ChatKit web component -->
+    <script type="module">
+        import '@openai/chatkit';
+    </script>
+
+    <style>
+        /* Pure vanilla ChatKit - use CSS variables only */
+        openai-chatkit {
+            /* Official theme variables */
+            --ck-accent-color: #3b82f6;
+            --ck-background-color: #ffffff;
+            --ck-text-color: #1f2937;
+            --ck-border-radius: 8px;
+            --ck-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+
+            /* Dimensions */
+            height: 600px;
+            width: 400px;
+            border-radius: var(--ck-border-radius);
+            box-shadow: var(--ck-shadow);
+        }
+
+        /* Fixed positioning for bottom-right corner */
+        .chatkit-container {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+                'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica',
+                'Arial', sans-serif;
+        }
+    </style>
+</head>
+<body>
+    <!-- ChatKit web component container -->
+    <div class="chatkit-container">
+        <openai-chatkit id="chat"></openai-chatkit>
+    </div>
+
+    <!-- Configuration script (vanilla JS, no React) -->
+    <script type="module">
+        import '@openai/chatkit';
+
+        const chatkit = document.getElementById('chat');
+        const API_URL = 'http://localhost:8000/agent/chat';
+
+        // Initialize session
+        let sessionId = null;
+
+        async function createSession() {
+            try {
+                const response = await fetch('http://localhost:8000/agent/session', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ user_id: null })
+                });
+
+                if (!response.ok) throw new Error('Failed to create session');
+
+                const data = await response.json();
+                sessionId = data.session_id;
+
+                // Store in sessionStorage for persistence across navigation
+                sessionStorage.setItem('chatkit-session-id', sessionId);
+
+                console.log('ChatKit session created:', sessionId);
+            } catch (error) {
+                console.error('Session creation failed:', error);
+            }
+        }
+
+        // Configure ChatKit web component
+        async function initializeChatKit() {
+            // Create or restore session
+            sessionId = sessionStorage.getItem('chatkit-session-id');
+            if (!sessionId) {
+                await createSession();
+            }
+
+            // Configure ChatKit (official pattern)
+            chatkit.setOptions({
+                // API configuration (self-hosted backend)
+                api: {
+                    url: API_URL,
+
+                    // Custom fetch for session management
+                    fetch: async (url, options) => {
+                        // Add session_id to request body
+                        const body = options.body ? JSON.parse(options.body) : {};
+                        body.session_id = sessionId;
+
+                        return fetch(url, {
+                            ...options,
+                            body: JSON.stringify(body),
+                            headers: {
+                                ...options.headers,
+                                'Content-Type': 'application/json',
+                            },
+                        });
+                    },
+                },
+
+                // Theme (official CSS variables)
+                theme: {
+                    colorScheme: 'light',
+                    accentColor: '#3b82f6',
+                    density: 'normal',
+                },
+
+                // Header with title
+                header: {
+                    title: 'AI Assistant',
+                    showTitle: true,
+                    icons: [
+                        { type: 'new-thread' },
+                        { type: 'settings' }
+                    ],
+                },
+
+                // Start screen (initial greeting)
+                startScreen: {
+                    greeting: 'Hello! I can help you manage inventory and create bills. How can I assist?',
+                    prompts: [
+                        { text: 'Add item', prompt: 'Help me add a new inventory item' },
+                        { text: 'Create bill', prompt: 'I need to create a bill' },
+                        { text: 'Check inventory', prompt: 'Show me current inventory' },
+                    ],
+                },
+
+                // Composer (input area)
+                composer: {
+                    placeholder: 'Type your message...',
+                    allowAttachments: false,  // Phase 6 spec: text-only
+                },
+
+                // Disclaimer
+                disclaimer: {
+                    text: 'AI may make mistakes. Verify important information.',
+                    position: 'bottom',
+                },
+            });
+
+            // Event listeners (official events)
+
+            // Log messages for debugging
+            chatkit.addEventListener('message', (e) => {
+                console.log('ChatKit message event:', e.detail);
+            });
+
+            // Handle errors
+            chatkit.addEventListener('error', (e) => {
+                console.error('ChatKit error:', e.detail);
+            });
+
+            // Track message end for analytics
+            chatkit.addEventListener('message-end', (e) => {
+                console.log('Message completed:', e.detail);
+            });
+        }
+
+        // Initialize on page load
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initializeChatKit);
+        } else {
+            initializeChatKit();
+        }
+    </script>
+</body>
+</html>

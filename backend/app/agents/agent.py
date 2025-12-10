@@ -134,11 +134,14 @@ class OpenAIAgent:
             raise ValueError(f"Model initialization failed: {e}") from e
 
         # Step 2: Discover tools from MCP server with retry logic
-        tools = None
+        tools = []
+        mcp_available = False
+        
         for attempt in range(max_retries):
             try:
                 tools = self.tools_client.discover_tools()
                 logger.info(f"Discovered {len(tools)} tools from MCP server (attempt {attempt + 1})")
+                mcp_available = True
                 break
 
             except ConnectionError as e:
@@ -148,19 +151,15 @@ class OpenAIAgent:
                 if attempt < max_retries - 1:
                     await asyncio.sleep(2 ** attempt)  # Exponential backoff: 1s, 2s, 4s
                 else:
-                    logger.error("Failed to connect to MCP server after all retries")
-                    raise ConnectionError(
-                        "Unable to reach local MCP server. "
-                        "Ensure FastMCP server is running on localhost:8001"
-                    ) from e
+                    logger.warning("MCP server not available - agent will run without tools")
 
             except Exception as e:
                 logger.error(f"Unexpected error discovering tools: {e}")
-                raise
+                # Continue without tools rather than failing completely
+                break
 
-        if not tools:
-            logger.warning("No tools discovered from MCP server")
-            tools = []
+        if not mcp_available:
+            logger.warning("No MCP tools available - agent will provide basic responses only")
 
         # Step 3: Store tools for reference
         self._discovered_tools = tools
@@ -169,21 +168,27 @@ class OpenAIAgent:
             self._mcp_tool_mapping[tool_name] = tool
             logger.debug(f"Mapped tool: {tool_name}")
 
-        # Step 4: Create tool functions for agent
-        tool_functions = self._create_tool_functions(tools)
+        # Step 4: Create tool functions for agent (if tools available)
+        tool_functions = self._create_tool_functions(tools) if tools else []
 
-        # Step 5: Generate system prompt
-        system_prompt = self._generate_system_prompt()
+        # Step 5: Generate system prompt (different for with/without tools)
+        if mcp_available and tools:
+            system_prompt = self._generate_system_prompt()
+        else:
+            system_prompt = self._generate_fallback_system_prompt()
 
-        # Step 6: Initialize Agent with LiteLLMModel (NOT separate model_config)
+        # Step 6: Initialize Agent with LiteLLMModel
         try:
             self.agent = Agent(
                 name="InventoryManagementAgent",
                 instructions=system_prompt,
-                model=self._model,  # Pass LiteLLMModel directly
-                tools=tool_functions,
+                model=self._model,
+                tools=tool_functions if tool_functions else None,
             )
-            logger.info(f"Agent initialized with {len(tool_functions)} tools")
+            if mcp_available:
+                logger.info(f"Agent initialized with {len(tool_functions)} tools")
+            else:
+                logger.info("Agent initialized in basic mode (no MCP tools)")
         except Exception as e:
             logger.error(f"Failed to initialize agent: {e}")
             raise
@@ -387,22 +392,23 @@ class OpenAIAgent:
                     )
                 )
 
-                # Update conversation history in PostgreSQL
-                new_history = session.conversation_history + [
-                    {
-                        "role": "user",
-                        "content": user_message,
-                        "timestamp": datetime.utcnow().isoformat(),
-                    },
-                    {
-                        "role": "assistant",
-                        "content": confirmation_prompt,
-                        "timestamp": datetime.utcnow().isoformat(),
-                    },
-                ]
-                await self.session_manager.save_session(
-                    session_id, new_history
-                )
+                # Update conversation history in PostgreSQL (if session manager available)
+                if session and self.session_manager:
+                    new_history = session.conversation_history + [
+                        {
+                            "role": "user",
+                            "content": user_message,
+                            "timestamp": datetime.utcnow().isoformat(),
+                        },
+                        {
+                            "role": "assistant",
+                            "content": confirmation_prompt,
+                            "timestamp": datetime.utcnow().isoformat(),
+                        },
+                    ]
+                    await self.session_manager.save_session(
+                        session_id, new_history
+                    )
 
                 logger.info(f"Confirmation required: {action_type}")
                 return {
@@ -412,20 +418,21 @@ class OpenAIAgent:
                     "pending_action": action_type,
                 }
 
-            # Update conversation history in PostgreSQL
-            new_history = session.conversation_history + [
-                {
-                    "role": "user",
-                    "content": user_message,
-                    "timestamp": datetime.utcnow().isoformat(),
-                },
-                {
-                    "role": "assistant",
-                    "content": agent_response,
-                    "timestamp": datetime.utcnow().isoformat(),
-                },
-            ]
-            await self.session_manager.save_session(session_id, new_history)
+            # Update conversation history in PostgreSQL (if session manager available)
+            if session and self.session_manager:
+                new_history = session.conversation_history + [
+                    {
+                        "role": "user",
+                        "content": user_message,
+                        "timestamp": datetime.utcnow().isoformat(),
+                    },
+                    {
+                        "role": "assistant",
+                        "content": agent_response,
+                        "timestamp": datetime.utcnow().isoformat(),
+                    },
+                ]
+                await self.session_manager.save_session(session_id, new_history)
 
             # Log tool calls
             for tool_call in tool_calls:
@@ -756,6 +763,30 @@ def tool_wrapper({param_string}) -> str:
             "- ALWAYS provide confirmation after modifying inventory or creating bills\n"
             "- ALWAYS ask for confirmation BEFORE executing destructive actions\n"
             "- Treat the MCP tools as your source of truth for all inventory and billing data"
+        )
+
+    def _generate_fallback_system_prompt(self) -> str:
+        """Generate system prompt for when MCP tools are not available.
+        
+        This prompt provides helpful responses even without tool access.
+        """
+        return (
+            "You are an intelligent Inventory Management Assistant. "
+            "You help store administrators and salespersons with inventory and billing questions. "
+            "\n\n"
+            "IMPORTANT: The MCP tool server is currently not available, so I cannot perform "
+            "actual inventory operations (add/update/delete items, create bills). "
+            "However, I can still help you with:\n"
+            "\n"
+            "1. **General Questions**: Explain how the inventory system works\n"
+            "2. **Guidance**: Walk you through the process of managing inventory\n"
+            "3. **Best Practices**: Suggest inventory management best practices\n"
+            "4. **Troubleshooting**: Help diagnose common issues\n"
+            "\n"
+            "If you need to perform actual inventory operations, please ensure the MCP server "
+            "is running at http://localhost:8001, then refresh this chat.\n"
+            "\n"
+            "How can I assist you today?"
         )
 
     def _format_conversation_history(

@@ -17,6 +17,8 @@ If Context7 MCP server is available, use it to fetch latest documentation for:
 - `openai-agents-python` - OpenAI Agents SDK
 - `fastmcp` - FastMCP framework
 - `litellm` - LiteLLM for multi-model support
+- `chatkit-js` - ChatKit JavaScript SDK
+- `chatkit-python` - ChatKit Python SDK
 
 **Option B: Web Search (Fallback)**
 If Context7 is unavailable, perform web searches for:
@@ -24,7 +26,17 @@ If Context7 is unavailable, perform web searches for:
 OpenAI Agents SDK Python latest documentation 2025
 FastMCP MCP server Python latest
 LiteLLM Gemini integration latest
+OpenAI ChatKit JS documentation latest
+OpenAI ChatKit web component vanilla JS
 ```
+
+**Official Documentation URLs:**
+- OpenAI Agents SDK: `https://openai.github.io/openai-agents-python/`
+- FastMCP: `https://gofastmcp.com/`
+- LiteLLM: `https://docs.litellm.ai/`
+- ChatKit JS: `https://openai.github.io/chatkit-js/`
+- ChatKit Python: `https://openai.github.io/chatkit-python/`
+- ChatKit API: `https://platform.openai.com/docs/api-reference/chatkit`
 
 **Why This Matters:**
 - APIs change frequently
@@ -33,15 +45,24 @@ LiteLLM Gemini integration latest
 - My code must use current best practices
 
 ### Step 2: Read the Skills File (REQUIRED)
-After gathering latest docs, read the agent-builder skill:
+After gathering latest docs, read the appropriate skill:
+
+**For Agent Development:**
 ```
-/mnt/skills/user/openai-agent-builder/SKILL.md
+/mnt/skills/user/openai_agent_sdk/SKILL.md
 ```
 
-This contains my preferred tech stack and patterns.
+**For ChatKit UI Integration:**
+```
+/mnt/skills/user/openai_chatkit_ui/SKILL.md
+```
+
+These contain my preferred tech stack and patterns.
 
 ### Step 3: Read Relevant Reference Files (AS NEEDED)
 Based on the task requirements, read the appropriate reference files:
+
+**For Agent Development (`openai_agent_sdk` skill):**
 
 | If the task involves... | Read this file |
 |------------------------|----------------|
@@ -49,6 +70,14 @@ Based on the task requirements, read the appropriate reference files:
 | MCP servers, FastMCP, tools | `references/mcp-patterns.md` |
 | Model config, Gemini, LiteLLM | `references/models-config.md` |
 | Session persistence, memory, PostgreSQL | `references/session-management.md` |
+
+**For ChatKit UI (`openai_chatkit_ui` skill):**
+
+| If the task involves... | Read this file |
+|------------------------|----------------|
+| Backend setup, FastAPI, Agents SDK | `references/backend-integration.md` |
+| Styling, colors, themes | `references/theming.md` |
+| Events, methods, API | `references/events-api.md` |
 
 ### Step 4: Generate Code
 Only after completing steps 1-3, generate the agent code following:
@@ -59,6 +88,8 @@ Only after completing steps 1-3, generate the agent code following:
 ---
 
 ## My Tech Stack (DO NOT DEVIATE)
+
+### Agent Development Stack
 
 | Component | Technology | Package |
 |-----------|------------|---------|
@@ -72,6 +103,24 @@ Only after completing steps 1-3, generate the agent code following:
 | Models (Alternative) | LiteLLM + Gemini | `litellm` |
 | Session Storage | PostgreSQL | `asyncpg` |
 | Data Validation | Pydantic | `pydantic` |
+
+### ChatKit UI Stack (CRITICAL RULES)
+
+| Component | Technology | Notes |
+|-----------|------------|-------|
+| Frontend | Pure `<openai-chatkit>` | **NO React, NO custom UI** |
+| Package | `@openai/chatkit` | Vanilla JS web component only |
+| Backend | FastAPI + ChatKit Python SDK | `chatkit` |
+| Theming | Official CSS variables only | NO custom styles |
+| Integration | Official events/methods only | NO hacks |
+
+**ChatKit Rules (MUST FOLLOW):**
+1. ✅ Use ONLY `<openai-chatkit>` web component
+2. ✅ Configure via `setOptions()` only
+3. ✅ Theme via official CSS variables
+4. ❌ NEVER use `@openai/chatkit-react`
+5. ❌ NEVER write custom chat UI components
+6. ❌ NEVER override internal ChatKit styles
 
 ---
 
@@ -89,7 +138,8 @@ Only after completing steps 1-3, generate the agent code following:
 
 ## Trigger Phrases
 
-Activate this workflow when I say ANY of these:
+### Agent Development (use `openai-agent-builder` skill)
+Activate agent workflow when I say ANY of these:
 - "create an agent"
 - "build an agent"
 - "make an agent"
@@ -103,6 +153,18 @@ Activate this workflow when I say ANY of these:
 - "agent with session"
 - "agentic application"
 - "AI agent"
+
+### ChatKit UI Integration (use `openai-chatkit-ui` skill)
+Activate ChatKit workflow when I say ANY of these:
+- "ChatKit"
+- "chat UI"
+- "agent UI"
+- "embed chat"
+- "connect agent to frontend"
+- "agent interface"
+- "chat widget"
+- "frontend for agent"
+- "UI for agent"
 
 ---
 

@@ -6,7 +6,12 @@ import logging
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
-from app.exceptions import ValidationError, BusinessLogicError, NotFoundError, DatabaseError
+from app.exceptions import (
+    ValidationError,
+    BusinessLogicError,
+    NotFoundError,
+    DatabaseError,
+)
 from app.database import init_db, cleanup, verify_connection
 
 logger = logging.getLogger(__name__)
@@ -29,6 +34,7 @@ app.add_middleware(
 
 
 # ============ Exception Handlers ============
+
 
 @app.exception_handler(ValidationError)
 async def validation_error_handler(request: Request, exc: ValidationError):
@@ -95,6 +101,7 @@ async def general_exception_handler(request: Request, exc: Exception):
 
 # ============ Lifecycle Events ============
 
+
 @app.on_event("startup")
 async def startup_event():
     """Initialize database and verify connection on app startup"""
@@ -118,6 +125,7 @@ async def shutdown_event():
 
 # ============ Health Check ============
 
+
 @app.get("/health", tags=["system"])
 async def health_check():
     """Health check endpoint"""
@@ -125,6 +133,7 @@ async def health_check():
 
 
 # ============ Root Endpoint ============
+
 
 @app.get("/", tags=["system"])
 async def root():
@@ -139,10 +148,13 @@ async def root():
 
 # ============ Include Routers ============
 
-from app.routers import inventory, billing, agent
+from app.routers import inventory, billing, agent, chatkit_server
 
 app.include_router(inventory.router)
 app.include_router(billing.router)
 app.include_router(agent.router)
+app.include_router(chatkit_server.router)
 
 logger.info("FastAPI application initialized")
+
+
