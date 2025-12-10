@@ -20,6 +20,12 @@ from app.mcp_server.tools_billing import (
     billing_get_bill,
     billing_list_bills,
 )
+from app.mcp_server.tools_analytics import (
+    get_sales_by_month,
+    compare_sales,
+    get_sales_trends,
+    get_inventory_analytics,
+)
 from app.database import async_session
 
 logging.basicConfig(level=logging.INFO)
@@ -115,6 +121,49 @@ TOOLS = {
     "billing_list_bills": {
         "func": billing_list_bills,
         "description": "List all bills",
+        "schema": {
+            "type": "object",
+            "properties": {},
+        },
+    },
+    # Analytics tools (Task T025 - AI Dashboard)
+    "get_sales_by_month": {
+        "func": get_sales_by_month,
+        "description": "Get sales summary for a specific month with top products, daily trends, and statistics",
+        "schema": {
+            "type": "object",
+            "properties": {
+                "year": {"type": "integer", "description": "Year (e.g., 2025)"},
+                "month": {"type": "integer", "description": "Month (1-12)"},
+            },
+            "required": ["year", "month"],
+        },
+    },
+    "compare_sales": {
+        "func": compare_sales,
+        "description": "Compare sales between two periods with percentage changes and product differences",
+        "schema": {
+            "type": "object",
+            "properties": {
+                "period1": {"type": "string", "description": "First period in YYYY-MM format (e.g., '2025-11')"},
+                "period2": {"type": "string", "description": "Second period in YYYY-MM format (e.g., '2025-12')"},
+            },
+            "required": ["period1", "period2"],
+        },
+    },
+    "get_sales_trends": {
+        "func": get_sales_trends,
+        "description": "Get sales trends for specified days with moving averages, best/worst days, and category breakdown",
+        "schema": {
+            "type": "object",
+            "properties": {
+                "days": {"type": "integer", "description": "Number of days to analyze (default 30, max 365)"},
+            },
+        },
+    },
+    "get_inventory_analytics": {
+        "func": get_inventory_analytics,
+        "description": "Get inventory analytics with stock levels, alerts (out-of-stock, low stock), category breakdown, and recommendations",
         "schema": {
             "type": "object",
             "properties": {},

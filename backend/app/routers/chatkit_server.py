@@ -9,10 +9,11 @@ import logging
 import os
 import json
 from datetime import datetime
-from typing import Any, AsyncIterator
+from typing import Any, AsyncIterator, List, Optional
 
 from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse, JSONResponse
+from pydantic import BaseModel
 from starlette.responses import Response
 from chatkit.server import (
     ChatKitServer,
@@ -31,10 +32,15 @@ from chatkit.types import (
     ThreadItemAddedEvent,
     AssistantMessageItem,
     AssistantMessageContent,
+    # Native thinking/reasoning types
+    ThoughtTask,
+    WorkflowTaskAdded,
+    WorkflowTaskUpdated,
 )
 
 from app.agents import OpenAIAgent, MCPClient, ConfirmationFlow
 from app.database import get_db
+from app.services.rate_limiter import get_rate_limiter
 
 logger = logging.getLogger(__name__)
 
@@ -63,6 +69,15 @@ class SimpleStore(Store):
             self._items[thread.id] = []
     
     async def load_thread(self, thread_id: str, context: Any) -> ThreadMetadata | None:
+        # Auto-create thread if it doesn't exist
+        if thread_id not in self._threads:
+            from datetime import datetime
+            new_thread = ThreadMetadata(
+                id=thread_id,
+                created_at=datetime.now().isoformat(),
+            )
+            self._threads[thread_id] = new_thread
+            self._items[thread_id] = []
         return self._threads.get(thread_id)
     
     async def delete_thread(self, thread_id: str, context: Any) -> None:
@@ -196,9 +211,12 @@ class IMSChatKitServer(ChatKitServer):
         """
         Process user message and yield streaming response events.
         
-        This is the main entry point for ChatKit messages.
+        Uses native ChatKit thinking UI (WorkflowTaskAdded/Updated with ThoughtTask)
+        to show the "Thinking..." lightbulb indicator with collapsible reasoning.
         """
         import uuid
+        import time
+        import asyncio
         
         try:
             # If no user message, just return
@@ -216,31 +234,144 @@ class IMSChatKitServer(ChatKitServer):
             
             # Get session ID from thread
             session_id = thread.id if hasattr(thread, 'id') else str(id(thread))
-            
+
+            # === RATE LIMITING CHECK (Task T020) ===
+            rate_limiter = get_rate_limiter()
+            is_allowed, rate_limit_details = rate_limiter.consume(session_id)
+
+            if not is_allowed:
+                # Rate limit exceeded - return error message via ChatKit
+                retry_after = rate_limit_details.get("retry_after", 60)
+                reset_at = rate_limit_details.get("reset_at", "soon")
+
+                rate_limit_message = (
+                    f"**Rate Limit Exceeded**\n\n"
+                    f"You've reached the maximum of {rate_limit_details['limit']} queries per hour.\n\n"
+                    f"• Try again in: {retry_after} seconds\n"
+                    f"• Limit resets at: {reset_at}\n\n"
+                    f"_This limit helps ensure fair access for all users._"
+                )
+
+                # Create error response using ChatKit streaming
+                error_item_id = f"msg-error-{uuid.uuid4().hex[:12]}"
+                error_message_item = AssistantMessageItem(
+                    id=error_item_id,
+                    type="message",
+                    role="assistant",
+                    status="completed",
+                    content=[AssistantMessageContent(type="text", text=rate_limit_message)]
+                )
+
+                yield ThreadItemAddedEvent(
+                    type="thread.item.added",
+                    item=error_message_item
+                )
+                yield ThreadItemDoneEvent(
+                    type="thread.item.done",
+                    item=error_message_item
+                )
+
+                logger.warning(f"Rate limit exceeded for session {session_id}: retry after {retry_after}s")
+                return
+
+            # Log rate limit status (include warning if approaching limit)
+            if rate_limit_details.get("warning"):
+                logger.info(
+                    f"ChatKit session {session_id} approaching rate limit: "
+                    f"{rate_limit_details['remaining']}/{rate_limit_details['limit']} remaining"
+                )
+
             logger.info(f"ChatKit processing message for session {session_id}: {user_message[:50] if user_message else 'empty'}...")
             
             if not user_message:
                 response_text = "I didn't receive any message. How can I help you?"
             else:
+                # Track timing for thinking display
+                start_time = time.time()
+                
+                # Generate thinking steps based on message
+                thinking_steps = self._generate_thinking_steps(user_message)
+                
+                # === NATIVE CHATKIT THINKING UI ===
+                # Step 1: Add thinking task with LOADING status (shows animated lightbulb)
+                initial_thought = ThoughtTask(
+                    type="thought",
+                    status_indicator="loading",  # Shows animated thinking indicator!
+                    title=thinking_steps[0] if thinking_steps else "Analyzing request...",
+                    content=""
+                )
+                yield WorkflowTaskAdded(
+                    type="workflow.task.added",
+                    task_index=0,
+                    task=initial_thought
+                )
+                
+                # Step 2: Update thinking content progressively (keep loading status)
+                accumulated_reasoning = ""
+                for i, step in enumerate(thinking_steps):
+                    step_time = time.time() - start_time
+                    accumulated_reasoning += f"• {step}\n"
+                    
+                    # Update the thought task with accumulated reasoning
+                    updated_thought = ThoughtTask(
+                        type="thought",
+                        status_indicator="loading",  # Keep showing thinking animation
+                        title=step,
+                        content=accumulated_reasoning
+                    )
+                    yield WorkflowTaskUpdated(
+                        type="workflow.task.updated",
+                        task_index=0,
+                        task=updated_thought
+                    )
+                    
+                    # Small delay to show streaming effect
+                    await asyncio.sleep(0.15)
+                
                 # Process message with agent
                 result = await agent.process_message(
                     session_id=session_id,
                     user_message=user_message,
                 )
+                
+                # Calculate total thinking time
+                total_time = time.time() - start_time
+                
+                # Extract response and tool calls
                 response_text = result.get("response", "I'm sorry, I couldn't process that request.")
+                tool_calls = result.get("tool_calls", [])
+                
+                # Add tool usage to reasoning
+                if tool_calls:
+                    accumulated_reasoning += "\nTools used:\n"
+                    for tc in tool_calls:
+                        tool_name = tc.get("tool", "unknown")
+                        accumulated_reasoning += f"  → {tool_name}\n"
+                
+                # Final thought update with COMPLETE status and timing
+                final_thought = ThoughtTask(
+                    type="thought",
+                    status_indicator="complete",  # Shows completed indicator
+                    title=f"Thought for {total_time:.0f}s",
+                    content=accumulated_reasoning
+                )
+                yield WorkflowTaskUpdated(
+                    type="workflow.task.updated",
+                    task_index=0,
+                    task=final_thought
+                )
             
             # Generate message ID
             msg_id = f"msg-{uuid.uuid4().hex[:12]}"
             
-            # Stream the response as text deltas
-            # First, yield a text delta for the content
+            # Stream the actual response
             yield AssistantMessageContentPartTextDelta(
                 type="assistant_message.content_part.text_delta",
                 content_index=0,
                 delta=response_text
             )
             
-            # Then signal content part is done with proper AssistantMessageContent
+            # Signal content part is done
             yield AssistantMessageContentPartDone(
                 type="assistant_message.content_part.done",
                 content_index=0,
@@ -251,7 +382,7 @@ class IMSChatKitServer(ChatKitServer):
                 )
             )
             
-            # First, yield thread.item.added event
+            # Yield thread.item.added event
             assistant_msg = AssistantMessageItem(
                 id=msg_id,
                 thread_id=thread.id,
@@ -277,6 +408,51 @@ class IMSChatKitServer(ChatKitServer):
                 content_index=0,
                 delta=error_text
             )
+    
+    def _generate_thinking_steps(self, user_message: str) -> list[str]:
+        """
+        Generate thinking steps based on the user's message.
+        
+        These steps show the reasoning process in the UI.
+        """
+        steps = []
+        message_lower = user_message.lower()
+        
+        # Analyze message intent
+        steps.append("📝 Analyzing your request...")
+        
+        # Check for inventory-related keywords
+        if any(word in message_lower for word in ['inventory', 'stock', 'item', 'product', 'add', 'update', 'delete']):
+            steps.append("📦 Detecting inventory operation...")
+            if 'add' in message_lower:
+                steps.append("➕ Preparing to add new item...")
+            elif 'update' in message_lower or 'edit' in message_lower:
+                steps.append("✏️ Preparing to update item...")
+            elif 'delete' in message_lower or 'remove' in message_lower:
+                steps.append("🗑️ Preparing to remove item...")
+            elif 'show' in message_lower or 'list' in message_lower or 'check' in message_lower:
+                steps.append("🔍 Fetching inventory data...")
+        
+        # Check for billing-related keywords
+        elif any(word in message_lower for word in ['bill', 'invoice', 'payment', 'create bill', 'generate']):
+            steps.append("🧾 Detecting billing operation...")
+            if 'create' in message_lower or 'generate' in message_lower:
+                steps.append("📝 Preparing new bill...")
+            elif 'show' in message_lower or 'list' in message_lower:
+                steps.append("🔍 Fetching billing records...")
+        
+        # Check for help/general
+        elif any(word in message_lower for word in ['help', 'what can', 'how to', 'guide']):
+            steps.append("ℹ️ Preparing help information...")
+        
+        # Default reasoning
+        else:
+            steps.append("🧠 Processing your request...")
+        
+        # Final step
+        steps.append("⚡ Executing with AI agent...")
+        
+        return steps
 
 
 # Global instances
@@ -367,3 +543,90 @@ async def chatkit_health():
         "service": "ChatKit Server",
         "version": "1.0.0"
     }
+
+
+@router.get("/chatkit/rate-limit/{session_id}")
+async def get_rate_limit_status(session_id: str):
+    """
+    Get rate limit status for a session (Task T020).
+
+    Returns current usage and remaining quota.
+    Frontend can use this to display rate limit warnings.
+    """
+    rate_limiter = get_rate_limiter()
+    usage = rate_limiter.get_usage(session_id)
+    return {
+        "status": "ok",
+        "rate_limit": usage
+    }
+
+
+# === SIMPLE CHAT ENDPOINT (Fallback for when ChatKit CDN is unavailable) ===
+
+class SimpleChatMessage(BaseModel):
+    role: str
+    content: str
+
+class SimpleChatRequest(BaseModel):
+    session_id: str
+    message: str
+    history: Optional[List[SimpleChatMessage]] = []
+
+@router.post("/chat")
+async def simple_chat_endpoint(request: SimpleChatRequest):
+    """
+    Simple chat endpoint for fallback UI.
+
+    Accepts a plain JSON request with session_id and message,
+    returns a JSON response with the assistant's reply.
+
+    This is a simpler alternative to the ChatKit protocol endpoint.
+    """
+    try:
+        # Rate limiting check
+        rate_limiter = get_rate_limiter()
+        is_allowed, rate_limit_details = rate_limiter.consume(request.session_id)
+
+        if not is_allowed:
+            retry_after = rate_limit_details.get("retry_after", 60)
+            return JSONResponse(
+                content={
+                    "error": "rate_limit_exceeded",
+                    "message": f"Rate limit exceeded. Try again in {retry_after} seconds.",
+                    "retry_after": retry_after,
+                    "rate_limit": rate_limit_details
+                },
+                status_code=429
+            )
+
+        # Get the agent
+        agent = await _server._get_agent()
+
+        # Build conversation history for context
+        history_text = ""
+        if request.history:
+            for msg in request.history[-5:]:  # Last 5 messages for context
+                role = "User" if msg.role == "user" else "Assistant"
+                history_text += f"{role}: {msg.content}\n"
+
+        # Process with agent
+        full_prompt = request.message
+        if history_text:
+            full_prompt = f"Previous conversation:\n{history_text}\n\nUser: {request.message}"
+
+        logger.info(f"Simple chat processing for session {request.session_id}: {request.message[:50]}...")
+
+        response_text = await agent.run(full_prompt)
+
+        return {
+            "content": response_text,
+            "session_id": request.session_id,
+            "rate_limit": rate_limiter.get_usage(request.session_id)
+        }
+
+    except Exception as e:
+        logger.error(f"Simple chat error: {e}", exc_info=True)
+        return JSONResponse(
+            content={"error": str(e)},
+            status_code=500
+        )

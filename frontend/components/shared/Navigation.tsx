@@ -36,6 +36,9 @@ export default function Navigation() {
           <Link href={ROUTES.POS} className={linkClasses(ROUTES.POS)}>
             💳 POS
           </Link>
+          <Link href={ROUTES.ANALYTICS} className={linkClasses(ROUTES.ANALYTICS)}>
+            📊 Analytics
+          </Link>
         </div>
       </div>
     </nav>

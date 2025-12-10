@@ -64,6 +64,7 @@ export const ROUTES = {
   HOME: '/',
   ADMIN: '/admin',
   POS: '/pos',
+  ANALYTICS: '/analytics',
 };
 
 // API Endpoints

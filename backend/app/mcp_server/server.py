@@ -36,6 +36,12 @@ async def run_server():
         billing_get_bill,
         billing_list_bills,
     )
+    from app.mcp_server.tools_analytics import (
+        get_sales_by_month,
+        compare_sales,
+        get_sales_trends,
+        get_inventory_analytics,
+    )
 
     server = create_server()
 
@@ -50,6 +56,12 @@ async def run_server():
     server.tool(exclude_args=["session"])(billing_create_bill)
     server.tool(exclude_args=["session"])(billing_get_bill)
     server.tool(exclude_args=["session"])(billing_list_bills)
+
+    # Analytics tools (Task T025 - AI Dashboard)
+    server.tool(exclude_args=["session"])(get_sales_by_month)
+    server.tool(exclude_args=["session"])(compare_sales)
+    server.tool(exclude_args=["session"])(get_sales_trends)
+    server.tool(exclude_args=["session"])(get_inventory_analytics)
 
     # Run server with stdio transport
     await server.run_stdio_async()
