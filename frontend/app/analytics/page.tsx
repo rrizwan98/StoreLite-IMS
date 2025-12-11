@@ -1,387 +1,298 @@
 /**
- * AI Analytics Dashboard - Hybrid Approach
+ * AI Analytics Dashboard with Pure OpenAI ChatKit + Structured Visualization API
  *
- * 1. Uses /agent/chat-legacy for natural language AI responses
- * 2. Uses /analytics/* endpoints for structured visualization data
- * 3. Uses /inventory endpoint for product-specific queries
- *
- * This ensures both accurate AI responses AND reliable chart data
+ * Architecture:
+ * 1. ChatKit handles chat (unchanged)
+ * 2. After response, calls /analytics/visualize API with query
+ * 3. API returns structured chart data
+ * 4. Frontend renders charts with Recharts
  */
 
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
+import Script from 'next/script';
 import { API_BASE_URL } from '@/lib/constants';
 import ErrorBoundary from '@/components/shared/ErrorBoundary';
 import {
   BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
-  XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
+  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
 } from 'recharts';
 
-// Types
-interface ChatMessage {
-  role: 'user' | 'assistant';
-  content: string;
-}
-
-interface ChartData {
-  name: string;
-  value: number;
-  [key: string]: any;
-}
-
-interface Visualization {
-  type: 'bar' | 'line' | 'pie' | 'metric';
-  title: string;
-  data: ChartData[];
-}
-
+// Types for visualization data from API
 interface MetricData {
   title: string;
   value: string;
-  icon?: string;
+  subtitle?: string;
+  status?: 'success' | 'warning' | 'danger';
 }
 
-// Colors for charts
+interface ChartConfig {
+  type: 'bar' | 'line' | 'pie';
+  title: string;
+  data: Array<{ name: string; value: number; [key: string]: any }>;
+  dataKey: string;
+  xAxisKey: string;
+  color?: string;
+  formatValue?: 'currency' | 'number' | 'percentage';
+}
+
+interface VisualizationResponse {
+  success: boolean;
+  query: string;
+  metrics: MetricData[];
+  charts: ChartConfig[];
+  intent?: {
+    inventory: boolean;
+    sales: boolean;
+    trend: boolean;
+    products: string[];
+  };
+  error?: string;
+}
+
+// Chart colors
 const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#06B6D4', '#84CC16'];
 
-// Detect query intent
-function detectQueryIntent(query: string): { type: string; endpoint: string } | null {
-  const lower = query.toLowerCase();
-
-  // Inventory/Stock queries for specific products
-  if (lower.includes('pencil') || lower.includes('pancel') || lower.includes('dollar') ||
-      (lower.includes('stock') && (lower.includes('show') || lower.includes('check') || lower.includes('what')))) {
-    // Extract key product words - use smarter extraction
-    // Remove common filler words and just get the product name
-    let searchTerm = query
-      .replace(/(?:show|check|what|get|find|me|the|only|please|stock|inventory|just|can you)\s*/gi, '')
-      .trim();
-
-    // If we have "pencil" in query but product is "pancel", search for "dollar" (the brand)
-    if (lower.includes('dollar')) {
-      searchTerm = 'dollar'; // Use brand name for more flexible search
-    }
-
-    // Fallback: use first meaningful word
-    if (!searchTerm || searchTerm.length < 2) {
-      const words = query.split(/\s+/).filter(w => w.length > 2 && !['show', 'check', 'what', 'get', 'find', 'me', 'the', 'only', 'stock'].includes(w.toLowerCase()));
-      searchTerm = words[0] || query;
-    }
-
-    console.log('[Analytics] Product search term:', searchTerm);
-    return { type: 'product', endpoint: `/api/items?name=${encodeURIComponent(searchTerm)}` };
-  }
-
-  // Inventory health/analytics
-  if (lower.includes('inventory') && (lower.includes('health') || lower.includes('status') || lower.includes('analytics'))) {
-    return { type: 'inventory_health', endpoint: '/analytics/inventory-health' };
-  }
-
-  // Low stock
-  if (lower.includes('low stock') || lower.includes('restock') || lower.includes('running low')) {
-    return { type: 'inventory_health', endpoint: '/analytics/inventory-health' };
-  }
-
-  // Top products/best sellers
-  if (lower.includes('top') || lower.includes('best') || lower.includes('selling')) {
-    return { type: 'top_products', endpoint: '/analytics/top-products?limit=5' };
-  }
-
-  // Sales trends
-  if (lower.includes('trend') || lower.includes('daily') || lower.includes('30 day')) {
-    return { type: 'sales_trends', endpoint: '/analytics/sales-trends?days=30' };
-  }
-
-  // Monthly sales
-  if (lower.includes('month') || lower.includes('sale') || lower.includes('revenue')) {
-    return { type: 'sales_month', endpoint: '/analytics/sales-month' };
-  }
-
-  // Category breakdown
-  if (lower.includes('category') || lower.includes('breakdown')) {
-    return { type: 'inventory_health', endpoint: '/analytics/inventory-health' };
-  }
-
-  // All inventory
-  if (lower.includes('all') && (lower.includes('item') || lower.includes('product') || lower.includes('inventory'))) {
-    return { type: 'all_inventory', endpoint: '/api/items' };
-  }
-
-  return null;
-}
-
-// Generate visualizations from API response
-function generateVisualizationsFromData(type: string, data: any): { visualizations: Visualization[], metrics: MetricData[] } {
-  const visualizations: Visualization[] = [];
-  const metrics: MetricData[] = [];
-
-  console.log('[Analytics] generateVisualizationsFromData called with:', { type, dataLength: Array.isArray(data) ? data.length : 'not array', data });
-
-  switch (type) {
-    case 'product':
-      // Single or multiple products from /api/items
-      // API returns: stock_qty, unit_price (not stock_quantity, price)
-      if (Array.isArray(data) && data.length > 0) {
-        console.log('[Analytics] Processing product data:', data);
-        if (data.length === 1) {
-          // Single product - show as metrics
-          const item = data[0];
-          const stockQty = parseFloat(item.stock_qty) || 0;
-          const unitPrice = parseFloat(item.unit_price) || 0;
-          metrics.push(
-            { title: 'Product', value: (item.name || 'Unknown').trim() },
-            { title: 'Stock Qty', value: String(stockQty) },
-            { title: 'Price', value: `$${unitPrice.toFixed(2)}` },
-            { title: 'Category', value: item.category || 'N/A' },
-            { title: 'Unit', value: item.unit || 'N/A' },
-            { title: 'Total Value', value: `$${(stockQty * unitPrice).toFixed(2)}` }
-          );
-        } else {
-          // Multiple products - show as charts
-          visualizations.push({
-            type: 'bar',
-            title: 'Stock Quantity',
-            data: data.slice(0, 10).map((item: any) => ({
-              name: (item.name || 'Unknown').trim().substring(0, 15),
-              value: parseFloat(item.stock_qty) || 0,
-            })),
-          });
-
-          visualizations.push({
-            type: 'bar',
-            title: 'Inventory Value ($)',
-            data: data.slice(0, 10).map((item: any) => ({
-              name: (item.name || 'Unknown').trim().substring(0, 15),
-              value: (parseFloat(item.stock_qty) || 0) * (parseFloat(item.unit_price) || 0),
-            })),
-          });
-        }
-      }
-      break;
-
-    case 'all_inventory':
-      if (Array.isArray(data) && data.length > 0) {
-        visualizations.push({
-          type: 'bar',
-          title: 'Inventory by Stock',
-          data: data.slice(0, 10).map((item: any) => ({
-            name: (item.name || 'Unknown').trim().substring(0, 15),
-            value: parseFloat(item.stock_qty) || 0,
-          })),
-        });
-
-        // Group by category
-        const categoryMap: Record<string, number> = {};
-        data.forEach((item: any) => {
-          const cat = item.category || 'Other';
-          categoryMap[cat] = (categoryMap[cat] || 0) + ((parseFloat(item.stock_qty) || 0) * (parseFloat(item.unit_price) || 0));
-        });
-        visualizations.push({
-          type: 'pie',
-          title: 'Value by Category',
-          data: Object.entries(categoryMap).map(([name, value]) => ({ name, value })),
-        });
-      }
-      break;
-
-    case 'inventory_health':
-      if (data.metrics) {
-        data.metrics.forEach((m: any) => {
-          metrics.push({ title: m.title, value: m.value, icon: m.icon });
-        });
-      }
-      if (data.visualizations) {
-        data.visualizations.forEach((v: any) => {
-          if (v.type === 'bar-chart' && v.data?.length > 0) {
-            visualizations.push({
-              type: 'bar',
-              title: v.title,
-              data: v.data.map((d: any) => ({ name: d.label, value: d.value })),
-            });
-          }
-        });
-      }
-      break;
-
-    case 'top_products':
-      if (data.visualizations) {
-        data.visualizations.forEach((v: any) => {
-          if (v.type === 'bar-chart' && v.data?.length > 0) {
-            visualizations.push({
-              type: 'bar',
-              title: v.title,
-              data: v.data.map((d: any) => ({ name: d.label, value: d.value })),
-            });
-          }
-        });
-      }
-      break;
-
-    case 'sales_trends':
-      if (data.metrics) {
-        data.metrics.forEach((m: any) => {
-          metrics.push({ title: m.title, value: m.value, icon: m.icon });
-        });
-      }
-      if (data.visualizations) {
-        data.visualizations.forEach((v: any) => {
-          if (v.type === 'line-chart' && v.data?.length > 0) {
-            visualizations.push({
-              type: 'line',
-              title: v.title,
-              data: v.data.map((d: any) => ({ name: d.label, value: d.value })),
-            });
-          } else if (v.type === 'bar-chart' && v.data?.length > 0) {
-            visualizations.push({
-              type: 'bar',
-              title: v.title,
-              data: v.data.map((d: any) => ({ name: d.label, value: d.value })),
-            });
-          }
-        });
-      }
-      break;
-
-    case 'sales_month':
-      if (data.metrics) {
-        data.metrics.forEach((m: any) => {
-          metrics.push({ title: m.title, value: m.value, icon: m.icon });
-        });
-      }
-      if (data.visualizations) {
-        data.visualizations.forEach((v: any) => {
-          if (v.type === 'bar-chart' && v.data?.length > 0) {
-            visualizations.push({
-              type: 'bar',
-              title: v.title,
-              data: v.data.map((d: any) => ({ name: d.label, value: d.value })),
-            });
-          } else if (v.type === 'line-chart' && v.data?.length > 0) {
-            visualizations.push({
-              type: 'line',
-              title: v.title,
-              data: v.data.map((d: any) => ({ name: d.label, value: d.value })),
-            });
-          }
-        });
-      }
-      break;
-  }
-
-  return { visualizations, metrics };
-}
+// Generate session ID
+const generateSessionId = (): string => {
+  const timestamp = Date.now();
+  const random = Math.random().toString(36).substring(2, 15);
+  return `analytics-${timestamp}-${random}`;
+};
 
 export default function AnalyticsPage() {
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [inputValue, setInputValue] = useState('');
-  const [isTyping, setIsTyping] = useState(false);
-  const [visualizations, setVisualizations] = useState<Visualization[]>([]);
   const [metrics, setMetrics] = useState<MetricData[]>([]);
-  const [sessionId] = useState(() => `analytics-${Date.now()}`);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [charts, setCharts] = useState<ChartConfig[]>([]);
+  const [isLoaded, setIsLoaded] = useState(false);
+  const [lastQuery, setLastQuery] = useState<string>('');
+  const [isLoadingViz, setIsLoadingViz] = useState(false);
+  const chatkitRef = useRef<HTMLElement | null>(null);
+  const configuredRef = useRef(false);
 
-  // Auto-scroll
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  const [sessionId] = useState(() => {
+    if (typeof window !== 'undefined') {
+      let id = sessionStorage.getItem('analytics-chatkit-session-id');
+      if (!id) {
+        id = generateSessionId();
+        sessionStorage.setItem('analytics-chatkit-session-id', id);
+      }
+      return id;
+    }
+    return generateSessionId();
+  });
 
-  // Send message - HYBRID APPROACH
-  const sendMessage = async (message: string) => {
-    if (!message.trim() || isTyping) return;
+  /**
+   * Fetch visualization data from the new API endpoint
+   */
+  const fetchVisualization = useCallback(async (query: string, responseText?: string) => {
+    if (!query) return;
 
-    const userMsg: ChatMessage = { role: 'user', content: message };
-    setMessages(prev => [...prev, userMsg]);
-    setInputValue('');
-    setIsTyping(true);
+    setIsLoadingViz(true);
+    console.log('[Analytics] Fetching visualization for:', query);
 
     try {
-      // PARALLEL CALLS: AI agent + Analytics endpoint
-      const intent = detectQueryIntent(message);
-      console.log('[Analytics] Detected intent:', intent);
-
-      // Start both requests in parallel
-      const aiPromise = fetch(`${API_BASE_URL}/agent/chat-legacy`, {
+      const response = await fetch(`${API_BASE_URL}/analytics/visualize`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ session_id: sessionId, message }),
-      }).then(r => r.json()).catch(e => ({ response: 'AI service unavailable', error: true }));
+        body: JSON.stringify({
+          query: query,
+          response_text: responseText || ''
+        })
+      });
 
-      const dataPromise = intent
-        ? fetch(`${API_BASE_URL}${intent.endpoint}`).then(r => r.json()).catch(e => {
-            console.error('[Analytics] Data fetch error:', e);
-            return null;
-          })
-        : Promise.resolve(null);
+      const data: VisualizationResponse = await response.json();
+      console.log('[Analytics] Visualization response:', data);
 
-      // Wait for both
-      const [aiResponse, dataResponse] = await Promise.all([aiPromise, dataPromise]);
-      console.log('[Analytics] AI response:', aiResponse);
-      console.log('[Analytics] Data response:', dataResponse);
+      if (data.success) {
+        setMetrics(data.metrics || []);
+        setCharts(data.charts || []);
+        setLastQuery(query);
+      } else {
+        console.error('[Analytics] Visualization error:', data.error);
+      }
+    } catch (error) {
+      console.error('[Analytics] Failed to fetch visualization:', error);
+    } finally {
+      setIsLoadingViz(false);
+    }
+  }, []);
 
-      // Add AI response to chat
-      setMessages(prev => [...prev, {
-        role: 'assistant',
-        content: aiResponse.response || 'No response from AI.',
-      }]);
+  // Configure ChatKit when loaded
+  useEffect(() => {
+    if (!isLoaded || configuredRef.current) return;
 
-      // Generate visualizations from data endpoint
-      if (dataResponse && intent) {
-        console.log('[Analytics] Generating visualizations for type:', intent.type);
-        const { visualizations: newViz, metrics: newMetrics } = generateVisualizationsFromData(intent.type, dataResponse);
-        console.log('[Analytics] Generated:', { visualizations: newViz.length, metrics: newMetrics.length });
-
-        // Always update state - clear old and set new
-        setVisualizations(newViz);
-        setMetrics(newMetrics);
-      } else if (intent) {
-        // Clear visualizations if no data returned
-        console.log('[Analytics] No data returned, clearing visualizations');
-        setVisualizations([]);
-        setMetrics([]);
+    const initChatKit = () => {
+      const chatkit = chatkitRef.current as any;
+      if (!chatkit || typeof chatkit.setOptions !== 'function') {
+        setTimeout(initChatKit, 100);
+        return;
       }
 
-    } catch (error) {
-      console.error('Chat error:', error);
-      setMessages(prev => [...prev, {
-        role: 'assistant',
-        content: 'Sorry, I encountered an error. Please try again.',
-      }]);
-    } finally {
-      setIsTyping(false);
+      console.log('[Analytics] Configuring ChatKit');
+      configuredRef.current = true;
+
+      // Store the last user query
+      let currentQuery = '';
+
+      chatkit.setOptions({
+        api: {
+          url: `${API_BASE_URL}/agent/chatkit`,
+          domainKey: '',
+          fetch: async (url: string, options: RequestInit) => {
+            try {
+              const body = options.body ? JSON.parse(options.body as string) : {};
+              body.session_id = sessionId;
+
+              // Capture user message
+              if (body.params?.input?.content) {
+                const inputText = body.params.input.content.find((c: any) => c.type === 'input_text')?.text;
+                if (inputText) {
+                  currentQuery = inputText;
+                  console.log('[Analytics] User query:', inputText);
+                }
+              }
+
+              const response = await fetch(url, {
+                ...options,
+                body: JSON.stringify(body),
+                headers: {
+                  ...options.headers,
+                  'Content-Type': 'application/json',
+                },
+              });
+
+              // Clone response to read for visualization trigger
+              const clonedResponse = response.clone();
+              const reader = clonedResponse.body?.getReader();
+
+              if (reader && currentQuery) {
+                const decoder = new TextDecoder();
+                let responseText = '';
+
+                // Read stream in background
+                (async () => {
+                  try {
+                    while (true) {
+                      const { done, value } = await reader.read();
+                      if (done) break;
+
+                      const chunk = decoder.decode(value, { stream: true });
+                      const lines = chunk.split('\n');
+
+                      for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                          try {
+                            const data = JSON.parse(line.slice(6));
+
+                            // Capture response text
+                            if (data.type === 'assistant_message.content_part.text_delta' && data.delta) {
+                              responseText += data.delta;
+                            }
+
+                            // When thread item is done, fetch visualization
+                            if (data.type === 'thread.item.done' && data.item?.type === 'assistant_message') {
+                              console.log('[Analytics] Response complete, fetching visualization');
+                              // Small delay to ensure UI updates
+                              setTimeout(() => {
+                                fetchVisualization(currentQuery, responseText);
+                              }, 200);
+                            }
+                          } catch (e) {
+                            // Not JSON, skip
+                          }
+                        }
+                      }
+                    }
+                  } catch (e) {
+                    console.error('[Analytics] Stream read error:', e);
+                  }
+                })();
+              }
+
+              return response;
+            } catch (e) {
+              console.error('ChatKit fetch error:', e);
+              throw e;
+            }
+          },
+        },
+        theme: 'light',
+        header: {
+          enabled: true,
+          title: {
+            enabled: true,
+            text: 'AI Analytics Assistant',
+          },
+        },
+        startScreen: {
+          greeting: 'Ask me anything about your inventory! Charts will appear automatically.',
+          prompts: [
+            { label: 'Stock Check', prompt: 'Show me stock of Dollar pancel and oil' },
+            { label: 'All Inventory', prompt: 'Show me inventory overview' },
+            { label: 'Low Stock', prompt: 'Which items are low on stock?' },
+            { label: 'Sales Trend', prompt: 'Show me sales trend' },
+          ],
+        },
+        composer: {
+          placeholder: 'Ask about inventory, sales, products...',
+        },
+        disclaimer: {
+          text: 'Charts are generated from your actual database.',
+        },
+      });
+    };
+
+    setTimeout(initChatKit, 300);
+  }, [isLoaded, sessionId, fetchVisualization]);
+
+  // Handle script load
+  const handleScriptLoad = () => {
+    console.log('[Analytics] ChatKit script loaded');
+    const checkElement = () => {
+      if (customElements.get('openai-chatkit')) {
+        console.log('[Analytics] ChatKit element registered');
+        setIsLoaded(true);
+      } else {
+        setTimeout(checkElement, 100);
+      }
+    };
+    checkElement();
+  };
+
+  // Format value for display
+  const formatValue = (value: number, format?: string) => {
+    if (format === 'currency') {
+      return `$${value.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
     }
-  };
-
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      sendMessage(inputValue);
+    if (format === 'percentage') {
+      return `${value}%`;
     }
+    return value.toLocaleString();
   };
 
-  // Format currency
-  const formatCurrency = (value: number) => {
-    if (value >= 1000000) return `$${(value / 1000000).toFixed(1)}M`;
-    if (value >= 1000) return `$${(value / 1000).toFixed(1)}K`;
-    return `$${value.toFixed(0)}`;
-  };
+  // Render chart based on type
+  const renderChart = (chart: ChartConfig, index: number) => {
+    const chartHeight = Math.max(200, chart.data.length * 35);
 
-  // Render visualization
-  const renderVisualization = (viz: Visualization, index: number) => {
-    switch (viz.type) {
+    switch (chart.type) {
       case 'bar':
         return (
-          <div key={index} className="bg-white rounded-lg p-4 border border-gray-200">
-            <h4 className="font-semibold text-gray-800 mb-3">{viz.title}</h4>
-            <ResponsiveContainer width="100%" height={200}>
-              <BarChart data={viz.data} margin={{ top: 10, right: 10, left: 0, bottom: 20 }}>
+          <div key={index} className="bg-white rounded-lg p-4 border border-gray-200 shadow-sm">
+            <h4 className="font-semibold text-gray-800 mb-3">{chart.title}</h4>
+            <ResponsiveContainer width="100%" height={chartHeight}>
+              <BarChart
+                data={chart.data}
+                layout="vertical"
+                margin={{ top: 5, right: 30, left: 100, bottom: 5 }}
+              >
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                <XAxis dataKey="name" tick={{ fontSize: 10 }} angle={-20} textAnchor="end" />
-                <YAxis tick={{ fontSize: 10 }} />
-                <Tooltip formatter={(value: number) => formatCurrency(value)} />
-                <Bar dataKey="value" fill="#3B82F6" radius={[4, 4, 0, 0]}>
-                  {viz.data.map((_, i) => (
-                    <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                <XAxis type="number" tick={{ fontSize: 11 }} tickFormatter={(v) => formatValue(v, chart.formatValue)} />
+                <YAxis type="category" dataKey={chart.xAxisKey} tick={{ fontSize: 11 }} width={95} />
+                <Tooltip formatter={(value: number) => [formatValue(value, chart.formatValue), 'Value']} />
+                <Bar dataKey={chart.dataKey} radius={[0, 4, 4, 0]}>
+                  {chart.data.map((_, i) => (
+                    <Cell key={i} fill={chart.color || COLORS[i % COLORS.length]} />
                   ))}
                 </Bar>
               </BarChart>
@@ -391,15 +302,22 @@ export default function AnalyticsPage() {
 
       case 'line':
         return (
-          <div key={index} className="bg-white rounded-lg p-4 border border-gray-200">
-            <h4 className="font-semibold text-gray-800 mb-3">{viz.title}</h4>
-            <ResponsiveContainer width="100%" height={200}>
-              <LineChart data={viz.data} margin={{ top: 10, right: 10, left: 0, bottom: 20 }}>
+          <div key={index} className="bg-white rounded-lg p-4 border border-gray-200 shadow-sm">
+            <h4 className="font-semibold text-gray-800 mb-3">{chart.title}</h4>
+            <ResponsiveContainer width="100%" height={250}>
+              <LineChart data={chart.data} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                <XAxis dataKey="name" tick={{ fontSize: 10 }} />
-                <YAxis tick={{ fontSize: 10 }} />
-                <Tooltip formatter={(value: number) => formatCurrency(value)} />
-                <Line type="monotone" dataKey="value" stroke="#3B82F6" strokeWidth={2} dot={{ r: 3 }} />
+                <XAxis dataKey={chart.xAxisKey} tick={{ fontSize: 10 }} />
+                <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => formatValue(v, chart.formatValue)} />
+                <Tooltip formatter={(value: number) => [formatValue(value, chart.formatValue), 'Value']} />
+                <Line
+                  type="monotone"
+                  dataKey={chart.dataKey}
+                  stroke="#3B82F6"
+                  strokeWidth={2}
+                  dot={{ r: 3, fill: '#3B82F6' }}
+                  activeDot={{ r: 6 }}
+                />
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -407,25 +325,27 @@ export default function AnalyticsPage() {
 
       case 'pie':
         return (
-          <div key={index} className="bg-white rounded-lg p-4 border border-gray-200">
-            <h4 className="font-semibold text-gray-800 mb-3">{viz.title}</h4>
-            <ResponsiveContainer width="100%" height={200}>
+          <div key={index} className="bg-white rounded-lg p-4 border border-gray-200 shadow-sm">
+            <h4 className="font-semibold text-gray-800 mb-3">{chart.title}</h4>
+            <ResponsiveContainer width="100%" height={280}>
               <PieChart>
                 <Pie
-                  data={viz.data}
+                  data={chart.data}
                   cx="50%"
                   cy="50%"
-                  innerRadius={40}
-                  outerRadius={70}
+                  innerRadius={50}
+                  outerRadius={90}
                   paddingAngle={2}
-                  dataKey="value"
-                  label={({ name }) => name}
+                  dataKey={chart.dataKey}
+                  label={({ name, value }) => `${name}: ${formatValue(value, chart.formatValue)}`}
+                  labelLine={{ strokeWidth: 1 }}
                 >
-                  {viz.data.map((_, i) => (
+                  {chart.data.map((_, i) => (
                     <Cell key={i} fill={COLORS[i % COLORS.length]} />
                   ))}
                 </Pie>
-                <Tooltip formatter={(value: number) => formatCurrency(value)} />
+                <Tooltip formatter={(value: number) => formatValue(value, chart.formatValue)} />
+                <Legend />
               </PieChart>
             </ResponsiveContainer>
           </div>
@@ -436,93 +356,46 @@ export default function AnalyticsPage() {
     }
   };
 
-  // Sample queries
-  const sampleQueries = [
-    'Show me Dollar Pencil stock',
-    'Top 5 selling products',
-    'Inventory health report',
-    'Sales trends for 30 days',
-    'Monthly sales report',
-    'Show all products',
-  ];
-
   return (
     <ErrorBoundary>
+      {/* Load ChatKit from OpenAI CDN */}
+      <Script
+        src="https://cdn.platform.openai.com/deployments/chatkit/chatkit.js"
+        strategy="afterInteractive"
+        onLoad={handleScriptLoad}
+        onError={(e) => console.error('Failed to load ChatKit:', e)}
+      />
+
       <div className="h-[calc(100vh-120px)] flex gap-4">
-        {/* Left: Chat Panel */}
+        {/* Left: ChatKit Panel */}
         <div className="w-1/2 flex flex-col bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
           <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-4 py-3">
             <h2 className="font-semibold flex items-center">
               <span className="mr-2">🤖</span>
               IMS AI Analytics Assistant
             </h2>
-            <p className="text-xs text-blue-100 mt-1">Ask anything about your inventory in natural language</p>
+            <p className="text-xs text-blue-100 mt-1">Ask questions - charts appear automatically</p>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50">
-            {messages.length === 0 && (
-              <div className="text-center py-6">
-                <div className="text-5xl mb-3">📊</div>
-                <p className="text-gray-600 mb-4">Ask me anything about your inventory!</p>
-                <div className="flex flex-wrap justify-center gap-2">
-                  {sampleQueries.slice(0, 4).map((q, i) => (
-                    <button
-                      key={i}
-                      onClick={() => sendMessage(q)}
-                      className="px-3 py-1.5 bg-white border border-gray-300 rounded-full text-sm hover:bg-blue-50 hover:border-blue-300 transition-colors"
-                    >
-                      {q}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {messages.map((msg, idx) => (
-              <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                <div className={`max-w-[85%] rounded-lg px-4 py-2 ${
-                  msg.role === 'user'
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-white border border-gray-200 text-gray-800'
-                }`}>
-                  <div className="whitespace-pre-wrap text-sm">{msg.content}</div>
-                </div>
-              </div>
-            ))}
-
-            {isTyping && (
-              <div className="flex justify-start">
-                <div className="bg-white border border-gray-200 rounded-lg px-4 py-2">
-                  <div className="flex space-x-1">
-                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
-                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '0.1s'}}></div>
-                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
-                  </div>
-                </div>
-              </div>
-            )}
-            <div ref={messagesEndRef} />
-          </div>
-
-          <div className="border-t border-gray-200 p-3 bg-white">
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={inputValue}
-                onChange={(e) => setInputValue(e.target.value)}
-                onKeyPress={handleKeyPress}
-                placeholder="Ask about inventory, sales, products..."
-                className="flex-1 border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                disabled={isTyping}
+          <div className="flex-1 relative">
+            {isLoaded ? (
+              <openai-chatkit
+                ref={chatkitRef as any}
+                id="analytics-chatkit"
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  display: 'block',
+                }}
               />
-              <button
-                onClick={() => sendMessage(inputValue)}
-                disabled={!inputValue.trim() || isTyping}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 transition-colors"
-              >
-                Send
-              </button>
-            </div>
+            ) : (
+              <div className="flex items-center justify-center h-full">
+                <div className="text-center">
+                  <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600 mx-auto mb-3"></div>
+                  <p className="text-gray-500">Loading ChatKit...</p>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -530,50 +403,74 @@ export default function AnalyticsPage() {
         <div className="w-1/2 flex flex-col bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
           <div className="bg-gradient-to-r from-purple-600 to-pink-600 text-white px-4 py-3">
             <h2 className="font-semibold flex items-center">
-              <span className="mr-2">📈</span>
-              Dynamic Visualizations
+              <span className="mr-2">📊</span>
+              Live Visualizations
             </h2>
-            <p className="text-xs text-purple-100 mt-1">Charts update based on your queries</p>
+            <p className="text-xs text-purple-100 mt-1">
+              {lastQuery ? `Query: "${lastQuery}"` : 'Charts from your database'}
+            </p>
           </div>
 
           <div className="flex-1 overflow-y-auto p-4 bg-gray-50">
-            {visualizations.length === 0 && metrics.length === 0 ? (
-              <div className="text-center py-12">
-                <div className="text-6xl mb-4 opacity-50">📊</div>
-                <p className="text-gray-500">Ask a question to see visualizations</p>
-                <p className="text-gray-400 text-sm mt-2">Charts will appear here based on your queries</p>
-                <div className="mt-4 space-y-2">
-                  <p className="text-xs text-gray-400">Try asking:</p>
-                  {sampleQueries.slice(0, 3).map((q, i) => (
-                    <button
-                      key={i}
-                      onClick={() => sendMessage(q)}
-                      className="block mx-auto text-xs text-blue-500 hover:underline"
-                    >
-                      "{q}"
-                    </button>
-                  ))}
+            {isLoadingViz ? (
+              <div className="flex items-center justify-center h-32">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
+                <span className="ml-3 text-gray-500">Loading charts...</span>
+              </div>
+            ) : charts.length === 0 && metrics.length === 0 ? (
+              <div className="text-center py-8">
+                <div className="text-6xl mb-4 opacity-50">📈</div>
+                <p className="text-gray-500 mb-2">Charts appear here automatically</p>
+                <p className="text-gray-400 text-sm mb-4">
+                  Ask a question in the chat and charts will be<br />
+                  generated from your actual database!
+                </p>
+                <div className="bg-blue-50 rounded-lg p-4 text-left max-w-sm mx-auto">
+                  <p className="text-xs text-blue-700 font-medium mb-2">Try asking:</p>
+                  <ul className="text-xs text-blue-600 space-y-1">
+                    <li>• "Show me stock of Dollar pancel and oil"</li>
+                    <li>• "What's the inventory overview?"</li>
+                    <li>• "Which items are low on stock?"</li>
+                    <li>• "Show me sales trend"</li>
+                  </ul>
                 </div>
               </div>
             ) : (
               <div className="space-y-4">
-                {/* Metrics Grid */}
+                {/* Metrics Cards */}
                 {metrics.length > 0 && (
-                  <div className="bg-white rounded-lg p-4 border border-gray-200">
-                    <h4 className="font-semibold text-gray-800 mb-3">Details</h4>
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                      {metrics.map((m, i) => (
-                        <div key={i} className="text-center p-3 bg-gray-50 rounded-lg">
-                          <div className="text-xs text-gray-500 mb-1">{m.title}</div>
-                          <div className="text-lg font-bold text-gray-800">{m.value}</div>
+                  <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+                    {metrics.map((m, i) => (
+                      <div
+                        key={i}
+                        className={`p-4 rounded-lg border shadow-sm ${
+                          m.status === 'danger' ? 'bg-red-50 border-red-200' :
+                          m.status === 'warning' ? 'bg-yellow-50 border-yellow-200' :
+                          m.status === 'success' ? 'bg-green-50 border-green-200' :
+                          'bg-white border-gray-200'
+                        }`}
+                      >
+                        <div className="text-xs text-gray-500 mb-1 truncate" title={m.title}>
+                          {m.title}
                         </div>
-                      ))}
-                    </div>
+                        <div className={`text-xl font-bold ${
+                          m.status === 'danger' ? 'text-red-600' :
+                          m.status === 'warning' ? 'text-yellow-600' :
+                          m.status === 'success' ? 'text-green-600' :
+                          'text-gray-800'
+                        }`}>
+                          {m.value}
+                        </div>
+                        {m.subtitle && (
+                          <div className="text-xs text-gray-400 mt-1">{m.subtitle}</div>
+                        )}
+                      </div>
+                    ))}
                   </div>
                 )}
 
                 {/* Charts */}
-                {visualizations.map((viz, i) => renderVisualization(viz, i))}
+                {charts.map((chart, i) => renderChart(chart, i))}
               </div>
             )}
           </div>
@@ -581,4 +478,18 @@ export default function AnalyticsPage() {
       </div>
     </ErrorBoundary>
   );
+}
+
+// Type declaration for the custom element
+declare global {
+  namespace JSX {
+    interface IntrinsicElements {
+      'openai-chatkit': React.DetailedHTMLProps<
+        React.HTMLAttributes<HTMLElement> & {
+          id?: string;
+        },
+        HTMLElement
+      >;
+    }
+  }
 }
