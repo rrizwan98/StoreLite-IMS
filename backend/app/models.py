@@ -4,7 +4,7 @@ SQLAlchemy ORM models for IMS FastAPI backend
 
 from datetime import datetime
 from decimal import Decimal
-from sqlalchemy import Column, Integer, String, Numeric, Boolean, DateTime, ForeignKey, Text
+from sqlalchemy import Column, Integer, String, Numeric, Boolean, DateTime, ForeignKey, Text, CheckConstraint, JSON
 from sqlalchemy.orm import relationship
 from app.database import Base
 
@@ -23,6 +23,15 @@ class Item(Base):
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
+    # Check constraint: category must be one of the allowed values
+    __table_args__ = (
+        CheckConstraint(
+            "category IN ('Grocery', 'Beauty', 'Garments', 'Utilities', 'Other')",
+            name="items_category_check"
+        ),
+        {"extend_existing": True},
+    )
+
     # Relationships
     bill_items = relationship("BillItem", back_populates="item", cascade="all, delete-orphan")
 
@@ -39,6 +48,8 @@ class Bill(Base):
     store_name = Column(String(255), nullable=True)
     total_amount = Column(Numeric(12, 2), nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    __table_args__ = ({"extend_existing": True},)
 
     # Relationships
     bill_items = relationship("BillItem", back_populates="bill", cascade="all, delete-orphan")
@@ -59,9 +70,60 @@ class BillItem(Base):
     quantity = Column(Numeric(12, 3), nullable=False)
     line_total = Column(Numeric(12, 2), nullable=False)
 
+    __table_args__ = ({"extend_existing": True},)
+
     # Relationships
     bill = relationship("Bill", back_populates="bill_items")
     item = relationship("Item", back_populates="bill_items")
 
     def __repr__(self):
         return f"<BillItem(id={self.id}, bill_id={self.bill_id}, item_name={self.item_name})>"
+
+
+class AgentSession(Base):
+    """Agent conversation session for Phase 5 OpenAI Agents SDK integration"""
+    __tablename__ = "agent_sessions"
+
+    id = Column(String(36), primary_key=True, index=True)  # UUID
+    session_id = Column(String(255), nullable=False, unique=True, index=True)
+    conversation_history = Column(JSON, nullable=False, default=[])  # Array of message dicts
+    session_metadata = Column(JSON, nullable=False, default={})  # User context, store info, etc.
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    __table_args__ = ({"extend_existing": True},)
+
+    def __repr__(self):
+        return f"<AgentSession(session_id={self.session_id}, messages={len(self.conversation_history)})>"
+
+
+class ConversationHistory(Base):
+    """
+    Persistent storage for ChatKit conversations.
+    Enables conversation recovery if user refreshes page (SC-005).
+    """
+    __tablename__ = "conversation_history"
+
+    id = Column(Integer, primary_key=True, index=True)
+    session_id = Column(String(100), nullable=False, index=True)
+    user_id = Column(String(255), nullable=True, index=True)
+
+    # Message content
+    user_message = Column(Text, nullable=False)  # What user typed
+    agent_response = Column(Text, nullable=False)  # What agent said
+
+    # Response metadata
+    response_type = Column(
+        String(50),
+        nullable=True,
+        default="text"  # "text", "item_created", "bill_created", "item_list"
+    )
+    structured_data = Column(Text, nullable=True)  # JSON for UI rendering
+
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+    __table_args__ = ({"extend_existing": True},)
+
+    def __repr__(self):
+        return f"<ConversationHistory(session={self.session_id}, type={self.response_type})>"
