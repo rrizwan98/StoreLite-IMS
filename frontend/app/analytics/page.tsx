@@ -428,10 +428,10 @@ export default function AnalyticsPage() {
                 <div className="bg-blue-50 rounded-lg p-4 text-left max-w-sm mx-auto">
                   <p className="text-xs text-blue-700 font-medium mb-2">Try asking:</p>
                   <ul className="text-xs text-blue-600 space-y-1">
-                    <li>• "Show me stock of Dollar pancel and oil"</li>
-                    <li>• "What's the inventory overview?"</li>
-                    <li>• "Which items are low on stock?"</li>
-                    <li>• "Show me sales trend"</li>
+                    <li>Show me stock of Dollar pancel and oil</li>
+                    <li>What is the inventory overview?</li>
+                    <li>Which items are low on stock?</li>
+                    <li>Show me sales trend</li>
                   </ul>
                 </div>
               </div>
@@ -480,16 +480,4 @@ export default function AnalyticsPage() {
   );
 }
 
-// Type declaration for the custom element
-declare global {
-  namespace JSX {
-    interface IntrinsicElements {
-      'openai-chatkit': React.DetailedHTMLProps<
-        React.HTMLAttributes<HTMLElement> & {
-          id?: string;
-        },
-        HTMLElement
-      >;
-    }
-  }
-}
+// Note: TypeScript declaration for openai-chatkit is in ChatKitWidget.tsx

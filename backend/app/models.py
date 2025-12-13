@@ -4,9 +4,77 @@ SQLAlchemy ORM models for IMS FastAPI backend
 
 from datetime import datetime
 from decimal import Decimal
-from sqlalchemy import Column, Integer, String, Numeric, Boolean, DateTime, ForeignKey, Text, CheckConstraint, JSON
+from sqlalchemy import Column, Integer, String, Numeric, Boolean, DateTime, ForeignKey, Text, CheckConstraint, JSON, Enum
 from sqlalchemy.orm import relationship
+import enum
 from app.database import Base
+
+
+# ============================================================================
+# Enums
+# ============================================================================
+
+class ConnectionType(enum.Enum):
+    """User's database connection type choice"""
+    OWN_DATABASE = "own_database"
+    OUR_DATABASE = "our_database"
+
+
+class MCPStatus(enum.Enum):
+    """MCP server connection status"""
+    CONNECTED = "connected"
+    DISCONNECTED = "disconnected"
+    CONNECTING = "connecting"
+    ERROR = "error"
+
+
+# ============================================================================
+# User Authentication Models
+# ============================================================================
+
+class User(Base):
+    """User account for authentication"""
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, index=True)
+    email = Column(String(255), unique=True, nullable=False, index=True)
+    password_hash = Column(String(255), nullable=False)
+    full_name = Column(String(255), nullable=True)
+    is_active = Column(Boolean, default=True, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    last_login = Column(DateTime, nullable=True)
+
+    __table_args__ = ({"extend_existing": True},)
+
+    # Relationships
+    connection = relationship("UserConnection", back_populates="user", uselist=False, cascade="all, delete-orphan")
+
+    def __repr__(self):
+        return f"<User(id={self.id}, email={self.email})>"
+
+
+class UserConnection(Base):
+    """User's database connection preferences and MCP state"""
+    __tablename__ = "user_connections"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False, index=True)
+    connection_type = Column(String(50), nullable=False)  # 'own_database' or 'our_database'
+    database_uri = Column(Text, nullable=True)  # User's DATABASE_URI (encrypted at rest ideally)
+    mcp_server_status = Column(String(50), default="disconnected")  # 'connected', 'disconnected', 'connecting', 'error'
+    mcp_session_id = Column(String(255), nullable=True)  # MCP session reference
+    last_connected_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    __table_args__ = ({"extend_existing": True},)
+
+    # Relationships
+    user = relationship("User", back_populates="connection")
+
+    def __repr__(self):
+        return f"<UserConnection(user_id={self.user_id}, type={self.connection_type}, status={self.mcp_server_status})>"
 
 
 class Item(Base):

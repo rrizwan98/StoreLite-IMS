@@ -105,7 +105,7 @@ async def inventory_add_item(
     unit: str,
     unit_price: float,
     stock_qty: float,
-    session: AsyncSession
+    session: AsyncSession = None
 ) -> dict:
     """Create new inventory item with normalized category."""
     # Validate input and get normalized values

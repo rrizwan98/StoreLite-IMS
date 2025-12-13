@@ -5,7 +5,7 @@ This agent connects to user's PostgreSQL database via postgres-mcp MCP server
 and uses MCP tools (execute_sql, list_objects, etc.) for all database operations.
 
 Architecture:
-1. User provides DATABASE_URI
+1. User provides DATABASE_URI (or retrieves from stored user connection)
 2. Backend starts postgres-mcp server via MCPServerStdio (subprocess)
 3. Agent uses MCP tools from the postgres-mcp server
 4. All database operations go through MCP protocol
@@ -91,7 +91,8 @@ def get_llm_model():
 
 class ConnectRequest(BaseModel):
     """Request to connect to a PostgreSQL database."""
-    database_uri: str  # postgresql://user:password@host:port/dbname
+    database_uri: Optional[str] = None  # postgresql://user:password@host:port/dbname
+    user_id: Optional[int] = None  # User ID to retrieve stored database_uri
 
 
 # ============================================================================
@@ -428,7 +429,10 @@ _mcp_manager = MCPSessionManager()
 # Inventory Agent System Prompt
 # ============================================================================
 
-INVENTORY_SYSTEM_PROMPT = """You are an INVENTORY MANAGEMENT SPECIALIST connected to a PostgreSQL database via MCP (Model Context Protocol).
+INVENTORY_SYSTEM_PROMPT = """You are an EXPERT AI DATABASE ANALYTICS ASSISTANT connected to a PostgreSQL database via MCP (Model Context Protocol).
+
+## YOUR ROLE:
+You provide AI-powered analytics dashboard services, helping users understand and analyze their database data with professional-level insights.
 
 ## YOUR MCP TOOLS:
 You have access to these database tools via postgres-mcp:
@@ -437,65 +441,78 @@ You have access to these database tools via postgres-mcp:
 - **list_objects**: List tables, views in a schema
 - **get_object_details**: Get table columns and constraints
 
+## CRITICAL RULES FOR RESPONSES:
+
+### 1. ALWAYS EXPLORE THE DATABASE FIRST
+When a user asks about their data, FIRST use list_objects or list_schemas to discover what tables exist. NEVER assume table names - always check first!
+
+### 2. FORMAT DATA FOR VISUALIZATION
+When presenting query results with numerical data, format them clearly so the dashboard can visualize them:
+
+**For item counts:**
+"There is a total of **X items** in your database."
+
+**For individual items with quantities:**
+- "**ItemName**: X units"
+- Or use a table format:
+  | Name | Quantity | Price |
+  |------|----------|-------|
+  | Rice | 50 | $2.50 |
+
+**For totals:**
+"Total value: **$X,XXX.XX**"
+
+### 3. BE ACCURATE - NEVER INVENT DATA
+- Only report data that EXISTS in the database
+- If a query returns 0 results, say "No items found" - don't make up examples
+- If you can't find a table, say so clearly
+
+### 4. INTELLIGENT QUERY BUILDING
+- First discover the schema (list_objects)
+- Then check column names (get_object_details)
+- Then build appropriate queries
+- Handle any table structure - not just the default schema
+
+## EXAMPLE RESPONSE PATTERNS:
+
+**When user asks "how many items are in my database?"**
+1. First: list_objects to find tables
+2. Then: execute_sql to count rows
+3. Response: "Based on the **items** table, you have a total of **5 items** in your database."
+
+**When user asks for stock levels:**
+1. Query the inventory/items table
+2. Response with clear data:
+   "Here are your current stock levels:
+   - **Rice**: 50 units ($2.50 each)
+   - **Wheat**: 30 units ($3.00 each)
+   - **Sugar**: 25 units ($1.50 each)
+
+   Total inventory value: **$XXX.XX**"
+
+**When data is not found:**
+"I checked your database but found no inventory tables. Would you like me to:
+1. List all available tables?
+2. Help you create an inventory table?"
+
 ## YOUR CAPABILITIES:
-1. **Product Management** - Add, update, delete, search products
-2. **Bill/Invoice Generation** - Create bills with line items
-3. **Stock Management** - Update stock, check levels, low stock alerts
-4. **Database Exploration** - List tables, view structure
-
-## INVENTORY TABLE SCHEMA (if exists):
-```sql
--- Products table
-CREATE TABLE inventory_items (
-    id SERIAL PRIMARY KEY,
-    name VARCHAR(255) NOT NULL,
-    category VARCHAR(100),
-    unit VARCHAR(50) DEFAULT 'piece',
-    unit_price DECIMAL(12, 2) DEFAULT 0,
-    stock_qty DECIMAL(12, 3) DEFAULT 0,
-    min_stock_level DECIMAL(12, 3) DEFAULT 10,
-    description TEXT,
-    is_active BOOLEAN DEFAULT TRUE,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
--- Bills table
-CREATE TABLE inventory_bills (
-    id SERIAL PRIMARY KEY,
-    bill_number VARCHAR(50) UNIQUE,
-    customer_name VARCHAR(255),
-    total_amount DECIMAL(12, 2) DEFAULT 0,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
--- Bill items table
-CREATE TABLE inventory_bill_items (
-    id SERIAL PRIMARY KEY,
-    bill_id INTEGER REFERENCES inventory_bills(id),
-    item_id INTEGER REFERENCES inventory_items(id),
-    quantity DECIMAL(12, 3),
-    unit_price DECIMAL(12, 2),
-    total_price DECIMAL(12, 2)
-);
-```
-
-## INSTRUCTIONS:
-1. Use execute_sql tool for all database operations
-2. Always check if tables exist before operations
-3. Format results nicely for the user
-4. For adding products, use INSERT INTO inventory_items
-5. For bills, first insert into inventory_bills, then inventory_bill_items
+1. **Data Analysis** - Query and analyze any table in the database
+2. **Product Management** - Add, update, delete, search products
+3. **Reports** - Generate summaries, totals, trends
+4. **Stock Management** - Check levels, low stock alerts
+5. **Database Exploration** - List tables, view structure
 
 ## RESTRICTIONS (IMPORTANT):
-- ONLY work with inventory-related tables (inventory_items, inventory_bills, inventory_bill_items)
-- REFUSE to create user tables, auth tables, or non-inventory tables
-- REFUSE to access system tables or sensitive data
-- If user asks for non-inventory operations, politely explain you only handle inventory
+- Do NOT modify system tables
+- Do NOT access sensitive auth/user data unless specifically requested
+- Be cautious with DELETE/DROP operations - always confirm first
 
 ## RESPONSE STYLE:
-- Be helpful and concise
-- Show query results in readable format
-- Suggest next actions when appropriate
+- Professional and helpful
+- Use **bold** for important numbers and names
+- Format data in tables when showing multiple items
+- Be concise but complete
+- If no data found, say so clearly (don't invent)
 """
 
 
@@ -787,12 +804,43 @@ async def connect_database(request: ConnectRequest) -> Dict[str, Any]:
     Connect to a PostgreSQL database using DATABASE_URI via postgres-mcp.
 
     This will:
-    1. Validate the DATABASE_URI format
-    2. Start a postgres-mcp MCP server subprocess
-    3. Save session to PostgreSQL for persistence
-    4. Return session_id and available MCP tools
+    1. Get database_uri from request or retrieve from user's stored connection
+    2. Validate the DATABASE_URI format
+    3. Start a postgres-mcp MCP server subprocess
+    4. Save session to PostgreSQL for persistence
+    5. If new database_uri provided, update user_connections table
+    6. Return session_id and available MCP tools
     """
-    database_uri = request.database_uri.strip()
+    database_uri = None
+    should_save_new_uri = False
+
+    # Check if user provided a new database_uri directly
+    if request.database_uri:
+        database_uri = request.database_uri.strip()
+        should_save_new_uri = True  # User is providing a new/different URI
+        logger.info(f"[MCP] Using provided database_uri for user {request.user_id}")
+    # Otherwise, try to get stored database_uri
+    elif request.user_id:
+        try:
+            pool = await SessionPersistence.get_pool()
+            if pool:
+                async with pool.acquire() as conn:
+                    row = await conn.fetchrow(
+                        "SELECT database_uri FROM user_connections WHERE user_id = $1",
+                        request.user_id
+                    )
+                    if row and row["database_uri"]:
+                        database_uri = row["database_uri"]
+                        logger.info(f"[MCP] Retrieved stored database_uri for user {request.user_id}")
+        except Exception as e:
+            logger.warning(f"[MCP] Failed to retrieve stored database_uri: {e}")
+
+    # Validate we have a database_uri
+    if not database_uri:
+        raise HTTPException(
+            status_code=400,
+            detail="No database URI provided. Please provide database_uri or ensure your connection has a stored URI."
+        )
 
     # Validate URI format
     if not database_uri.startswith("postgresql://") and not database_uri.startswith("postgres://"):
@@ -819,6 +867,25 @@ async def connect_database(request: ConnectRequest) -> Dict[str, Any]:
     # Save session to PostgreSQL for persistence
     mcp_tools = result.get("mcp_info", {}).get("tools", [])
     await SessionPersistence.save_session(session_id, database_uri, mcp_tools)
+
+    # If user provided a new database_uri, update their stored connection
+    if should_save_new_uri and request.user_id:
+        try:
+            pool = await SessionPersistence.get_pool()
+            if pool:
+                async with pool.acquire() as conn:
+                    await conn.execute(
+                        """
+                        UPDATE user_connections
+                        SET database_uri = $1, updated_at = NOW()
+                        WHERE user_id = $2
+                        """,
+                        database_uri,
+                        request.user_id
+                    )
+                    logger.info(f"[MCP] Updated stored database_uri for user {request.user_id}")
+        except Exception as e:
+            logger.warning(f"[MCP] Failed to update stored database_uri: {e}")
 
     return result
 

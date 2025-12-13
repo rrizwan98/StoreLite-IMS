@@ -451,13 +451,16 @@ async def get_top_products_data(
 
 
 # ============================================================================
-# NEW: Dynamic Visualization Endpoint for ChatKit Integration
+# AI-POWERED VISUALIZATION ENDPOINT
+# Expert-level analytics that ONLY shows real data from AI responses
 # ============================================================================
 
 class VisualizeRequest(BaseModel):
     """Request model for visualization endpoint."""
     query: str
     response_text: Optional[str] = None
+    user_id: Optional[int] = None
+    use_mcp: bool = False  # True if user has own_database with MCP connection
 
 
 @router.post("/visualize")
@@ -466,25 +469,45 @@ async def get_visualization_for_query(
     db: AsyncSession = Depends(get_db)
 ) -> Dict[str, Any]:
     """
-    NEW ENDPOINT: Generate chart-ready visualization data based on user query.
+    AI-POWERED VISUALIZATION ENDPOINT
 
-    This endpoint analyzes the query, fetches relevant data, and returns
-    structured chart data that Recharts can render directly.
+    This endpoint creates intelligent visualizations by:
+    1. Parsing the AI agent's actual response text
+    2. Extracting REAL data mentioned in the response
+    3. Creating appropriate chart types based on data structure
+    4. NEVER showing fake/default data - only what's in the response
 
-    Flow:
-    1. Frontend sends user query after ChatKit response
-    2. This endpoint detects intent and fetches appropriate data
-    3. Returns structured visualization data
-    4. Frontend renders charts with Recharts
+    For own_database users (use_mcp=True):
+    - Only uses data extracted from AI response
+    - Never queries our platform database
+    - Creates visualizations from the agent's answer
+
+    For our_database users (use_mcp=False):
+    - Can use our platform database for additional context
+    - Still prioritizes data from AI response
     """
     try:
-        query = request.query.lower()
+        query = request.query
         response_text = request.response_text or ""
+        use_mcp = request.use_mcp
 
-        logger.info(f"[Visualize] Processing query: {query[:100]}")
+        logger.info(f"[Visualize] Query: {query[:50]}... | use_mcp={use_mcp}")
+        logger.info(f"[Visualize] Response text length: {len(response_text)}")
 
-        # Detect intent and generate appropriate visualization
-        viz_data = await _generate_visualization_for_query(query, response_text, db)
+        # EXPERT MODE: Only extract data from AI response
+        # Never generate fake data
+        viz_data = _extract_visualization_from_response(query, response_text)
+
+        # If no data found in response, return empty (no fake fallbacks)
+        if not viz_data.get("metrics") and not viz_data.get("charts"):
+            logger.info("[Visualize] No visualizable data found in response")
+            return {
+                "success": True,
+                "query": request.query,
+                "metrics": [],
+                "charts": [],
+                "message": "No numerical data to visualize for this response"
+            }
 
         return {
             "success": True,
@@ -502,550 +525,189 @@ async def get_visualization_for_query(
         }
 
 
-async def _generate_visualization_for_query(
-    query: str,
-    response_text: str,
-    db: AsyncSession
-) -> Dict[str, Any]:
+def _extract_visualization_from_response(query: str, response_text: str) -> Dict[str, Any]:
     """
-    UNIVERSAL visualization generator - works for ANY query.
+    EXPERT AI VISUALIZATION EXTRACTOR
+
+    This function intelligently parses the AI agent's response text
+    to extract REAL data for visualization.
 
     Strategy:
-    1. First, search database for ANY matching products from the query
-    2. If products found, show their data
-    3. If sales-related query, show sales data
-    4. ALWAYS return some visualization - fallback to overview
+    1. Parse response for numerical data patterns
+    2. Identify data type (counts, prices, quantities, percentages)
+    3. Create appropriate visualization type
+    4. Return ONLY data that exists in the response
+    5. NEVER generate fake/placeholder data
+
+    Returns empty if no visualizable data found.
     """
-    from sqlalchemy import text
+    import re
 
     metrics = []
-    charts = []
-    detected_intent = "unknown"
+    chart_data = []
 
-    query_lower = query.lower()
+    if not response_text or len(response_text) < 10:
+        logger.info("[Visualize] Response too short for visualization")
+        return {"metrics": [], "charts": []}
 
-    # Intent detection (flexible)
-    sales_keywords = ['sale', 'sales', 'revenue', 'sold', 'income', 'transaction', 'bill', 'order']
-    trend_keywords = ['trend', 'over time', 'history', 'monthly', 'daily', 'weekly', 'chart', 'graph']
-    low_keywords = ['low', 'out of stock', 'restock', 'empty', 'minimum', 'running out', 'need to order']
-    top_keywords = ['top', 'best', 'highest', 'most', 'popular', 'selling']
-    category_keywords = ['category', 'categories', 'type', 'types', 'grocery', 'beauty', 'garments', 'utilities']
+    logger.info(f"[Visualize] Parsing response: {response_text[:200]}...")
 
-    is_sales = any(kw in query_lower for kw in sales_keywords)
-    is_trend = any(kw in query_lower for kw in trend_keywords)
-    is_low = any(kw in query_lower for kw in low_keywords)
-    is_top = any(kw in query_lower for kw in top_keywords)
-    is_category = any(kw in query_lower for kw in category_keywords)
+    # =========================================================================
+    # PATTERN 1: Total/Summary Numbers
+    # Examples: "there is a total of **1 item**", "total: 5 items", "count: 10"
+    # =========================================================================
+    total_patterns = [
+        r'total\s+of\s+\*?\*?(\d+)\s*\*?\*?\s*(item|product|record|row|entr)',
+        r'(?:there\s+(?:is|are)|have)\s+\*?\*?(\d+)\s*\*?\*?\s*(item|product|record|row|entr)',
+        r'(?:count|total)[:\s]+\*?\*?(\d+)\*?\*?',
+        r'\*?\*?(\d+)\*?\*?\s+(?:item|product|record)s?\s+(?:in|found|total)',
+    ]
 
-    logger.info(f"[Visualize] Query: {query[:50]}... | sales={is_sales}, trend={is_trend}, low={is_low}, top={is_top}")
-
-    # STEP 1: Try to find matching products from the query in database
-    found_products = await _smart_product_search(query, db)
-
-    if found_products:
-        # Products found! Show their data
-        detected_intent = "product_search"
-        logger.info(f"[Visualize] Found {len(found_products)} products from query")
-
-        for item in found_products[:10]:  # Limit to 10 products
-            stock_qty = float(item['stock_qty']) if item['stock_qty'] else 0
-            unit_price = float(item['unit_price']) if item['unit_price'] else 0
+    total_found = None
+    for pattern in total_patterns:
+        match = re.search(pattern, response_text, re.IGNORECASE)
+        if match:
+            total_found = int(match.group(1))
+            logger.info(f"[Visualize] Found total count: {total_found}")
             metrics.append({
-                "title": item['name'],
-                "value": f"{stock_qty:.0f} units",
-                "subtitle": f"${unit_price:.2f} each | {item['category']}"
+                "title": "Total Items",
+                "value": str(total_found),
+                "status": "success" if total_found > 0 else "warning"
+            })
+            break
+
+    # =========================================================================
+    # PATTERN 2: Named Items with Quantities
+    # Examples: '"Rice" has stock quantity of **50**', 'Rice: 50 units'
+    # =========================================================================
+    item_patterns = [
+        # "ProductName" has (stock) quantity of X (units)
+        r'["\']([^"\']+)["\']\s+has\s+(?:a\s+)?(?:stock\s+)?(?:quantity\s+of\s+)?\*?\*?(\d+)\s*\*?\*?\s*(?:unit)?',
+        # **ProductName**: X units
+        r'\*\*([^*]+)\*\*[:\s]+\*?\*?(\d+)\s*\*?\*?\s*(?:unit|stock|quantit)?',
+        # ProductName: X units/items
+        r'^[•\-\*]?\s*([A-Za-z][A-Za-z\s]{2,30})[:\s]+(\d+)\s*(?:unit|item|stock|pcs?)?',
+        # name: "X", quantity: Y
+        r'name[:\s]+["\']?([^"\',:]+)["\']?[,\s]+(?:quantity|stock|count)[:\s]+(\d+)',
+        # Row format: ProductName | X | ...
+        r'\|\s*([A-Za-z][A-Za-z\s]{2,25})\s*\|\s*(\d+)\s*\|',
+    ]
+
+    found_items = {}
+    for pattern in item_patterns:
+        for match in re.finditer(pattern, response_text, re.IGNORECASE | re.MULTILINE):
+            name = match.group(1).strip()
+            quantity = int(match.group(2))
+
+            # Clean up name
+            name = name.strip('*').strip()
+
+            # Skip if name is too short, too long, or is a generic word
+            skip_words = {'the', 'item', 'product', 'total', 'count', 'stock', 'quantity',
+                         'database', 'table', 'result', 'row', 'record', 'value'}
+            if len(name) < 2 or len(name) > 50 or name.lower() in skip_words:
+                continue
+
+            # Avoid duplicates (case-insensitive)
+            name_key = name.lower()
+            if name_key not in found_items:
+                found_items[name_key] = {"name": name, "value": quantity}
+                logger.info(f"[Visualize] Found item: {name} = {quantity}")
+
+    # Convert to chart data
+    for item_data in list(found_items.values())[:10]:  # Max 10 items
+        chart_data.append(item_data)
+        metrics.append({
+            "title": item_data["name"],
+            "value": f"{item_data['value']} units"
+        })
+
+    # =========================================================================
+    # PATTERN 3: Price/Currency Data
+    # Examples: "$25.99", "price: $100", "total value: $500"
+    # =========================================================================
+    price_patterns = [
+        r'(?:price|cost|value)[:\s]+\$?\s?(\d+(?:\.\d{2})?)',
+        r'\$(\d+(?:\.\d{2})?)',
+    ]
+
+    prices_found = []
+    for pattern in price_patterns:
+        for match in re.finditer(pattern, response_text, re.IGNORECASE):
+            try:
+                price = float(match.group(1))
+                if price > 0 and price not in prices_found:
+                    prices_found.append(price)
+            except:
+                continue
+
+    # Add price metrics if found
+    if prices_found and len(prices_found) <= 5:
+        for i, price in enumerate(prices_found[:3]):
+            metrics.append({
+                "title": f"Price {i+1}" if len(prices_found) > 1 else "Price",
+                "value": f"${price:,.2f}"
             })
 
-        chart_data = [
-            {"name": item['name'][:20], "value": float(item['stock_qty']) if item['stock_qty'] else 0}
-            for item in found_products[:10]
-        ]
+    # =========================================================================
+    # PATTERN 4: Percentage Data
+    # Examples: "50%", "growth: 25%"
+    # =========================================================================
+    percentage_pattern = r'(\d+(?:\.\d+)?)\s*%'
+    percentages = []
+    for match in re.finditer(percentage_pattern, response_text):
+        try:
+            pct = float(match.group(1))
+            if 0 <= pct <= 100 and pct not in percentages:
+                percentages.append(pct)
+        except:
+            continue
 
-        if chart_data:
+    if percentages and len(percentages) <= 3:
+        for pct in percentages[:2]:
+            metrics.append({
+                "title": "Percentage",
+                "value": f"{pct:.1f}%"
+            })
+
+    # =========================================================================
+    # BUILD CHART ONLY IF WE HAVE REAL DATA
+    # =========================================================================
+    charts = []
+
+    if chart_data and len(chart_data) >= 1:
+        # Determine best chart type
+        if len(chart_data) == 1:
+            # Single item - show as metric only, no chart needed
+            pass
+        elif len(chart_data) <= 5:
+            # Few items - bar chart is best
             charts.append({
                 "type": "bar",
-                "title": "Stock Levels",
+                "title": "Data Overview",
+                "data": chart_data,
+                "dataKey": "value",
+                "xAxisKey": "name"
+            })
+        else:
+            # Many items - horizontal bar chart
+            charts.append({
+                "type": "bar",
+                "title": "Data Overview",
                 "data": chart_data,
                 "dataKey": "value",
                 "xAxisKey": "name"
             })
 
-    # STEP 2: Sales-related queries
-    elif is_sales:
-        detected_intent = "sales"
-        if is_trend:
-            viz = await _get_sales_trend_visualization(db)
-        elif is_top:
-            viz = await _get_top_sales_visualization(db)
-        else:
-            viz = await _get_sales_overview_visualization(db)
-        metrics.extend(viz.get("metrics", []))
-        charts.extend(viz.get("charts", []))
-
-    # STEP 3: Low stock queries
-    elif is_low:
-        detected_intent = "low_stock"
-        viz = await _get_low_stock_visualization(db)
-        metrics.extend(viz.get("metrics", []))
-        charts.extend(viz.get("charts", []))
-
-    # STEP 4: Top/best items queries
-    elif is_top:
-        detected_intent = "top_items"
-        viz = await _get_top_stock_visualization(db)
-        metrics.extend(viz.get("metrics", []))
-        charts.extend(viz.get("charts", []))
-
-    # STEP 5: Category-based queries
-    elif is_category:
-        detected_intent = "category"
-        viz = await _get_inventory_overview_visualization(db)
-        metrics.extend(viz.get("metrics", []))
-        charts.extend(viz.get("charts", []))
-
-    # STEP 6: FALLBACK - Always show something relevant
-    if not charts:
-        detected_intent = "fallback_overview"
-        logger.info("[Visualize] No specific match, showing inventory overview as fallback")
-
-        # Try to parse AI response for any data
-        if response_text:
-            viz = _parse_response_for_visualization(response_text)
-            if viz.get("charts"):
-                metrics.extend(viz.get("metrics", []))
-                charts.extend(viz.get("charts", []))
-
-        # Still nothing? Show inventory overview
-        if not charts:
-            viz = await _get_inventory_overview_visualization(db)
-            metrics.extend(viz.get("metrics", []))
-            charts.extend(viz.get("charts", []))
-
     return {
         "metrics": metrics,
         "charts": charts,
-        "intent": detected_intent,
-        "products_found": len(found_products) if found_products else 0
+        "data_extracted": len(found_items) > 0 or total_found is not None
     }
 
 
-async def _smart_product_search(query: str, db: AsyncSession) -> List[Dict]:
-    """
-    SMART product search - searches database for ANY words from the query.
-    This makes visualization work for ANY product type (grocery, beauty, garments, etc.)
-    """
-    from sqlalchemy import text
-    import re
-
-    # Words to skip when searching (common English words)
-    skip_words = {
-        'show', 'me', 'the', 'a', 'an', 'is', 'are', 'what', 'how', 'many', 'much',
-        'get', 'find', 'search', 'list', 'all', 'can', 'you', 'tell', 'about',
-        'stock', 'inventory', 'item', 'items', 'product', 'products', 'level', 'levels',
-        'quantity', 'check', 'please', 'give', 'want', 'need', 'have', 'do', 'does',
-        'for', 'in', 'on', 'at', 'to', 'of', 'and', 'or', 'with', 'my', 'our', 'your',
-        'i', 'we', 'they', 'it', 'this', 'that', 'these', 'those', 'there', 'here',
-        'be', 'been', 'being', 'was', 'were', 'has', 'had', 'having', 'will', 'would',
-        'could', 'should', 'may', 'might', 'must', 'shall'
-    }
-
-    # Extract potential search words from query
-    words = re.findall(r'\b[a-zA-Z]{2,}\b', query.lower())
-    search_words = [w for w in words if w not in skip_words]
-
-    if not search_words:
-        return []
-
-    logger.info(f"[SmartSearch] Searching for words: {search_words}")
-
-    found_products = []
-    seen_ids = set()
-
-    # Search for each word in the database
-    for word in search_words[:5]:  # Limit to first 5 search words
-        try:
-            search_query = text("""
-                SELECT id, name, stock_qty, unit_price, category
-                FROM items
-                WHERE LOWER(name) LIKE :pattern
-                   OR LOWER(category) LIKE :pattern
-                ORDER BY stock_qty DESC
-                LIMIT 10
-            """)
-
-            result = await db.execute(search_query, {"pattern": f"%{word}%"})
-            items = result.fetchall()
-
-            for item in items:
-                if item.id not in seen_ids:
-                    seen_ids.add(item.id)
-                    found_products.append({
-                        "id": item.id,
-                        "name": item.name,
-                        "stock_qty": item.stock_qty,
-                        "unit_price": item.unit_price,
-                        "category": item.category
-                    })
-        except Exception as e:
-            logger.error(f"[SmartSearch] Error searching for '{word}': {e}")
-            continue
-
-    return found_products[:10]  # Return max 10 products
-
-
-def _extract_product_names(query: str) -> List[str]:
-    """Extract potential product names from query."""
-    import re
-
-    # Common words to ignore
-    stop_words = {
-        'show', 'me', 'the', 'stock', 'of', 'and', 'or', 'for', 'in', 'a', 'an',
-        'what', 'is', 'are', 'how', 'many', 'much', 'get', 'find', 'search',
-        'inventory', 'item', 'items', 'product', 'products', 'unit', 'units',
-        'level', 'levels', 'quantity', 'check', 'display', 'list', 'all',
-        'overview', 'health', 'status', 'summary', 'report', 'analytics',
-        'low', 'out', 'high', 'top', 'best', 'worst', 'which', 'that',
-        'sales', 'revenue', 'trend', 'trends', 'monthly', 'daily', 'weekly',
-        'compare', 'comparison', 'versus', 'total', 'average', 'current'
-    }
-
-    # Skip extraction for overview/general queries
-    overview_patterns = ['overview', 'health', 'status', 'summary', 'all items', 'all products']
-    if any(p in query.lower() for p in overview_patterns):
-        return []
-
-    # Skip extraction for low stock queries
-    if 'low' in query.lower() and 'stock' in query.lower():
-        return []
-
-    # Split by common delimiters
-    parts = re.split(r'[,\s]+and\s+|[,\s]+or\s+|,\s*', query.lower())
-
-    products = []
-    for part in parts:
-        # Clean up
-        words = part.strip().split()
-        # Filter out stop words and keep potential product names
-        name_words = [w for w in words if w not in stop_words and len(w) > 1]
-        if name_words:
-            products.append(' '.join(name_words))
-
-    # Filter out empty strings, very short results, and single question marks
-    products = [p for p in products if len(p) > 2 and p != '?' and not p.endswith('?')]
-
-    return products[:5]  # Limit to 5 products
-
-
-async def _get_product_stock_visualization(
-    product_names: List[str],
-    db: AsyncSession
-) -> Dict[str, Any]:
-    """Get visualization for specific products."""
-    from sqlalchemy import text
-
-    metrics = []
-    chart_data = []
-
-    for name in product_names:
-        # Search for product (case-insensitive partial match)
-        query = text("""
-            SELECT id, name, stock_qty, unit_price, category
-            FROM items
-            WHERE LOWER(name) LIKE :pattern
-            LIMIT 5
-        """)
-
-        result = await db.execute(query, {"pattern": f"%{name.lower()}%"})
-        items = result.fetchall()
-
-        for item in items:
-            stock_qty = float(item.stock_qty) if item.stock_qty else 0
-            unit_price = float(item.unit_price) if item.unit_price else 0
-            metrics.append({
-                "title": item.name,
-                "value": f"{stock_qty:.0f} units",
-                "subtitle": f"${unit_price:.2f} each"
-            })
-            chart_data.append({
-                "name": item.name[:20],
-                "value": stock_qty,
-                "price": unit_price
-            })
-
-    charts = []
-    if chart_data:
-        charts.append({
-            "type": "bar",
-            "title": "Stock Levels",
-            "data": chart_data,
-            "dataKey": "value",
-            "xAxisKey": "name"
-        })
-
-    return {"metrics": metrics, "charts": charts}
-
-
-async def _get_low_stock_visualization(db: AsyncSession) -> Dict[str, Any]:
-    """Get low stock items visualization."""
-    from sqlalchemy import text
-
-    # Using stock_qty <= 10 as threshold since there's no reorder_level column
-    query = text("""
-        SELECT id, name, stock_qty, unit_price, category
-        FROM items
-        WHERE stock_qty <= 10
-        ORDER BY stock_qty ASC
-        LIMIT 10
-    """)
-
-    result = await db.execute(query)
-    items = result.fetchall()
-
-    metrics = [
-        {"title": "Low Stock Items", "value": str(len(items)), "status": "warning"}
-    ]
-
-    chart_data = [
-        {"name": item.name[:15], "value": float(item.stock_qty), "threshold": 10}
-        for item in items
-    ]
-
-    charts = []
-    if chart_data:
-        charts.append({
-            "type": "bar",
-            "title": "Low Stock Items",
-            "data": chart_data,
-            "dataKey": "value",
-            "xAxisKey": "name",
-            "color": "#EF4444"
-        })
-
-    return {"metrics": metrics, "charts": charts}
-
-
-async def _get_top_stock_visualization(db: AsyncSession) -> Dict[str, Any]:
-    """Get top items by stock value."""
-    from sqlalchemy import text
-
-    query = text("""
-        SELECT name, stock_qty, unit_price, (stock_qty * unit_price) as total_value
-        FROM items
-        ORDER BY total_value DESC
-        LIMIT 10
-    """)
-
-    result = await db.execute(query)
-    items = result.fetchall()
-
-    total_value = sum(item.total_value for item in items)
-
-    metrics = [
-        {"title": "Top 10 Value", "value": f"${total_value:,.2f}"}
-    ]
-
-    chart_data = [
-        {"name": item.name[:15], "value": float(item.total_value)}
-        for item in items
-    ]
-
-    charts = []
-    if chart_data:
-        charts.append({
-            "type": "bar",
-            "title": "Top Items by Stock Value",
-            "data": chart_data,
-            "dataKey": "value",
-            "xAxisKey": "name",
-            "formatValue": "currency"
-        })
-
-    return {"metrics": metrics, "charts": charts}
-
-
-async def _get_inventory_overview_visualization(db: AsyncSession) -> Dict[str, Any]:
-    """Get general inventory overview."""
-    try:
-        data = await get_inventory_analytics(session=db)
-
-        summary = data.get("summary", {})
-        category_breakdown = data.get("category_breakdown", [])
-
-        metrics = [
-            {"title": "Total Items", "value": str(summary.get("total_items", 0))},
-            {"title": "Total Value", "value": f"${summary.get('total_inventory_value', 0):,.2f}"},
-            {"title": "Out of Stock", "value": str(summary.get("out_of_stock_count", 0)), "status": "danger" if summary.get("out_of_stock_count", 0) > 0 else "success"},
-            {"title": "Low Stock", "value": str(summary.get("low_stock_count", 0)), "status": "warning" if summary.get("low_stock_count", 0) > 0 else "success"},
-        ]
-
-        chart_data = [
-            {"name": cat.get("category", "Unknown")[:15], "value": cat.get("total_value", 0)}
-            for cat in category_breakdown[:8]
-        ]
-
-        charts = []
-        if chart_data:
-            charts.append({
-                "type": "bar",
-                "title": "Inventory Value by Category",
-                "data": chart_data,
-                "dataKey": "value",
-                "xAxisKey": "name",
-                "formatValue": "currency"
-            })
-
-        return {"metrics": metrics, "charts": charts}
-    except Exception as e:
-        logger.error(f"Error in inventory overview: {e}")
-        return {"metrics": [], "charts": []}
-
-
-async def _get_sales_trend_visualization(db: AsyncSession) -> Dict[str, Any]:
-    """Get sales trend visualization."""
-    try:
-        data = await get_sales_trends(days=30, session=db)
-
-        summary = data.get("summary", {})
-        daily_trends = data.get("daily_trends", [])
-
-        metrics = [
-            {"title": "Total Sales (30d)", "value": f"${summary.get('total_sales', 0):,.2f}"},
-            {"title": "Avg Daily", "value": f"${summary.get('average_daily_sales', 0):,.2f}"},
-        ]
-
-        chart_data = [
-            {"name": t.get("date", "")[-5:], "value": t.get("sales", 0)}
-            for t in daily_trends[-30:]
-        ]
-
-        charts = []
-        if chart_data:
-            charts.append({
-                "type": "line",
-                "title": "Sales Trend (Last 30 Days)",
-                "data": chart_data,
-                "dataKey": "value",
-                "xAxisKey": "name",
-                "formatValue": "currency"
-            })
-
-        return {"metrics": metrics, "charts": charts}
-    except Exception as e:
-        logger.error(f"Error in sales trend: {e}")
-        return {"metrics": [], "charts": []}
-
-
-async def _get_top_sales_visualization(db: AsyncSession) -> Dict[str, Any]:
-    """Get top selling products."""
-    try:
-        now = datetime.utcnow()
-        data = await get_sales_by_month(year=now.year, month=now.month, session=db)
-
-        top_products = data.get("top_products", [])[:5]
-
-        metrics = [
-            {"title": p.get("name", "Unknown")[:20], "value": f"${p.get('revenue', 0):,.2f}"}
-            for p in top_products[:3]
-        ]
-
-        chart_data = [
-            {"name": p.get("name", "Unknown")[:15], "value": p.get("revenue", 0)}
-            for p in top_products
-        ]
-
-        charts = []
-        if chart_data:
-            charts.append({
-                "type": "bar",
-                "title": "Top Products by Revenue",
-                "data": chart_data,
-                "dataKey": "value",
-                "xAxisKey": "name",
-                "formatValue": "currency"
-            })
-
-        return {"metrics": metrics, "charts": charts}
-    except Exception as e:
-        logger.error(f"Error in top sales: {e}")
-        return {"metrics": [], "charts": []}
-
-
-async def _get_sales_overview_visualization(db: AsyncSession) -> Dict[str, Any]:
-    """Get sales overview with chart."""
-    try:
-        now = datetime.utcnow()
-        data = await get_sales_by_month(year=now.year, month=now.month, session=db)
-
-        summary = data.get("summary", {})
-        top_products = data.get("top_products", [])[:5]
-
-        metrics = [
-            {"title": "Total Sales", "value": f"${summary.get('total_sales', 0):,.2f}"},
-            {"title": "Transactions", "value": str(summary.get("total_transactions", 0))},
-            {"title": "Avg Transaction", "value": f"${summary.get('average_transaction_value', 0):,.2f}"},
-        ]
-
-        # Always include a chart for sales
-        charts = []
-        if top_products:
-            chart_data = [
-                {"name": p.get("name", "Unknown")[:15], "value": p.get("revenue", 0)}
-                for p in top_products
-            ]
-            charts.append({
-                "type": "bar",
-                "title": "Top Products by Revenue",
-                "data": chart_data,
-                "dataKey": "value",
-                "xAxisKey": "name",
-                "formatValue": "currency"
-            })
-
-        return {"metrics": metrics, "charts": charts}
-    except Exception as e:
-        logger.error(f"Error in sales overview: {e}")
-        return {"metrics": [], "charts": []}
-
-
-def _parse_response_for_visualization(response_text: str) -> Dict[str, Any]:
-    """Parse AI response text to extract visualization data as fallback."""
-    import re
-
-    metrics = []
-    chart_data = []
-
-    # Pattern: "ProductName" has X units / stock quantity of X
-    patterns = [
-        r'"([^"]+)"\s+has\s+(?:a\s+)?(?:stock\s+)?(?:quantity\s+of\s+)?\*?\*?(\d+)\s*(?:units?)?\*?\*?',
-        r'\*\*([^*]+)\*\*[:\s]+\*?\*?(\d+)\s*(?:units?)?\*?\*?',
-        r'([A-Z][a-zA-Z\s]+?):\s*(\d+)\s*(?:units?|pcs?|items?)',
-    ]
-
-    found = set()
-    for pattern in patterns:
-        for match in re.finditer(pattern, response_text, re.IGNORECASE):
-            name = match.group(1).strip()
-            value = int(match.group(2))
-
-            if name.lower() not in found and len(name) > 2:
-                found.add(name.lower())
-                metrics.append({
-                    "title": name,
-                    "value": f"{value} units"
-                })
-                chart_data.append({
-                    "name": name[:15],
-                    "value": value
-                })
-
-    charts = []
-    if chart_data:
-        charts.append({
-            "type": "bar",
-            "title": "Stock Levels",
-            "data": chart_data,
-            "dataKey": "value",
-            "xAxisKey": "name"
-        })
-
-    return {"metrics": metrics, "charts": charts}
+# ============================================================================
+# NOTE: Old helper functions removed. Now using _extract_visualization_from_response
+# which only extracts data from the AI response text - never from database.
+# This prevents fake/incorrect visualizations for own_database users.
+# ============================================================================

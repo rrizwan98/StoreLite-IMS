@@ -148,8 +148,12 @@ async def root():
 
 # ============ Include Routers ============
 
-from app.routers import inventory, billing, agent, chatkit_server, analytics, db_connect, inventory_agent
+from app.routers import inventory, billing, agent, chatkit_server, analytics, db_connect, inventory_agent, auth
 
+# Authentication router (must be first for auth to work)
+app.include_router(auth.router)
+
+# Feature routers
 app.include_router(inventory.router)
 app.include_router(billing.router)
 app.include_router(agent.router)

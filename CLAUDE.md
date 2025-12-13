@@ -11,6 +11,24 @@ Project Structure Reminder:
 
 ---
 
+## 0.1 Constitutional Framework
+
+Reference: `specs/constitution.md` (create if missing, starting at v1.0).
+
+**Core Principles (Decision Frameworks)**:
+1. **Specification Primacy**: Always define intent (requirements, constraints) before any implementation. No code without a spec.
+2. **Progressive Complexity**: Build from simple agents/tools to complex integrations, matching project maturity (e.g., basic endpoints before full session management).
+3. **Factual Accuracy**: All technical claims (e.g., API behaviors, DB schemas) must be verifiable via docs or tests.
+4. **Coherent Structure**: Ensure backend-frontend separation; agent flows build on prior components.
+5. **Intelligence Accumulation**: Reuse patterns (e.g., agent tools, DB utils) across features.
+6. **Anti-Convergence**: Vary implementation approaches to avoid repetitive patterns (e.g., alternate sync/async where appropriate).
+7. **Minimal Viable Change**: Every update maps to a specific requirement; avoid scope creep.
+8. **Test-Driven Reliability**: All changes must pass red-green-refactor cycle.
+
+If a principle is violated, reference the constitution and apply corrections (e.g., halt and revise spec).
+
+---
+
 ## I. Before Any Task: STOP and Gather Context
 
 **MANDATORY**: Before writing any code or response, complete this context-gathering protocol.
@@ -33,13 +51,16 @@ If files are missing for a new feature, **first create a spec** before implement
 
 ### Step 3: Determine Development Phase (Specs-Driven Mandatory)
 Follow this strict order (SDD - Specs Driven Development):
-1. **Spec**: Define requirements, inputs/outputs, database schema changes, agent tools.
-2. **Plan**: Architecture decisions (which agent handles what, session flow, error handling).
-3. **Tasks**: Break into implementable tasks.
-4. **Implement**: Code in backend/frontend.
-5. **Validate**: Tests, manual verification, session continuity checks.
+1. **Constitution**: Align with core principles; reference or update `constitution.md` if needed.
+2. **Spec**: Define requirements, inputs/outputs, database schema changes, agent tools, edge cases, acceptance criteria.
+3. **Plan**: Architecture decisions (which agent handles what, session flow, error handling).
+4. **Tasks**: Break into implementable tasks (e.g., sub-tasks for backend, frontend).
+5. **Red Phase (Test-Driven)**: Write failing tests (unit, integration) to define expected behavior.
+6. **Green Phase (Test-Driven)**: Implement minimal code to make tests pass.
+7. **Refactor**: Clean up code while keeping tests green; optimize for reusability.
+8. **Validate**: Full tests, manual verification, session continuity checks.
 
-**Never skip to implementation without a spec.**
+**Never skip to implementation without a spec. Always incorporate TDD (red-green-refactor) in development.**
 
 ### Step 4: Check for Common Conflicts
 Avoid these pitfalls:
@@ -64,6 +85,9 @@ Avoid these pitfalls:
 - Wrong: Mixing sync/async, improper tool definitions.
 - Right: Follow OpenAI Agents SDK best practices – clear tool schemas, proper handoffs.
 
+### Step 5: Small-Scope Verification
+For complex features (e.g., ≥3 components or safety-critical like DB migrations): Generate minimal test cases (3-5 entities), verify invariants (e.g., session persistence across restarts).
+
 ---
 
 ## II. Pedagogical Layers for Teaching (When Explaining Concepts)
@@ -87,7 +111,7 @@ Determine layer from context and teach progressively.
 ### Understanding Summary
 - **Task**: [Brief description]
 - **Work Type**: Backend / Frontend / Full-Stack / DB
-- **Phase**: Spec / Plan / Implement / Validate
+- **Phase**: Constitution / Spec / Plan / Tasks / Red / Green / Refactor / Validate
 - **Key Components Involved**: [e.g., Specific agent, endpoint, DB table]
 - **Assumptions**: [List any, ask for confirmation if unclear]
 - **Potential Risks**: [e.g., Session loss, DB migration needed]
@@ -99,11 +123,80 @@ Wait for user confirmation or clarification.
 
 ---
 
+## III.5 Git & Specs-Driven Update Workflow (Mandatory for All Changes)
+
+Whenever a new update, feature, bug fix, or refactor is requested (frontend, backend, database, or full-stack):
+
+**STRICT PROTOCOL – NO EXCEPTIONS:**
+
+1. **First: Check for Existing Specs**
+   - Search in `specs/` folder (or relevant subfolder like `specs/backend/`, `specs/frontend/`, `specs/agents/`) for a spec file related to the requested change.
+   - Examples: `agent-session-management.spec.md`, `chat-ui-integration.spec.md`, `api-troubleshooting-tool.spec.md`
+
+2. **If Specs Already Exist:**
+   - **Update the spec first**:
+     - Increment version (e.g., v1.0 → v1.1 or v2.0 for major changes).
+     - Add a "Changes" or "Update History" section with date (e.g., December 13, 2025) and summary of new requirements.
+     - Clearly mark what is being added/modified/removed.
+   - **Work on the SAME Git branch** that originally implemented this feature (if known).
+   - If branch name unknown or merged, use the current main/develop branch.
+   - Update code according to the updated spec.
+   - Commit changes with descriptive messages (e.g., "Update agent session spec to v1.1; implement DB fallback").
+   - Deploy from the **same branch** after testing.
+
+3. **If NO Specs Exist (New Feature or Undocumented Change):**
+   - **STOP. Do NOT write code yet.**
+   - First: Create a new spec file in appropriate `specs/` subdirectory.
+     - Name it clearly: `feature-name.spec.md` or `bugfix-description.spec.md`
+     - Include: Goal, Requirements, Inputs/Outputs, DB changes (if any), Edge cases, Acceptance criteria.
+     - Add version v1.0 and date.
+   - Create a **new Git branch** named meaningfully:
+     - Format: `feature/<descriptive-name>` (e.g., `feature/agent-file-upload`)
+     - Or `bugfix/<issue>` or `refactor/<component>`
+   - Implement code ONLY in this new branch, following SDD phases (including red-green-refactor).
+   - After completion and testing: Merge via PR (with spec reference) and deploy.
+
+**Git Best Practices**:
+- Use semantic commits: `feat:`, `fix:`, `refactor:`, `test:`, `docs:` prefixes.
+- Branches: Always branch from `main` or `develop`; keep branches short-lived.
+- PRs: Require spec link, test passing, and constitution alignment in reviews.
+- Persistence: Use Git for long-horizon tracking; commit PHRs and docs.
+
+**Why this matters:**
+- Prevents undocumented "quick fixes" that break later.
+- Ensures traceability: Anyone can understand why code exists by reading specs.
+- Enables safe collaboration and future refactoring.
+- Maintains version history of requirements, not just code.
+
+**You (Claude/Grok) must enforce this:**
+- Before any code change, ask: "Is there an existing spec for this?"
+- If unsure, propose checking or creating one.
+- Never proceed to code without confirming spec status.
+
+**Failure Mode to Avoid:**
+- Making direct changes on main branch without spec.
+- Adding features without documentation → technical debt.
+- "Just fix it quickly" mindset → unmaintainable codebase.
+
+---
+
 ## IV. Documentation & Intelligence Harvesting
 
 ### Specs
 - All new features start with a spec file (e.g., `specs/agent-session-management.spec.md`).
-- Format: Clear sections – Goal, Requirements, Inputs/Outputs, DB Changes, Edge Cases.
+- Format: Clear sections – Goal, Requirements, Inputs/Outputs, DB Changes, Edge Cases, Acceptance Criteria, Version (e.g., v1.0), Date.
+- Phases Integration: Specs reference constitution; include plan/tasks outlines; define tests for red-green phases.
+
+### Testing
+- **Unit Tests**: For individual components (e.g., agent tool functions via pytest).
+- **Integration Tests**: For interactions (e.g., FastAPI endpoint calling agent, Postgres session storage).
+- **End-to-End Tests**: Full flows (e.g., frontend chat → backend agent → DB query).
+- **Red-Green-Refactor Cycle**:
+  - **Red**: Write failing test to capture requirement (e.g., "assert session persists after restart").
+  - **Green**: Implement minimal code to pass the test.
+  - **Refactor**: Improve code structure without breaking tests (e.g., extract reusable DB helper).
+- Tools: Use pytest for Python (backend), Jest for Next.js (frontend); cover edge cases from spec.
+- Coverage: Aim for ≥80%; include in CI/CD.
 
 ### Latest Updates
 - Maintain a `docs/LATEST_UPDATES.md` or changelog.
@@ -111,6 +204,12 @@ Wait for user confirmation or clarification.
 
 ### Prompt History Records (PHRs)
 - For iterative work: Create markdown files in `history/` documenting prompt → response → learnings.
+- Stages: Route to `history/prompts/<stage>/` where stage is `constitution | spec | plan | tasks | red | green | refactor | validate | misc`.
+- Process:
+  1. Determine stage.
+  2. Generate title (3-7 words, slugified).
+  3. Create PHR with YAML frontmatter (prompt, response, learnings).
+  4. For iterations: Create separate PHRs (e.g., `plan-iteration-db-optimization`).
 - Especially for debugging sessions, agent fixes, or format corrections.
 
 ### Reusable Intelligence
@@ -131,6 +230,8 @@ After sessions with fixes: Suggest harvesting into permanent docs (e.g., update 
 - ChatKit integration mismatches (ensure streaming/events match agent output).
 - DB connection leaks (use async sessions properly).
 - Skipping tests for agent tool calls.
+- Layer mismatch (e.g., spec-driven for manual foundation tasks).
+- Bypassing red-green cycle (direct implementation without failing tests first).
 
 ---
 
@@ -141,12 +242,13 @@ After sessions with fixes: Suggest harvesting into permanent docs (e.g., update 
 - Agents are specs-driven and reusable.
 - Session management is robust (Postgres-backed).
 - Frontend provides seamless chat experience with real-time updates.
-- All changes are documented and harvestable.
+- All changes are documented, tested, and harvestable.
 
 **You Fail When**:
 - Mixing layers or concerns.
-- Implementing without specs.
+- Implementing without specs or tests.
 - Losing conversation context.
 - Creating throwaway code (not reusable).
 
 **Remember**: You are building an AI-native full-stack agent system. Prioritize scalability, reliability, and intelligent composition.
+

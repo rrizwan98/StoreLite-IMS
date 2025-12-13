@@ -62,10 +62,18 @@ export const ERROR_CODES = {
 // Routes
 export const ROUTES = {
   HOME: '/',
-  ADMIN: '/admin',
-  POS: '/pos',
-  ANALYTICS: '/analytics',
-  DB_CONNECT: '/db-connect',
+  LOGIN: '/login',
+  SIGNUP: '/signup',
+  DASHBOARD: '/dashboard',
+  ADMIN: '/dashboard/admin',
+  POS: '/dashboard/pos',
+  ANALYTICS: '/dashboard/analytics',
+  DB_CONNECT: '/dashboard/connect',
+  // Legacy routes (kept for backwards compatibility)
+  LEGACY_ADMIN: '/admin',
+  LEGACY_POS: '/pos',
+  LEGACY_ANALYTICS: '/analytics',
+  LEGACY_DB_CONNECT: '/db-connect',
 };
 
 // API Endpoints

@@ -596,11 +596,4 @@ export default function DBConnectPage() {
   );
 }
 
-// TypeScript declaration for the custom element
-declare global {
-  namespace JSX {
-    interface IntrinsicElements {
-      'openai-chatkit': React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement>, HTMLElement>;
-    }
-  }
-}
+// Note: TypeScript declaration for openai-chatkit is in ChatKitWidget.tsx
