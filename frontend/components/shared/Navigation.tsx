@@ -39,6 +39,9 @@ export default function Navigation() {
           <Link href={ROUTES.ANALYTICS} className={linkClasses(ROUTES.ANALYTICS)}>
             📊 Analytics
           </Link>
+          <Link href={ROUTES.DB_CONNECT} className={linkClasses(ROUTES.DB_CONNECT)}>
+            🔌 Connect DB
+          </Link>
         </div>
       </div>
     </nav>

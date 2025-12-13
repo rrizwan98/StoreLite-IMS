@@ -65,6 +65,7 @@ export const ROUTES = {
   ADMIN: '/admin',
   POS: '/pos',
   ANALYTICS: '/analytics',
+  DB_CONNECT: '/db-connect',
 };
 
 // API Endpoints

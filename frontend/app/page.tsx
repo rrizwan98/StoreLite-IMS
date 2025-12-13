@@ -14,7 +14,7 @@ export default function Home() {
         <p className="text-xl text-gray-600">{APP_METADATA.DESCRIPTION}</p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-6">
         {/* Admin Card */}
         <Link href={ROUTES.ADMIN}>
           <div className="card hover:shadow-lg cursor-pointer transition-shadow">
@@ -38,6 +38,30 @@ export default function Home() {
               invoices.
             </p>
             <div className="mt-4 text-primary font-semibold">Go to POS →</div>
+          </div>
+        </Link>
+
+        {/* DB Connect Card */}
+        <Link href={ROUTES.DB_CONNECT}>
+          <div className="card hover:shadow-lg cursor-pointer transition-shadow">
+            <div className="text-4xl mb-4">🔌</div>
+            <h2 className="text-2xl font-bold mb-2">Connect Your Database</h2>
+            <p className="text-gray-600">
+              Connect your own PostgreSQL database and manage inventory with our specialized AI agent.
+            </p>
+            <div className="mt-4 text-primary font-semibold">Connect Database →</div>
+          </div>
+        </Link>
+
+        {/* Analytics Card */}
+        <Link href={ROUTES.ANALYTICS}>
+          <div className="card hover:shadow-lg cursor-pointer transition-shadow">
+            <div className="text-4xl mb-4">📊</div>
+            <h2 className="text-2xl font-bold mb-2">AI Analytics Dashboard</h2>
+            <p className="text-gray-600">
+              Ask questions about your inventory in natural language and get smart visualizations.
+            </p>
+            <div className="mt-4 text-primary font-semibold">View Analytics →</div>
           </div>
         </Link>
       </div>

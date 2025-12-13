@@ -148,13 +148,15 @@ async def root():
 
 # ============ Include Routers ============
 
-from app.routers import inventory, billing, agent, chatkit_server, analytics
+from app.routers import inventory, billing, agent, chatkit_server, analytics, db_connect, inventory_agent
 
 app.include_router(inventory.router)
 app.include_router(billing.router)
 app.include_router(agent.router)
 app.include_router(chatkit_server.router)
 app.include_router(analytics.router)
+app.include_router(db_connect.router)
+app.include_router(inventory_agent.router)
 
 logger.info("FastAPI application initialized")
 
