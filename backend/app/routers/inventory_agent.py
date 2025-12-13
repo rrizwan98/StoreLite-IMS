@@ -1175,3 +1175,149 @@ async def restore_session() -> Dict[str, Any]:
             "success": False,
             "message": f"Restore failed: {str(e)}",
         }
+
+
+# ============================================================================
+# POS Endpoints - Product Search and Bill Generation
+# ============================================================================
+
+class ProductSearchRequest(BaseModel):
+    """Request to search products in user's database."""
+    query: str = ""  # Search term (name, category, etc.)
+    session_id: str
+
+
+class CreateBillRequest(BaseModel):
+    """Request to create a bill in user's database."""
+    session_id: str
+    customer_name: str = "Walk-in Customer"
+    customer_phone: str = ""
+    items: List[Dict[str, Any]]  # [{id, name, quantity, unit_price}]
+    discount: float = 0
+    tax: float = 0
+    payment_method: str = "cash"
+    notes: str = ""
+
+
+@router.post("/pos/search-products")
+async def search_products(request: ProductSearchRequest) -> Dict[str, Any]:
+    """
+    Search products in user's database via MCP.
+    Returns list of products matching the query.
+    """
+    session_info = _mcp_manager.get_session_info(request.session_id)
+    if not session_info:
+        raise HTTPException(status_code=400, detail="Session not found. Please connect first.")
+
+    # Build search prompt for the agent
+    if request.query.strip():
+        prompt = f"""Search for products in the inventory_items table where name contains '{request.query}' or category contains '{request.query}'.
+Return the results as a JSON array with this exact format:
+```json
+[{{"id": 1, "name": "Product Name", "category": "Category", "unit": "piece", "unit_price": 10.00, "stock_qty": 100}}]
+```
+Only return the JSON array, no other text. If no products found, return empty array: []"""
+    else:
+        prompt = """List all products from the inventory_items table (limit 50).
+Return the results as a JSON array with this exact format:
+```json
+[{"id": 1, "name": "Product Name", "category": "Category", "unit": "piece", "unit_price": 10.00, "stock_qty": 100}]
+```
+Only return the JSON array, no other text. If no products found, return empty array: []"""
+
+    try:
+        result = await _mcp_manager.run_agent(request.session_id, prompt)
+
+        # Try to extract JSON from response
+        products = []
+        if result:
+            import re
+            # Look for JSON array in response
+            json_match = re.search(r'\[[\s\S]*?\]', result)
+            if json_match:
+                try:
+                    products = json.loads(json_match.group())
+                except json.JSONDecodeError:
+                    pass
+
+        return {
+            "success": True,
+            "products": products,
+            "raw_response": result if not products else None
+        }
+    except Exception as e:
+        logger.error(f"[MCP POS] Product search failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Search failed: {str(e)}")
+
+
+@router.post("/pos/create-bill")
+async def create_bill(request: CreateBillRequest) -> Dict[str, Any]:
+    """
+    Create a bill in user's database via MCP.
+    Inserts bill and bill items, updates stock quantities.
+    """
+    session_info = _mcp_manager.get_session_info(request.session_id)
+    if not session_info:
+        raise HTTPException(status_code=400, detail="Session not found. Please connect first.")
+
+    if not request.items:
+        raise HTTPException(status_code=400, detail="No items in bill")
+
+    # Calculate totals
+    subtotal = sum(item.get("quantity", 0) * item.get("unit_price", 0) for item in request.items)
+    total = subtotal - request.discount + request.tax
+
+    # Generate bill number
+    import time
+    bill_number = f"BILL-{int(time.time())}"
+
+    # Build items list for prompt
+    items_str = "\n".join([
+        f"- {item.get('name', 'Unknown')}: {item.get('quantity', 0)} x {item.get('unit_price', 0)} = {item.get('quantity', 0) * item.get('unit_price', 0)}"
+        for item in request.items
+    ])
+
+    # Build SQL prompt for the agent
+    prompt = f"""Please create a new bill in the database with the following details:
+
+**Bill Information:**
+- Bill Number: {bill_number}
+- Customer: {request.customer_name}
+- Phone: {request.customer_phone or 'N/A'}
+- Payment: {request.payment_method}
+- Notes: {request.notes or 'None'}
+
+**Items:**
+{items_str}
+
+**Totals:**
+- Subtotal: {subtotal:.2f}
+- Discount: {request.discount:.2f}
+- Tax: {request.tax:.2f}
+- Grand Total: {total:.2f}
+
+Please do the following:
+1. INSERT into inventory_bills table (bill_number, customer_name, customer_phone, total_amount, discount, tax, grand_total, payment_method, notes)
+2. For each item, INSERT into inventory_bill_items table (bill_id, item_id, item_name, quantity, unit_price, total_price)
+3. UPDATE inventory_items to reduce stock_qty for each item sold
+
+After completing, confirm the bill was created with the bill number and total.
+Return a JSON object with: {{"success": true, "bill_number": "{bill_number}", "grand_total": {total:.2f}}}"""
+
+    try:
+        result = await _mcp_manager.run_agent(request.session_id, prompt)
+
+        return {
+            "success": True,
+            "bill_number": bill_number,
+            "customer_name": request.customer_name,
+            "items_count": len(request.items),
+            "subtotal": subtotal,
+            "discount": request.discount,
+            "tax": request.tax,
+            "grand_total": total,
+            "agent_response": result
+        }
+    except Exception as e:
+        logger.error(f"[MCP POS] Bill creation failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Bill creation failed: {str(e)}")

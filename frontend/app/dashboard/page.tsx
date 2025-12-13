@@ -282,24 +282,53 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            {/* Feature Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <Link href={ROUTES.DB_CONNECT}>
+            {/* Feature Cards - Full Features for Own Database Users */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              <Link href={connectionStatus.mcp_status === 'connected' ? ROUTES.MCP_ADMIN : ROUTES.DB_CONNECT}>
                 <div className="bg-white rounded-xl shadow-md p-6 hover:shadow-lg transition-shadow cursor-pointer">
-                  <div className="text-4xl mb-4">🔌</div>
-                  <h2 className="text-xl font-semibold mb-2">Database Connection</h2>
+                  <div className="text-4xl mb-4">📦</div>
+                  <h2 className="text-xl font-semibold mb-2">Inventory Admin</h2>
                   <p className="text-gray-600">
-                    Manage your MCP connection and run queries on your database.
+                    Manage products, stock levels, and categories in your database.
                   </p>
+                  {connectionStatus.mcp_status !== 'connected' && (
+                    <span className="text-xs text-yellow-600 mt-2 block">Connect MCP first</span>
+                  )}
                 </div>
               </Link>
 
-              <Link href={ROUTES.ANALYTICS}>
+              <Link href={connectionStatus.mcp_status === 'connected' ? ROUTES.MCP_POS : ROUTES.DB_CONNECT}>
+                <div className="bg-white rounded-xl shadow-md p-6 hover:shadow-lg transition-shadow cursor-pointer">
+                  <div className="text-4xl mb-4">💳</div>
+                  <h2 className="text-xl font-semibold mb-2">Point of Sale</h2>
+                  <p className="text-gray-600">
+                    Create bills, search products, and process sales.
+                  </p>
+                  {connectionStatus.mcp_status !== 'connected' && (
+                    <span className="text-xs text-yellow-600 mt-2 block">Connect MCP first</span>
+                  )}
+                </div>
+              </Link>
+
+              <Link href={connectionStatus.mcp_status === 'connected' ? ROUTES.ANALYTICS : ROUTES.DB_CONNECT}>
                 <div className="bg-white rounded-xl shadow-md p-6 hover:shadow-lg transition-shadow cursor-pointer">
                   <div className="text-4xl mb-4">📊</div>
-                  <h2 className="text-xl font-semibold mb-2">AI Analytics Dashboard</h2>
+                  <h2 className="text-xl font-semibold mb-2">AI Analytics</h2>
                   <p className="text-gray-600">
                     Ask questions about YOUR data and get smart visualizations.
+                  </p>
+                  {connectionStatus.mcp_status !== 'connected' && (
+                    <span className="text-xs text-yellow-600 mt-2 block">Connect MCP first</span>
+                  )}
+                </div>
+              </Link>
+
+              <Link href={ROUTES.DB_CONNECT}>
+                <div className="bg-white rounded-xl shadow-md p-6 hover:shadow-lg transition-shadow cursor-pointer border-2 border-blue-200">
+                  <div className="text-4xl mb-4">🔌</div>
+                  <h2 className="text-xl font-semibold mb-2">DB Connection</h2>
+                  <p className="text-gray-600">
+                    Manage MCP connection and run direct queries.
                   </p>
                 </div>
               </Link>

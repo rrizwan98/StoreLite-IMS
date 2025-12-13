@@ -65,10 +65,14 @@ export const ROUTES = {
   LOGIN: '/login',
   SIGNUP: '/signup',
   DASHBOARD: '/dashboard',
+  // Platform database routes
   ADMIN: '/dashboard/admin',
   POS: '/dashboard/pos',
   ANALYTICS: '/dashboard/analytics',
+  // Own database routes (MCP-connected)
   DB_CONNECT: '/dashboard/connect',
+  MCP_ADMIN: '/dashboard/mcp-admin',
+  MCP_POS: '/dashboard/mcp-pos',
   // Legacy routes (kept for backwards compatibility)
   LEGACY_ADMIN: '/admin',
   LEGACY_POS: '/pos',
