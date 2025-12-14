@@ -16,6 +16,8 @@ from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
 
 from app.database import get_db
+from app.models import User
+from app.routers.auth import get_current_user
 from app.mcp_server.tools_analytics import (
     get_sales_by_month,
     compare_sales,
@@ -58,14 +60,15 @@ class VisualizationResponse(BaseModel):
 
 @router.get("/inventory-health")
 async def get_inventory_health_data(
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ) -> Dict[str, Any]:
     """
-    Get inventory health data with chart-ready structure.
+    Get inventory health data with chart-ready structure (user-scoped).
     Returns metrics, alerts, and category breakdown for visualization.
     """
     try:
-        data = await get_inventory_analytics(session=db)
+        data = await get_inventory_analytics(session=db, user_id=current_user.id)
 
         summary = data.get("summary", {})
         category_breakdown = data.get("category_breakdown", [])
@@ -143,10 +146,11 @@ async def get_inventory_health_data(
 async def get_sales_month_data(
     year: int = Query(default=None, description="Year (defaults to current)"),
     month: int = Query(default=None, description="Month 1-12 (defaults to current)"),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ) -> Dict[str, Any]:
     """
-    Get monthly sales data with chart-ready structure.
+    Get monthly sales data with chart-ready structure (user-scoped).
     Returns metrics, top products, and daily trends for visualization.
     """
     try:
@@ -154,7 +158,7 @@ async def get_sales_month_data(
         year = year or now.year
         month = month or now.month
 
-        data = await get_sales_by_month(year=year, month=month, session=db)
+        data = await get_sales_by_month(year=year, month=month, session=db, user_id=current_user.id)
 
         summary = data.get("summary", {})
         top_products = data.get("top_products", [])
@@ -226,14 +230,15 @@ async def get_sales_month_data(
 @router.get("/sales-trends")
 async def get_sales_trends_data(
     days: int = Query(default=30, ge=1, le=365, description="Number of days"),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ) -> Dict[str, Any]:
     """
-    Get sales trends data with chart-ready structure.
+    Get sales trends data with chart-ready structure (user-scoped).
     Returns daily trends, moving averages, and insights.
     """
     try:
-        data = await get_sales_trends(days=days, session=db)
+        data = await get_sales_trends(days=days, session=db, user_id=current_user.id)
 
         summary = data.get("summary", {})
         daily_trends = data.get("daily_trends", [])
@@ -322,13 +327,14 @@ async def get_sales_trends_data(
 async def get_sales_comparison_data(
     period1: str = Query(..., description="First period YYYY-MM"),
     period2: str = Query(..., description="Second period YYYY-MM"),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ) -> Dict[str, Any]:
     """
-    Compare sales between two periods with chart-ready structure.
+    Compare sales between two periods with chart-ready structure (user-scoped).
     """
     try:
-        data = await compare_sales(period1=period1, period2=period2, session=db)
+        data = await compare_sales(period1=period1, period2=period2, session=db, user_id=current_user.id)
 
         comparison = data.get("comparison", {})
         changes = data.get("changes", {})
@@ -402,14 +408,15 @@ async def get_sales_comparison_data(
 @router.get("/top-products")
 async def get_top_products_data(
     limit: int = Query(default=5, ge=1, le=20, description="Number of products"),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ) -> Dict[str, Any]:
     """
-    Get top selling products with chart-ready structure.
+    Get top selling products with chart-ready structure (user-scoped).
     """
     try:
         now = datetime.utcnow()
-        data = await get_sales_by_month(year=now.year, month=now.month, session=db)
+        data = await get_sales_by_month(year=now.year, month=now.month, session=db, user_id=current_user.id)
 
         top_products = data.get("top_products", [])[:limit]
 
@@ -466,7 +473,8 @@ class VisualizeRequest(BaseModel):
 @router.post("/visualize")
 async def get_visualization_for_query(
     request: VisualizeRequest,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ) -> Dict[str, Any]:
     """
     AI-POWERED VISUALIZATION ENDPOINT

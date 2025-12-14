@@ -3,6 +3,7 @@ Pure OpenAI ChatKit Server Integration
 
 Uses the official openai-chatkit Python SDK (chatkit.server.ChatKitServer)
 Connects ChatKit frontend to the IMS agent backend.
+Updated: Force reload trigger
 """
 
 import logging
@@ -41,8 +42,32 @@ from chatkit.types import (
 from app.agents import OpenAIAgent, MCPClient, ConfirmationFlow
 from app.database import get_db
 from app.services.rate_limiter import get_rate_limiter
+from app.services.auth_service import decode_token, get_user_by_id
 
 logger = logging.getLogger(__name__)
+
+
+async def extract_user_id_from_request(request: Request) -> Optional[int]:
+    """
+    Extract user_id from Authorization header in ChatKit requests.
+    Returns None if no valid token is found (for backwards compatibility).
+    """
+    try:
+        # Get Authorization header
+        auth_header = request.headers.get("authorization", "")
+        if not auth_header or not auth_header.lower().startswith("bearer "):
+            return None
+
+        token = auth_header[7:]  # Remove "Bearer " prefix
+        token_data = decode_token(token)
+
+        if not token_data:
+            return None
+
+        return token_data.user_id
+    except Exception as e:
+        logger.warning(f"Failed to extract user_id from auth header: {e}")
+        return None
 
 router = APIRouter(prefix="/agent", tags=["chatkit"])
 
@@ -156,13 +181,19 @@ class SimpleStore(Store):
 class IMSChatKitServer(ChatKitServer):
     """
     IMS-specific ChatKit Server implementation.
-    
+
     Connects the OpenAI ChatKit frontend to our IMS agent backend.
+    Supports user-scoped data isolation via user_id.
     """
-    
+
     def __init__(self, store: Store):
         super().__init__(store)
         self._agent: OpenAIAgent | None = None
+        self._current_user_id: Optional[int] = None  # Set before processing
+
+    def set_user_id(self, user_id: Optional[int]):
+        """Set the current user ID for data isolation."""
+        self._current_user_id = user_id
     
     async def _get_agent(self) -> OpenAIAgent:
         """Get or initialize the OpenAI Agent."""
@@ -281,11 +312,29 @@ class IMSChatKitServer(ChatKitServer):
                     f"{rate_limit_details['remaining']}/{rate_limit_details['limit']} remaining"
                 )
 
-            logger.info(f"ChatKit processing message for session {session_id}: {user_message[:50] if user_message else 'empty'}...")
-            
+            # === DEBUG: Print query details to console ===
+            import sys
+            print("\n" + "="*60)
+            print("[CHATKIT ENDPOINT] IMS AI Analytics Assistant - Query Received")
+            print("="*60)
+            print(f"  Endpoint: /agent/chatkit (ChatKit Protocol)")
+            print(f"  User ID: {self._current_user_id}")
+            print(f"  Session ID: {session_id}")
+            print(f"  Query: {user_message}")
+            print("="*60 + "\n")
+            sys.stdout.flush()
+
+            logger.info(f"ChatKit processing message for session {session_id} (user_id={self._current_user_id}): {user_message[:50] if user_message else 'empty'}...")
+
             if not user_message:
                 response_text = "I didn't receive any message. How can I help you?"
             else:
+                # IMPORTANT: Prepend user_id context to ensure data isolation
+                # The agent will use this user_id when calling MCP tools
+                if self._current_user_id is not None:
+                    user_message = f"[SYSTEM CONTEXT: Current logged-in user_id={self._current_user_id}. You MUST include user_id={self._current_user_id} in ALL tool calls for data isolation.]\n\nUser query: {user_message}"
+                else:
+                    logger.warning(f"No user_id available for session {session_id} - data will not be user-scoped!")
                 # Track timing for thinking display
                 start_time = time.time()
                 
@@ -328,10 +377,11 @@ class IMSChatKitServer(ChatKitServer):
                     # Small delay to show streaming effect
                     await asyncio.sleep(0.15)
                 
-                # Process message with agent
+                # Process message with agent - pass user_id for auto-injection into tool calls
                 result = await agent.process_message(
                     session_id=session_id,
                     user_message=user_message,
+                    user_id=self._current_user_id,  # For data isolation
                 )
                 
                 # Calculate total thinking time
@@ -464,19 +514,26 @@ _server = IMSChatKitServer(_store)
 async def chatkit_endpoint(request: Request):
     """
     Main ChatKit endpoint.
-    
+
     Handles all ChatKit protocol requests (messages, threads, etc.)
     Uses the official ChatKit server protocol.
+    Extracts user_id from Authorization header for data isolation.
     """
     try:
         body = await request.body()
         logger.info(f"ChatKit request received: {body[:200]}...")
-        
+
+        # Extract user_id from Authorization header for data isolation
+        user_id = await extract_user_id_from_request(request)
+        _server.set_user_id(user_id)
+        logger.info(f"ChatKit endpoint: user_id={user_id}")
+
         # Get context from request
         context = {
             "headers": dict(request.headers),
+            "user_id": user_id,  # Include user_id in context
         }
-        
+
         # Process with ChatKit server
         result = await _server.process(body, context)
         
@@ -571,21 +628,29 @@ class SimpleChatRequest(BaseModel):
     session_id: str
     message: str
     history: Optional[List[SimpleChatMessage]] = []
+    user_id: Optional[int] = None  # Optional user_id for data isolation
+
 
 @router.post("/chat")
-async def simple_chat_endpoint(request: SimpleChatRequest):
+async def simple_chat_endpoint(request_body: SimpleChatRequest, request: Request):
     """
     Simple chat endpoint for fallback UI.
 
     Accepts a plain JSON request with session_id and message,
     returns a JSON response with the assistant's reply.
 
+    Extracts user_id from Authorization header for data isolation.
     This is a simpler alternative to the ChatKit protocol endpoint.
     """
     try:
+        # Extract user_id from auth header or request body
+        user_id = await extract_user_id_from_request(request)
+        if user_id is None and request_body.user_id is not None:
+            user_id = request_body.user_id
+
         # Rate limiting check
         rate_limiter = get_rate_limiter()
-        is_allowed, rate_limit_details = rate_limiter.consume(request.session_id)
+        is_allowed, rate_limit_details = rate_limiter.consume(request_body.session_id)
 
         if not is_allowed:
             retry_after = rate_limit_details.get("retry_after", 60)
@@ -604,24 +669,47 @@ async def simple_chat_endpoint(request: SimpleChatRequest):
 
         # Build conversation history for context
         history_text = ""
-        if request.history:
-            for msg in request.history[-5:]:  # Last 5 messages for context
+        if request_body.history:
+            for msg in request_body.history[-5:]:  # Last 5 messages for context
                 role = "User" if msg.role == "user" else "Assistant"
                 history_text += f"{role}: {msg.content}\n"
 
-        # Process with agent
-        full_prompt = request.message
+        # Process with agent - prepend user_id context for data isolation
+        full_prompt = request_body.message
+        if user_id is not None:
+            full_prompt = f"[SYSTEM CONTEXT: Current logged-in user_id={user_id}. You MUST include user_id={user_id} in ALL tool calls for data isolation.]\n\nUser query: {request_body.message}"
+        else:
+            logger.warning(f"No user_id available for session {request_body.session_id} - data will not be user-scoped!")
+
         if history_text:
-            full_prompt = f"Previous conversation:\n{history_text}\n\nUser: {request.message}"
+            full_prompt = f"Previous conversation:\n{history_text}\n\n{full_prompt}"
 
-        logger.info(f"Simple chat processing for session {request.session_id}: {request.message[:50]}...")
+        # === DEBUG: Print query details to console ===
+        import sys
+        print("\n" + "="*60)
+        print("[SIMPLE CHAT ENDPOINT] IMS AI Analytics Assistant - Query Received")
+        print("="*60)
+        print(f"  Endpoint: /agent/chat (Simple Chat)")
+        print(f"  User ID: {user_id}")
+        print(f"  Session ID: {request_body.session_id}")
+        print(f"  Query: {request_body.message}")
+        print("="*60 + "\n")
+        sys.stdout.flush()
 
-        response_text = await agent.run(full_prompt)
+        logger.info(f"Simple chat processing for session {request_body.session_id} (user_id={user_id}): {request_body.message[:50]}...")
+
+        # Use process_message instead of run - pass user_id for data isolation
+        result = await agent.process_message(
+            session_id=request_body.session_id,
+            user_message=full_prompt,
+            user_id=user_id,  # For data isolation
+        )
+        response_text = result.get("response", "I couldn't process that request.")
 
         return {
             "content": response_text,
-            "session_id": request.session_id,
-            "rate_limit": rate_limiter.get_usage(request.session_id)
+            "session_id": request_body.session_id,
+            "rate_limit": rate_limiter.get_usage(request_body.session_id)
         }
 
     except Exception as e:

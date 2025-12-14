@@ -36,13 +36,25 @@ export default function DashboardPage() {
   // Chat state for floating chat
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [isChatkitLoaded, setIsChatkitLoaded] = useState(false);
+  const [scriptLoaded, setScriptLoaded] = useState(false);
+  const [chatLoadError, setChatLoadError] = useState<string | null>(null);
   const chatkitRef = useRef<HTMLElement | null>(null);
   const configuredRef = useRef(false);
 
-  // Derived state for MCP
+  // Derived state for connection type
   const isOwnDatabase = connectionStatus?.connection_type === 'own_database';
+  const isOurDatabase = connectionStatus?.connection_type === 'our_database';
   const mcpConnected = connectionStatus?.mcp_status === 'connected';
   const mcpSessionId = connectionStatus?.mcp_session_id;
+
+  // For our_database users, generate a session ID based on user ID
+  const ourDbSessionId = user?.id ? `our-db-session-${user.id}` : null;
+
+  // Determine if chat should be available
+  // - own_database: needs MCP connected
+  // - our_database: always available after setup
+  const isChatAvailable = (isOwnDatabase && mcpConnected && mcpSessionId) || (isOurDatabase && !connectionStatus?.needs_setup);
+  const chatSessionId = isOwnDatabase ? mcpSessionId : ourDbSessionId;
 
   // Redirect to login if not authenticated
   useEffect(() => {
@@ -101,9 +113,9 @@ export default function DashboardPage() {
     }
   };
 
-  // Configure ChatKit for MCP Agent
+  // Configure ChatKit for AI Assistant
   const configureChatKit = useCallback(() => {
-    if (!isChatkitLoaded || !mcpSessionId) return;
+    if (!isChatkitLoaded || !chatSessionId) return;
     if (configuredRef.current) return;
 
     const chatkit = chatkitRef.current as any;
@@ -113,16 +125,23 @@ export default function DashboardPage() {
     }
 
     configuredRef.current = true;
-    console.log('[Dashboard] Configuring ChatKit with session:', mcpSessionId);
+    console.log('[Dashboard] Configuring ChatKit with session:', chatSessionId, 'type:', isOwnDatabase ? 'own_database' : 'our_database');
+
+    // Use different endpoint based on connection type
+    // own_database: uses /inventory-agent/chatkit (connects to user's DB via MCP)
+    // our_database: uses /agent/chatkit (connects to our platform DB)
+    const chatEndpoint = isOwnDatabase
+      ? `${API_BASE_URL}/inventory-agent/chatkit`
+      : `${API_BASE_URL}/agent/chatkit`;
 
     chatkit.setOptions({
       api: {
-        url: `${API_BASE_URL}/inventory-agent/chatkit`,
+        url: chatEndpoint,
         domainKey: '',
         fetch: async (url: string, options: RequestInit) => {
           try {
             const body = options.body ? JSON.parse(options.body as string) : {};
-            body.session_id = mcpSessionId;
+            body.session_id = chatSessionId;
             body.user_id = user?.id;
 
             return await fetch(url, {
@@ -132,7 +151,7 @@ export default function DashboardPage() {
                 ...options.headers,
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${getAccessToken()}`,
-                'x-session-id': mcpSessionId,
+                'x-session-id': chatSessionId || '',
               },
             });
           } catch (e) {
@@ -147,25 +166,31 @@ export default function DashboardPage() {
         title: { enabled: true, text: 'AI Assistant' },
       },
       startScreen: {
-        greeting: 'Ask me anything about your inventory!',
+        greeting: isOwnDatabase
+          ? 'Ask me anything about your database!'
+          : 'Ask me anything about your inventory!',
         prompts: [
-          { label: 'View Products', prompt: 'Show all products in my inventory' },
-          { label: 'Low Stock', prompt: 'Which products are running low on stock?' },
+          { label: 'View Products', prompt: 'Show all items in my inventory' },
+          { label: 'Low Stock', prompt: 'Which items are running low on stock?' },
           { label: 'Sales Summary', prompt: 'Show me a summary of recent sales' },
-          { label: 'Add Product', prompt: 'Help me add a new product to inventory' },
+          { label: 'Add Item', prompt: 'Help me add a new item to inventory' },
         ],
       },
       composer: { placeholder: 'Ask about your inventory...' },
-      disclaimer: { text: 'Connected to your database via MCP' },
+      disclaimer: {
+        text: isOwnDatabase
+          ? 'Connected to your database via MCP'
+          : 'Connected to IMS Platform'
+      },
     });
-  }, [isChatkitLoaded, mcpSessionId, user?.id]);
+  }, [isChatkitLoaded, chatSessionId, user?.id, isOwnDatabase]);
 
-  // Configure ChatKit when loaded and MCP connected
+  // Configure ChatKit when loaded and chat is available
   useEffect(() => {
-    if (isChatkitLoaded && mcpConnected && mcpSessionId) {
+    if (isChatkitLoaded && isChatAvailable && chatSessionId) {
       configureChatKit();
     }
-  }, [isChatkitLoaded, mcpConnected, mcpSessionId, configureChatKit]);
+  }, [isChatkitLoaded, isChatAvailable, chatSessionId, configureChatKit]);
 
   // Reset configuration when chat is closed
   useEffect(() => {
@@ -174,15 +199,28 @@ export default function DashboardPage() {
     }
   }, [isChatOpen]);
 
-  // Handle ChatKit script load
+  // Handle ChatKit script load with fast polling
   const handleScriptLoad = () => {
+    console.log('[Dashboard] ChatKit script loaded');
+    setScriptLoaded(true);
+
+    let attempts = 0;
+    const maxAttempts = 100; // 5 seconds max (50ms * 100)
+
     const checkElement = () => {
+      attempts++;
       if (customElements.get('openai-chatkit')) {
+        console.log('[Dashboard] ChatKit element registered after', attempts, 'attempts');
         setIsChatkitLoaded(true);
+      } else if (attempts < maxAttempts) {
+        setTimeout(checkElement, 50); // Fast polling every 50ms
       } else {
-        setTimeout(checkElement, 100);
+        console.error('[Dashboard] ChatKit element not registered after max attempts');
+        setChatLoadError('ChatKit failed to initialize. Please refresh the page.');
       }
     };
+
+    // Start checking immediately
     checkElement();
   };
 
@@ -495,20 +533,30 @@ export default function DashboardPage() {
         )}
       </main>
 
-      {/* Floating Chat Button - Only show for MCP connected users */}
-      {isOwnDatabase && mcpConnected && mcpSessionId && (
-        <>
-          {/* ChatKit Script - Same as Analytics page */}
-          <Script
-            src="https://cdn.platform.openai.com/deployments/chatkit/chatkit.js"
-            strategy="afterInteractive"
-            onLoad={handleScriptLoad}
-          />
+      {/* ChatKit Script - Load early, outside conditional */}
+      {isChatAvailable && (
+        <Script
+          src="https://cdn.platform.openai.com/deployments/chatkit/chatkit.js"
+          strategy="afterInteractive"
+          onLoad={handleScriptLoad}
+          onError={(e) => {
+            console.error('[Dashboard] Failed to load ChatKit:', e);
+            setChatLoadError('Failed to load ChatKit script. Please check your network connection.');
+          }}
+        />
+      )}
 
-          {/* Floating Chat Button */}
+      {/* Floating Chat Button - Show for both our_database and own_database users */}
+      {isChatAvailable && chatSessionId && (
+        <>
+          {/* Floating Chat Button - Blue for own_database, Purple for our_database */}
           <button
             onClick={() => setIsChatOpen(!isChatOpen)}
-            className="fixed bottom-6 right-6 w-14 h-14 bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-lg flex items-center justify-center transition-all duration-300 z-50 hover:scale-110"
+            className={`fixed bottom-6 right-6 w-14 h-14 text-white rounded-full shadow-lg flex items-center justify-center transition-all duration-300 z-50 hover:scale-110 ${
+              isOurDatabase
+                ? 'bg-purple-600 hover:bg-purple-700'
+                : 'bg-blue-600 hover:bg-blue-700'
+            }`}
             title="Chat with AI Assistant"
           >
             {isChatOpen ? (
@@ -525,11 +573,26 @@ export default function DashboardPage() {
           {/* Chat Modal */}
           {isChatOpen && (
             <div className="fixed bottom-24 right-6 w-96 h-[500px] bg-white rounded-xl shadow-2xl z-50 overflow-hidden border border-gray-200">
-              {!isChatkitLoaded ? (
+              {chatLoadError ? (
+                <div className="flex items-center justify-center h-full">
+                  <div className="text-center p-6">
+                    <div className="text-red-500 text-4xl mb-4">⚠️</div>
+                    <p className="text-red-600 font-medium mb-2">ChatKit Error</p>
+                    <p className="text-gray-500 text-sm mb-4">{chatLoadError}</p>
+                    <button
+                      onClick={() => window.location.reload()}
+                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                    >
+                      Refresh Page
+                    </button>
+                  </div>
+                </div>
+              ) : !isChatkitLoaded ? (
                 <div className="flex items-center justify-center h-full">
                   <div className="text-center">
                     <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600 mx-auto mb-3"></div>
                     <p className="text-gray-500">Loading ChatKit...</p>
+                    {scriptLoaded && <p className="text-gray-400 text-xs mt-2">Initializing component...</p>}
                   </div>
                 </div>
               ) : (
@@ -541,10 +604,10 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {/* ChatKit CSS Variables */}
+          {/* ChatKit CSS Variables - Purple for our_database, Blue for own_database */}
           <style jsx global>{`
             openai-chatkit {
-              --chatkit-primary-color: #2563eb;
+              --chatkit-primary-color: ${isOurDatabase ? '#9333ea' : '#2563eb'};
               --chatkit-background: #ffffff;
               --chatkit-text-color: #1f2937;
               --chatkit-border-radius: 8px;

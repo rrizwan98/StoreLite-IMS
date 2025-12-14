@@ -6,39 +6,46 @@ import logging
 from typing import List
 from decimal import Decimal
 from fastapi import APIRouter, Depends, status
-from sqlalchemy import select
+from sqlalchemy import select, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
-from app.models import Item, Bill, BillItem
+from app.models import Item, Bill, BillItem, User
 from app.schemas import BillCreate, BillResponse, BillItemResponse
 from app.exceptions import NotFoundError, BusinessLogicError, DatabaseError
+from app.routers.auth import get_current_user
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["billing"])
 
 
 @router.post("/bills", response_model=BillResponse, status_code=201)
-async def create_bill(bill_data: BillCreate, db: AsyncSession = Depends(get_db)):
+async def create_bill(
+    bill_data: BillCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     """
-    US6: Create a new bill/invoice with multiple items
+    US6: Create a new bill/invoice with multiple items (user-scoped)
 
     POST /bills
     """
-    logger.info(f"Creating bill with {len(bill_data.items)} items")
+    logger.info(f"Creating bill with {len(bill_data.items)} items for user {current_user.id}")
 
     try:
-        # Phase 1: Upfront validation - check all items exist and have sufficient stock
+        # Phase 1: Upfront validation - check all items exist (for this user) and have sufficient stock
         items_with_prices = []
         total_amount = Decimal("0.00")
 
         for bill_item_data in bill_data.items:
-            # Fetch item from DB
-            query = select(Item).where(Item.id == bill_item_data.item_id)
+            # Fetch item from DB - filter by current user's items
+            query = select(Item).where(
+                and_(Item.id == bill_item_data.item_id, Item.user_id == current_user.id)
+            )
             result = await db.execute(query)
             item = result.scalar_one_or_none()
 
             if not item:
-                logger.warning(f"Item not found: id={bill_item_data.item_id}")
+                logger.warning(f"Item not found: id={bill_item_data.item_id} for user {current_user.id}")
                 raise BusinessLogicError(f"Item with id {bill_item_data.item_id} not found")
 
             # Check sufficient stock
@@ -63,10 +70,11 @@ async def create_bill(bill_data: BillCreate, db: AsyncSession = Depends(get_db))
             })
 
         # Phase 2: All validations passed, create bill atomically
-        logger.info(f"All validations passed, creating bill with total={total_amount}")
+        logger.info(f"All validations passed, creating bill with total={total_amount} for user {current_user.id}")
 
-        # Create bill
+        # Create bill - associate with current user
         bill = Bill(
+            user_id=current_user.id,  # Associate bill with current user
             customer_name=bill_data.customer_name,
             store_name=bill_data.store_name,
             total_amount=total_amount,
@@ -135,21 +143,28 @@ async def create_bill(bill_data: BillCreate, db: AsyncSession = Depends(get_db))
 
 
 @router.get("/bills/{bill_id}", response_model=BillResponse)
-async def get_bill(bill_id: int, db: AsyncSession = Depends(get_db)):
+async def get_bill(
+    bill_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     """
-    US7: Retrieve bill details with all line items
+    US7: Retrieve bill details with all line items (user-scoped)
 
     GET /bills/{id}
     """
-    logger.info(f"Getting bill: id={bill_id}")
+    logger.info(f"Getting bill: id={bill_id} for user {current_user.id}")
 
     try:
-        query = select(Bill).where(Bill.id == bill_id)
+        # Filter by current user's bills only
+        query = select(Bill).where(
+            and_(Bill.id == bill_id, Bill.user_id == current_user.id)
+        )
         result = await db.execute(query)
         bill = result.scalar_one_or_none()
 
         if not bill:
-            logger.warning(f"Bill not found: id={bill_id}")
+            logger.warning(f"Bill not found: id={bill_id} for user {current_user.id}")
             raise NotFoundError(f"Bill with id {bill_id} not found")
 
         # Eager load bill items
@@ -196,16 +211,20 @@ async def get_bill(bill_id: int, db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/bills", response_model=List[BillResponse])
-async def list_bills(db: AsyncSession = Depends(get_db)):
+async def list_bills(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     """
-    US8: List all bills
+    US8: List all bills (user-scoped)
 
     GET /bills
     """
-    logger.info("Listing all bills")
+    logger.info(f"Listing all bills for user {current_user.id}")
 
     try:
-        query = select(Bill).order_by(Bill.created_at.desc())
+        # Filter by current user's bills only
+        query = select(Bill).where(Bill.user_id == current_user.id).order_by(Bill.created_at.desc())
         result = await db.execute(query)
         bills = result.scalars().all()
 

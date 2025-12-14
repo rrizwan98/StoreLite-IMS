@@ -16,6 +16,7 @@ import {
   ERROR_CODES,
   HTTP_STATUS,
 } from './constants';
+import { getAccessToken } from './auth-api';
 
 /**
  * Maps backend error codes and HTTP status to user-friendly messages
@@ -77,6 +78,18 @@ export class APIClient {
       },
     });
     this.retryStatusCallback = retryCallback;
+
+    // Add auth token interceptor - automatically include token in every request
+    this.axiosInstance.interceptors.request.use(
+      (config) => {
+        const token = getAccessToken();
+        if (token) {
+          config.headers.Authorization = `Bearer ${token}`;
+        }
+        return config;
+      },
+      (error) => Promise.reject(error)
+    );
   }
 
   /**

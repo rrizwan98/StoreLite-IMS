@@ -197,6 +197,16 @@ async def call_tool(request: dict):
     tool_name = request.get("tool")
     arguments = request.get("arguments", {})
 
+    # === DEBUG: Print MCP call details ===
+    import sys
+    print("\n" + "="*60)
+    print("[MCP SERVER] /mcp/call - Request Received")
+    print("="*60)
+    print(f"  Tool: {tool_name}")
+    print(f"  Arguments: {arguments}")
+    print("="*60 + "\n")
+    sys.stdout.flush()
+
     if tool_name not in TOOLS:
         raise HTTPException(status_code=404, detail=f"Tool {tool_name} not found")
 

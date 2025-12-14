@@ -1,8 +1,9 @@
 """
-MCP tool implementations for billing operations
+MCP tool implementations for billing operations (user-scoped)
 """
 import logging
 from decimal import Decimal
+from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
 from sqlalchemy.orm import selectinload
@@ -29,16 +30,18 @@ async def billing_create_bill(
     items: list,
     customer_name: str = None,
     store_name: str = None,
-    session: AsyncSession = None
+    session: AsyncSession = None,
+    user_id: Optional[int] = None
 ) -> dict:
     """
-    Create a bill with line items.
+    Create a bill with line items (user-scoped).
 
     Args:
         items: List of dicts with item_id and quantity
         customer_name: Optional customer name
         store_name: Optional store name
         session: AsyncSession for database operations
+        user_id: Optional user ID to scope bill and items
 
     Returns:
         Bill response with line items and total amount
@@ -64,8 +67,12 @@ async def billing_create_bill(
                     f"Item {item_id}: Quantity must be > 0"
                 )
 
-            # Get item
-            stmt = select(Item).where(Item.id == item_id)
+            # Get item - filter by user_id if provided
+            conditions = [Item.id == item_id]
+            if user_id is not None:
+                conditions.append(Item.user_id == user_id)
+
+            stmt = select(Item).where(and_(*conditions))
             result = await session.execute(stmt)
             item = result.scalar_one_or_none()
 
@@ -95,11 +102,12 @@ async def billing_create_bill(
                 "line_total": line_total
             })
 
-        # Create bill
+        # Create bill - associate with user if provided
         bill = Bill(
             customer_name=customer_name,
             store_name=store_name,
-            total_amount=total_amount
+            total_amount=total_amount,
+            user_id=user_id  # Associate bill with user
         )
         session.add(bill)
         await session.flush()  # Get bill ID
@@ -161,11 +169,17 @@ async def billing_create_bill(
 @mcp_error_handler("billing_get_bill")
 async def billing_get_bill(
     bill_id: int,
-    session: AsyncSession = None
+    session: AsyncSession = None,
+    user_id: Optional[int] = None
 ) -> dict:
-    """Get bill details with line items."""
+    """Get bill details with line items (user-scoped)."""
     try:
-        stmt = select(Bill).where(Bill.id == bill_id)
+        # Filter by user_id if provided
+        conditions = [Bill.id == bill_id]
+        if user_id is not None:
+            conditions.append(Bill.user_id == user_id)
+
+        stmt = select(Bill).where(and_(*conditions))
         result = await session.execute(stmt)
         bill = result.scalar_one_or_none()
 
@@ -209,10 +223,11 @@ async def billing_list_bills(
     end_date: str = None,
     page: int = 1,
     limit: int = 20,
-    session: AsyncSession = None
+    session: AsyncSession = None,
+    user_id: Optional[int] = None
 ) -> dict:
     """
-    List bills with optional date filtering and pagination.
+    List bills with optional date filtering and pagination (user-scoped).
     """
     try:
         # Validate pagination
@@ -223,8 +238,16 @@ async def billing_list_bills(
         if limit > 100:
             limit = 100
 
+        # Build base conditions with user_id filter if provided
+        base_conditions = []
+        if user_id is not None:
+            base_conditions.append(Bill.user_id == user_id)
+
         # Build query with eager loading of relationships
-        stmt = select(Bill).options(selectinload(Bill.bill_items))
+        if base_conditions:
+            stmt = select(Bill).options(selectinload(Bill.bill_items)).where(and_(*base_conditions))
+        else:
+            stmt = select(Bill).options(selectinload(Bill.bill_items))
 
         # Date filtering
         if start_date:
@@ -247,8 +270,11 @@ async def billing_list_bills(
                     "end_date must be ISO 8601 format"
                 )
 
-        # Get total count
-        count_stmt = select(Bill)
+        # Get total count with same filters
+        if base_conditions:
+            count_stmt = select(Bill).where(and_(*base_conditions))
+        else:
+            count_stmt = select(Bill)
         if start_date:
             count_stmt = count_stmt.where(Bill.created_at >= start_dt)
         if end_date:

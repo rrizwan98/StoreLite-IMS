@@ -31,15 +31,17 @@ logger = logging.getLogger(__name__)
 async def get_sales_by_month(
     year: int,
     month: int,
-    session: AsyncSession = None
+    session: AsyncSession = None,
+    user_id: Optional[int] = None
 ) -> dict:
     """
-    Get sales summary for a specific month with top products.
+    Get sales summary for a specific month with top products (user-scoped).
 
     Args:
         year: Year (e.g., 2025)
         month: Month (1-12)
         session: AsyncSession for database operations
+        user_id: Optional user ID to filter bills by user
 
     Returns:
         Sales summary with total, top products, daily trends, and statistics
@@ -58,14 +60,19 @@ async def get_sales_by_month(
         else:
             end_date = datetime(year, month + 1, 1)
 
-        # Query bills within the date range
+        # Build query conditions - filter by date range and optionally by user
+        conditions = [
+            Bill.created_at >= start_date,
+            Bill.created_at < end_date
+        ]
+        if user_id is not None:
+            conditions.append(Bill.user_id == user_id)
+
+        # Query bills within the date range (user-scoped if user_id provided)
         stmt = (
             select(Bill)
             .options(selectinload(Bill.bill_items))
-            .where(and_(
-                Bill.created_at >= start_date,
-                Bill.created_at < end_date
-            ))
+            .where(and_(*conditions))
             .order_by(Bill.created_at)
         )
 
@@ -146,15 +153,17 @@ async def get_sales_by_month(
 async def compare_sales(
     period1: str,
     period2: str,
-    session: AsyncSession = None
+    session: AsyncSession = None,
+    user_id: Optional[int] = None
 ) -> dict:
     """
-    Compare sales between two periods with percentage changes.
+    Compare sales between two periods with percentage changes (user-scoped).
 
     Args:
         period1: First period in format "YYYY-MM" (e.g., "2025-11")
         period2: Second period in format "YYYY-MM" (e.g., "2025-12")
         session: AsyncSession for database operations
+        user_id: Optional user ID to filter bills by user
 
     Returns:
         Comparative analysis with percentage changes, product differences
@@ -174,7 +183,7 @@ async def compare_sales(
         year1, month1 = parse_period(period1)
         year2, month2 = parse_period(period2)
 
-        # Get sales data for both periods
+        # Get sales data for both periods (user-scoped if user_id provided)
         async def get_period_data(year: int, month: int) -> dict:
             start_date = datetime(year, month, 1)
             if month == 12:
@@ -182,13 +191,18 @@ async def compare_sales(
             else:
                 end_date = datetime(year, month + 1, 1)
 
+            # Build conditions with optional user filter
+            conditions = [
+                Bill.created_at >= start_date,
+                Bill.created_at < end_date
+            ]
+            if user_id is not None:
+                conditions.append(Bill.user_id == user_id)
+
             stmt = (
                 select(Bill)
                 .options(selectinload(Bill.bill_items))
-                .where(and_(
-                    Bill.created_at >= start_date,
-                    Bill.created_at < end_date
-                ))
+                .where(and_(*conditions))
             )
 
             result = await session.execute(stmt)
@@ -308,14 +322,16 @@ async def compare_sales(
 @mcp_error_handler("get_sales_trends")
 async def get_sales_trends(
     days: int = 30,
-    session: AsyncSession = None
+    session: AsyncSession = None,
+    user_id: Optional[int] = None
 ) -> dict:
     """
-    Get sales trends for the specified number of days.
+    Get sales trends for the specified number of days (user-scoped).
 
     Args:
         days: Number of days to analyze (default 30, max 365)
         session: AsyncSession for database operations
+        user_id: Optional user ID to filter bills by user
 
     Returns:
         Trends analysis with daily data, moving averages, and insights
@@ -330,11 +346,16 @@ async def get_sales_trends(
         end_date = datetime.utcnow()
         start_date = end_date - timedelta(days=days)
 
-        # Query bills within the date range
+        # Build conditions with optional user filter
+        conditions = [Bill.created_at >= start_date]
+        if user_id is not None:
+            conditions.append(Bill.user_id == user_id)
+
+        # Query bills within the date range (user-scoped if user_id provided)
         stmt = (
             select(Bill)
             .options(selectinload(Bill.bill_items))
-            .where(Bill.created_at >= start_date)
+            .where(and_(*conditions))
             .order_by(Bill.created_at)
         )
 
@@ -458,17 +479,27 @@ async def get_sales_trends(
 
 @mcp_error_handler("get_inventory_analytics")
 async def get_inventory_analytics(
-    session: AsyncSession = None
+    session: AsyncSession = None,
+    user_id: Optional[int] = None
 ) -> dict:
     """
-    Get comprehensive inventory analytics including stock levels, alerts, and recommendations.
+    Get comprehensive inventory analytics including stock levels, alerts, and recommendations (user-scoped).
+
+    Args:
+        session: AsyncSession for database operations
+        user_id: Optional user ID to filter items by user
 
     Returns:
         Inventory analysis with stock status, reorder alerts, and recommendations
     """
     try:
-        # Get all active items
-        stmt = select(Item).where(Item.is_active == True)
+        # Build conditions with optional user filter
+        conditions = [Item.is_active == True]
+        if user_id is not None:
+            conditions.append(Item.user_id == user_id)
+
+        # Get all active items (user-scoped if user_id provided)
+        stmt = select(Item).where(and_(*conditions))
         result = await session.execute(stmt)
         items = result.scalars().all()
 

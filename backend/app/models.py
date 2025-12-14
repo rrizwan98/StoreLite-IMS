@@ -82,6 +82,7 @@ class Item(Base):
     __tablename__ = "items"
 
     id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True)  # Owner of this item
     name = Column(String(255), nullable=False, index=True)
     category = Column(String(100), nullable=False, index=True)
     unit = Column(String(50), nullable=False)
@@ -101,6 +102,7 @@ class Item(Base):
     )
 
     # Relationships
+    user = relationship("User", backref="items")
     bill_items = relationship("BillItem", back_populates="item", cascade="all, delete-orphan")
 
     def __repr__(self):
@@ -112,6 +114,7 @@ class Bill(Base):
     __tablename__ = "bills"
 
     id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True)  # Owner of this bill
     customer_name = Column(String(255), nullable=True)
     store_name = Column(String(255), nullable=True)
     total_amount = Column(Numeric(12, 2), nullable=False)
@@ -120,6 +123,7 @@ class Bill(Base):
     __table_args__ = ({"extend_existing": True},)
 
     # Relationships
+    user = relationship("User", backref="bills")
     bill_items = relationship("BillItem", back_populates="bill", cascade="all, delete-orphan")
 
     def __repr__(self):

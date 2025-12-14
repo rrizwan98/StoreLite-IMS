@@ -9,24 +9,30 @@ from fastapi import APIRouter, Depends, status
 from sqlalchemy import select, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
-from app.models import Item
+from app.models import Item, User
 from app.schemas import ItemCreate, ItemUpdate, ItemResponse
 from app.exceptions import NotFoundError, DatabaseError
+from app.routers.auth import get_current_user
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["inventory"])
 
 
 @router.post("/items", response_model=ItemResponse, status_code=201)
-async def create_item(item_data: ItemCreate, db: AsyncSession = Depends(get_db)):
+async def create_item(
+    item_data: ItemCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     """
-    US1: Create a new inventory item
+    US1: Create a new inventory item (user-scoped)
 
     POST /items
     """
-    logger.info(f"Creating item: {item_data.name}")
+    logger.info(f"Creating item: {item_data.name} for user {current_user.id}")
     try:
         new_item = Item(
+            user_id=current_user.id,  # Associate item with current user
             name=item_data.name,
             category=item_data.category,
             unit=item_data.unit,
@@ -37,7 +43,7 @@ async def create_item(item_data: ItemCreate, db: AsyncSession = Depends(get_db))
         db.add(new_item)
         await db.commit()
         await db.refresh(new_item)
-        logger.info(f"Item created successfully: id={new_item.id}")
+        logger.info(f"Item created successfully: id={new_item.id} for user {current_user.id}")
         return new_item
     except Exception as e:
         logger.error(f"Error creating item: {str(e)}")
@@ -49,16 +55,20 @@ async def create_item(item_data: ItemCreate, db: AsyncSession = Depends(get_db))
 async def list_items(
     name: str | None = None,
     category: str | None = None,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """
-    US2: List and search inventory items
+    US2: List and search inventory items (user-scoped)
 
     GET /items?name=...&category=...
     """
-    logger.info(f"Listing items with filters: name={name}, category={category}")
+    logger.info(f"Listing items for user {current_user.id} with filters: name={name}, category={category}")
     try:
-        query = select(Item).where(Item.is_active == True)
+        # Filter by current user's items only
+        query = select(Item).where(
+            and_(Item.is_active == True, Item.user_id == current_user.id)
+        )
 
         if name:
             query = query.where(Item.name.ilike(f"%{name}%"))
@@ -69,7 +79,7 @@ async def list_items(
         query = query.order_by(Item.name.asc())
         result = await db.execute(query)
         items = result.scalars().all()
-        logger.info(f"Found {len(items)} items")
+        logger.info(f"Found {len(items)} items for user {current_user.id}")
         return items
     except Exception as e:
         logger.error(f"Error listing items: {str(e)}")
@@ -77,22 +87,27 @@ async def list_items(
 
 
 @router.get("/items/{item_id}", response_model=ItemResponse)
-async def get_item(item_id: int, db: AsyncSession = Depends(get_db)):
+async def get_item(
+    item_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     """
-    US3: Get single item details
+    US3: Get single item details (user-scoped)
 
     GET /items/{id}
     """
-    logger.info(f"Getting item: id={item_id}")
+    logger.info(f"Getting item: id={item_id} for user {current_user.id}")
     try:
+        # Filter by current user's items only
         query = select(Item).where(
-            and_(Item.id == item_id, Item.is_active == True)
+            and_(Item.id == item_id, Item.is_active == True, Item.user_id == current_user.id)
         )
         result = await db.execute(query)
         item = result.scalar_one_or_none()
 
         if not item:
-            logger.warning(f"Item not found: id={item_id}")
+            logger.warning(f"Item not found: id={item_id} for user {current_user.id}")
             raise NotFoundError(f"Item with id {item_id} not found")
 
         logger.info(f"Item found: id={item_id}")
@@ -108,22 +123,25 @@ async def get_item(item_id: int, db: AsyncSession = Depends(get_db)):
 async def update_item(
     item_id: int,
     item_data: ItemUpdate,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """
-    US4: Update item price and stock
+    US4: Update item price and stock (user-scoped)
 
     PUT /items/{id}
     """
-    logger.info(f"Updating item: id={item_id}")
+    logger.info(f"Updating item: id={item_id} for user {current_user.id}")
     try:
-        # Get the item
-        query = select(Item).where(Item.id == item_id)
+        # Get the item - filter by user_id to ensure ownership
+        query = select(Item).where(
+            and_(Item.id == item_id, Item.user_id == current_user.id)
+        )
         result = await db.execute(query)
         item = result.scalar_one_or_none()
 
         if not item:
-            logger.warning(f"Item not found for update: id={item_id}")
+            logger.warning(f"Item not found for update: id={item_id} for user {current_user.id}")
             raise NotFoundError(f"Item with id {item_id} not found")
 
         # Update fields if provided
@@ -151,21 +169,27 @@ async def update_item(
 
 
 @router.delete("/items/{item_id}", status_code=204)
-async def deactivate_item(item_id: int, db: AsyncSession = Depends(get_db)):
+async def deactivate_item(
+    item_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     """
-    US5: Deactivate (soft-delete) an item
+    US5: Deactivate (soft-delete) an item (user-scoped)
 
     DELETE /items/{id}
     """
-    logger.info(f"Deactivating item: id={item_id}")
+    logger.info(f"Deactivating item: id={item_id} for user {current_user.id}")
     try:
-        # Get the item
-        query = select(Item).where(Item.id == item_id)
+        # Get the item - filter by user_id to ensure ownership
+        query = select(Item).where(
+            and_(Item.id == item_id, Item.user_id == current_user.id)
+        )
         result = await db.execute(query)
         item = result.scalar_one_or_none()
 
         if not item:
-            logger.warning(f"Item not found for deactivation: id={item_id}")
+            logger.warning(f"Item not found for deactivation: id={item_id} for user {current_user.id}")
             raise NotFoundError(f"Item with id {item_id} not found")
 
         # Soft delete: mark as inactive

@@ -65,6 +65,8 @@ export default function AnalyticsPage() {
   const [metrics, setMetrics] = useState<MetricData[]>([]);
   const [charts, setCharts] = useState<ChartConfig[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
+  const [scriptLoaded, setScriptLoaded] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [lastQuery, setLastQuery] = useState<string>('');
   const [isLoadingViz, setIsLoadingViz] = useState(false);
   const chatkitRef = useRef<HTMLElement | null>(null);
@@ -246,17 +248,28 @@ export default function AnalyticsPage() {
     setTimeout(initChatKit, 300);
   }, [isLoaded, sessionId, fetchVisualization]);
 
-  // Handle script load
+  // Handle script load with fast polling
   const handleScriptLoad = () => {
     console.log('[Analytics] ChatKit script loaded');
+    setScriptLoaded(true);
+
+    let attempts = 0;
+    const maxAttempts = 100; // 5 seconds max (50ms * 100)
+
     const checkElement = () => {
+      attempts++;
       if (customElements.get('openai-chatkit')) {
-        console.log('[Analytics] ChatKit element registered');
+        console.log('[Analytics] ChatKit element registered after', attempts, 'attempts');
         setIsLoaded(true);
+      } else if (attempts < maxAttempts) {
+        setTimeout(checkElement, 50); // Fast polling every 50ms
       } else {
-        setTimeout(checkElement, 100);
+        console.error('[Analytics] ChatKit element not registered after max attempts');
+        setLoadError('ChatKit failed to initialize. Please refresh the page.');
       }
     };
+
+    // Start checking immediately
     checkElement();
   };
 
@@ -358,12 +371,15 @@ export default function AnalyticsPage() {
 
   return (
     <ErrorBoundary>
-      {/* Load ChatKit from OpenAI CDN */}
+      {/* Load ChatKit from OpenAI CDN - afterInteractive for faster loading */}
       <Script
         src="https://cdn.platform.openai.com/deployments/chatkit/chatkit.js"
         strategy="afterInteractive"
         onLoad={handleScriptLoad}
-        onError={(e) => console.error('Failed to load ChatKit:', e)}
+        onError={(e) => {
+          console.error('Failed to load ChatKit:', e);
+          setLoadError('Failed to load ChatKit script. Please check your network connection.');
+        }}
       />
 
       <div className="h-[calc(100vh-120px)] flex gap-4">
@@ -378,7 +394,21 @@ export default function AnalyticsPage() {
           </div>
 
           <div className="flex-1 relative">
-            {isLoaded ? (
+            {loadError ? (
+              <div className="flex items-center justify-center h-full">
+                <div className="text-center p-6">
+                  <div className="text-red-500 text-4xl mb-4">⚠️</div>
+                  <p className="text-red-600 font-medium mb-2">ChatKit Error</p>
+                  <p className="text-gray-500 text-sm mb-4">{loadError}</p>
+                  <button
+                    onClick={() => window.location.reload()}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  >
+                    Refresh Page
+                  </button>
+                </div>
+              </div>
+            ) : isLoaded ? (
               <openai-chatkit
                 ref={chatkitRef as any}
                 id="analytics-chatkit"
@@ -393,6 +423,7 @@ export default function AnalyticsPage() {
                 <div className="text-center">
                   <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600 mx-auto mb-3"></div>
                   <p className="text-gray-500">Loading ChatKit...</p>
+                  {scriptLoaded && <p className="text-gray-400 text-xs mt-2">Initializing component...</p>}
                 </div>
               </div>
             )}
