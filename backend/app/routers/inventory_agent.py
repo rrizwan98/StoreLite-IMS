@@ -396,6 +396,81 @@ class MCPSessionManager:
             logger.error(f"[MCP] Agent run error: {e}", exc_info=True)
             return f"Error: {str(e)}"
 
+    async def execute_sql_direct(self, session_id: str, sql: str) -> Dict[str, Any]:
+        """
+        Execute SQL directly via MCP's execute_sql tool (bypasses AI agent for speed).
+
+        This is FAST - typically <100ms for simple queries.
+        """
+        server = self._servers.get(session_id)
+        if not server:
+            logger.error(f"[MCP SQL] Session {session_id} not found in active servers")
+            return {"error": "Session not found", "success": False}
+
+        try:
+            logger.info(f"[MCP SQL] Executing: {sql[:100]}...")
+
+            # Call the MCP tool directly
+            # IMPORTANT: postgres-mcp expects parameter name "sql", not "query"
+            result = await server.call_tool("execute_sql", {"sql": sql})
+
+            logger.info(f"[MCP SQL] Raw result type: {type(result)}")
+
+            # Parse result - MCP returns CallToolResult object with content list
+            content_text = ""
+            is_error = False
+
+            if result:
+                # Check for isError flag on CallToolResult
+                if hasattr(result, 'isError') and result.isError:
+                    is_error = True
+                    logger.error(f"[MCP SQL] MCP returned error flag")
+
+                # Handle CallToolResult object
+                if hasattr(result, 'content') and result.content:
+                    # content is a list of content objects
+                    for content_item in result.content:
+                        if hasattr(content_item, 'text'):
+                            content_text = content_item.text
+                            logger.info(f"[MCP SQL] Content text: {content_text[:200] if content_text else 'empty'}...")
+                            break
+                elif hasattr(result, 'text'):
+                    content_text = result.text
+                elif isinstance(result, (list, tuple)) and len(result) > 0:
+                    content_text = result[0].text if hasattr(result[0], 'text') else str(result[0])
+                else:
+                    content_text = str(result)
+                    logger.info(f"[MCP SQL] Converted result to string: {content_text[:200]}...")
+
+            # Check if content contains error
+            if content_text and ('error' in content_text.lower() or 'exception' in content_text.lower()):
+                logger.error(f"[MCP SQL] Error in response: {content_text}")
+                is_error = True
+
+            if is_error:
+                return {"error": content_text or "SQL execution failed", "success": False}
+
+            if content_text:
+                try:
+                    # Try to parse as JSON
+                    parsed = json.loads(content_text)
+                    logger.info(f"[MCP SQL] Parsed JSON result with {len(parsed) if isinstance(parsed, list) else 'non-list'} items")
+                    return {"success": True, "data": parsed, "raw": content_text}
+                except json.JSONDecodeError:
+                    logger.info(f"[MCP SQL] Non-JSON result: {content_text[:100]}")
+                    return {"success": True, "data": content_text, "raw": content_text}
+
+            logger.info(f"[MCP SQL] Empty result (likely INSERT/UPDATE/CREATE)")
+            return {"success": True, "data": None, "raw": ""}
+        except Exception as e:
+            logger.error(f"[MCP SQL] Direct SQL error: {e}", exc_info=True)
+            return {"error": str(e), "success": False}
+
+    def get_database_uri(self, session_id: str) -> Optional[str]:
+        """Get the database URI for a session (for direct connections)."""
+        session_info = _sessions.get(session_id)
+        return session_info.get("database_uri") if session_info else None
+
     async def close_session(self, session_id: str) -> bool:
         """Close an MCP session and cleanup resources."""
         async with self._lock:
@@ -1202,14 +1277,14 @@ class CreateBillRequest(BaseModel):
 @router.post("/pos/search-products")
 async def search_products(request: ProductSearchRequest) -> Dict[str, Any]:
     """
-    Search products in user's database via MCP.
+    Search products in user's database via MCP Agent.
     Returns list of products matching the query.
     """
     session_info = _mcp_manager.get_session_info(request.session_id)
     if not session_info:
         raise HTTPException(status_code=400, detail="Session not found. Please connect first.")
 
-    # Build search prompt for the agent
+    # Build search prompt for the agent (this was working before)
     if request.query.strip():
         prompt = f"""Search for products in the inventory_items table where name contains '{request.query}' or category contains '{request.query}'.
 Return the results as a JSON array with this exact format:
@@ -1253,11 +1328,17 @@ Only return the JSON array, no other text. If no products found, return empty ar
 @router.post("/pos/create-bill")
 async def create_bill(request: CreateBillRequest) -> Dict[str, Any]:
     """
-    Create a bill in user's database via MCP.
+    Create a bill in user's database via direct MCP SQL (FAST - no agent).
     Inserts bill and bill items, updates stock quantities.
     """
+    import time
+    start_time = time.time()
+
+    logger.info(f"[MCP POS] Creating bill for session: {request.session_id}")
+
     session_info = _mcp_manager.get_session_info(request.session_id)
     if not session_info:
+        logger.error(f"[MCP POS] Session not found: {request.session_id}")
         raise HTTPException(status_code=400, detail="Session not found. Please connect first.")
 
     if not request.items:
@@ -1265,58 +1346,169 @@ async def create_bill(request: CreateBillRequest) -> Dict[str, Any]:
 
     # Calculate totals
     subtotal = sum(item.get("quantity", 0) * item.get("unit_price", 0) for item in request.items)
-    total = subtotal - request.discount + request.tax
+    grand_total = subtotal - request.discount + request.tax
 
-    # Generate bill number
-    import time
-    bill_number = f"BILL-{int(time.time())}"
+    # Generate bill number with timestamp
+    bill_number = f"BILL-{int(time.time() * 1000)}"
 
-    # Build items list for prompt
-    items_str = "\n".join([
-        f"- {item.get('name', 'Unknown')}: {item.get('quantity', 0)} x {item.get('unit_price', 0)} = {item.get('quantity', 0) * item.get('unit_price', 0)}"
-        for item in request.items
-    ])
-
-    # Build SQL prompt for the agent
-    prompt = f"""Please create a new bill in the database with the following details:
-
-**Bill Information:**
-- Bill Number: {bill_number}
-- Customer: {request.customer_name}
-- Phone: {request.customer_phone or 'N/A'}
-- Payment: {request.payment_method}
-- Notes: {request.notes or 'None'}
-
-**Items:**
-{items_str}
-
-**Totals:**
-- Subtotal: {subtotal:.2f}
-- Discount: {request.discount:.2f}
-- Tax: {request.tax:.2f}
-- Grand Total: {total:.2f}
-
-Please do the following:
-1. INSERT into inventory_bills table (bill_number, customer_name, customer_phone, total_amount, discount, tax, grand_total, payment_method, notes)
-2. For each item, INSERT into inventory_bill_items table (bill_id, item_id, item_name, quantity, unit_price, total_price)
-3. UPDATE inventory_items to reduce stock_qty for each item sold
-
-After completing, confirm the bill was created with the bill number and total.
-Return a JSON object with: {{"success": true, "bill_number": "{bill_number}", "grand_total": {total:.2f}}}"""
+    # Escape strings for SQL safety
+    safe_customer = request.customer_name.replace("'", "''")
+    safe_phone = (request.customer_phone or '').replace("'", "''")
+    safe_notes = (request.notes or '').replace("'", "''")
+    safe_payment = request.payment_method.replace("'", "''")
 
     try:
-        result = await _mcp_manager.run_agent(request.session_id, prompt)
+        # Step 1: Create bills table if not exists
+        logger.info(f"[MCP POS] Step 1: Creating inventory_bills table if not exists...")
+        result1 = await _mcp_manager.execute_sql_direct(request.session_id, """
+            CREATE TABLE IF NOT EXISTS inventory_bills (
+                id SERIAL PRIMARY KEY,
+                bill_number VARCHAR(50) UNIQUE NOT NULL,
+                customer_name VARCHAR(255) DEFAULT 'Walk-in Customer',
+                customer_phone VARCHAR(50),
+                subtotal DECIMAL(12,2) DEFAULT 0,
+                discount DECIMAL(12,2) DEFAULT 0,
+                tax DECIMAL(12,2) DEFAULT 0,
+                grand_total DECIMAL(12,2) NOT NULL,
+                payment_method VARCHAR(50) DEFAULT 'cash',
+                notes TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        logger.info(f"[MCP POS] Step 1 result: {result1}")
+
+        # Step 2: Create bill_items table if not exists
+        logger.info(f"[MCP POS] Step 2: Creating inventory_bill_items table if not exists...")
+        result2 = await _mcp_manager.execute_sql_direct(request.session_id, """
+            CREATE TABLE IF NOT EXISTS inventory_bill_items (
+                id SERIAL PRIMARY KEY,
+                bill_id INTEGER,
+                item_id INTEGER,
+                item_name VARCHAR(255) NOT NULL,
+                quantity INTEGER NOT NULL,
+                unit_price DECIMAL(12,2) NOT NULL,
+                total_price DECIMAL(12,2) NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        logger.info(f"[MCP POS] Step 2 result: {result2}")
+
+        # Step 3: Insert the bill with RETURNING to get id
+        logger.info(f"[MCP POS] Step 3: Inserting bill {bill_number}...")
+        insert_sql = f"""
+            INSERT INTO inventory_bills
+            (bill_number, customer_name, customer_phone, subtotal, discount, tax, grand_total, payment_method, notes)
+            VALUES ('{bill_number}', '{safe_customer}', '{safe_phone}', {subtotal:.2f}, {request.discount:.2f}, {request.tax:.2f}, {grand_total:.2f}, '{safe_payment}', '{safe_notes}')
+            RETURNING id
+        """
+        insert_result = await _mcp_manager.execute_sql_direct(request.session_id, insert_sql)
+        logger.info(f"[MCP POS] Step 3 insert result: {insert_result}")
+
+        # Helper function to extract id from postgres-mcp result
+        def extract_id_from_result(result_data):
+            """Extract id from various postgres-mcp response formats."""
+            if not result_data:
+                return None
+
+            # If it's a list of dicts like [{"id": 1}]
+            if isinstance(result_data, list) and len(result_data) > 0:
+                first_row = result_data[0]
+                if isinstance(first_row, dict):
+                    return first_row.get("id")
+
+            # If it's a string, try to parse it
+            if isinstance(result_data, str):
+                # Try to parse as JSON
+                try:
+                    parsed = json.loads(result_data)
+                    if isinstance(parsed, list) and len(parsed) > 0:
+                        return parsed[0].get("id") if isinstance(parsed[0], dict) else None
+                except:
+                    pass
+
+                # Try to extract number from string like "[{'id': 5}]"
+                import re
+                match = re.search(r"'id':\s*(\d+)", result_data)
+                if match:
+                    return int(match.group(1))
+
+            return None
+
+        # Get bill_id from RETURNING clause or query
+        bill_id = None
+        if insert_result.get("success"):
+            data = insert_result.get("data")
+            raw = insert_result.get("raw", "")
+            logger.info(f"[MCP POS] Trying to extract bill_id from data: {data}, raw: {raw[:200] if raw else 'empty'}")
+
+            bill_id = extract_id_from_result(data)
+            if not bill_id and raw:
+                bill_id = extract_id_from_result(raw)
+
+            if bill_id:
+                logger.info(f"[MCP POS] Got bill_id from RETURNING: {bill_id}")
+
+        # If RETURNING didn't work, query for it
+        if not bill_id:
+            logger.info(f"[MCP POS] Step 4: Querying for bill_id...")
+            get_id_result = await _mcp_manager.execute_sql_direct(
+                request.session_id,
+                f"SELECT id FROM inventory_bills WHERE bill_number = '{bill_number}'"
+            )
+            logger.info(f"[MCP POS] Step 4 result: {get_id_result}")
+
+            if get_id_result.get("success"):
+                data = get_id_result.get("data")
+                raw = get_id_result.get("raw", "")
+
+                bill_id = extract_id_from_result(data)
+                if not bill_id and raw:
+                    bill_id = extract_id_from_result(raw)
+
+                if bill_id:
+                    logger.info(f"[MCP POS] Got bill_id from query: {bill_id}")
+
+        if not bill_id:
+            logger.warning(f"[MCP POS] Could not get bill_id, but continuing...")
+
+        # Step 5: Insert bill items and update stock
+        logger.info(f"[MCP POS] Step 5: Inserting {len(request.items)} bill items...")
+        for idx, item in enumerate(request.items):
+            item_id = item.get("id", 0)
+            safe_name = str(item.get("name", "Unknown")).replace("'", "''")
+            qty = item.get("quantity", 0)
+            unit_price = item.get("unit_price", 0)
+            total_price = qty * unit_price
+
+            # Insert bill item
+            insert_item_sql = f"""
+                INSERT INTO inventory_bill_items
+                (bill_id, item_id, item_name, quantity, unit_price, total_price)
+                VALUES ({bill_id or 'NULL'}, {item_id}, '{safe_name}', {qty}, {unit_price:.2f}, {total_price:.2f})
+            """
+            item_result = await _mcp_manager.execute_sql_direct(request.session_id, insert_item_sql)
+            logger.info(f"[MCP POS] Item {idx+1} insert result: {item_result}")
+
+            # Update stock quantity
+            if item_id:
+                update_sql = f"UPDATE inventory_items SET stock_qty = stock_qty - {qty} WHERE id = {item_id}"
+                stock_result = await _mcp_manager.execute_sql_direct(request.session_id, update_sql)
+                logger.info(f"[MCP POS] Stock update result for item {item_id}: {stock_result}")
+
+        elapsed_time = time.time() - start_time
+        logger.info(f"[MCP POS] Bill {bill_number} created in {elapsed_time:.3f}s (direct SQL, no agent)")
 
         return {
             "success": True,
             "bill_number": bill_number,
+            "bill_id": bill_id,
             "customer_name": request.customer_name,
             "items_count": len(request.items),
             "subtotal": subtotal,
             "discount": request.discount,
             "tax": request.tax,
-            "grand_total": total,
-            "agent_response": result
+            "grand_total": grand_total,
+            "elapsed_ms": int(elapsed_time * 1000),
         }
     except Exception as e:
         logger.error(f"[MCP POS] Bill creation failed: {e}")

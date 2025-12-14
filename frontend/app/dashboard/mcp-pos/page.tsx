@@ -82,7 +82,7 @@ export default function MCPPOSPage() {
     }
   }, [isLoading, isOwnDatabase, mcpConnected, mcpSessionId, router]);
 
-  // Search products
+  // Search products - Uses MCP to search user's own database
   const searchProducts = useCallback(async (query: string = '', isInitialLoad: boolean = false) => {
     if (!mcpSessionId) return;
 
@@ -218,7 +218,7 @@ export default function MCPPOSPage() {
     setNotes('');
   };
 
-  // Generate bill
+  // Generate bill - Uses fast MCP direct SQL endpoint (saves to user's database, no agent)
   const generateBill = async () => {
     if (cart.length === 0) {
       setError('Cart is empty');
@@ -234,6 +234,7 @@ export default function MCPPOSPage() {
     setError('');
 
     try {
+      // Use the fast MCP endpoint (direct SQL to user's database, no agent)
       const response = await fetch(`${API_BASE_URL}/inventory-agent/pos/create-bill`, {
         method: 'POST',
         headers: {
@@ -260,18 +261,18 @@ export default function MCPPOSPage() {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.detail || 'Bill generation failed');
+        throw new Error(data.detail || data.message || 'Bill generation failed');
       }
 
       // Set generated bill for display
       setGeneratedBill({
         bill_number: data.bill_number,
-        customer_name: customerName,
+        customer_name: data.customer_name || customerName,
         items: [...cart],
         subtotal,
         discount,
         tax,
-        grand_total: grandTotal,
+        grand_total: data.grand_total || grandTotal,
         created_at: new Date().toISOString(),
       });
 
