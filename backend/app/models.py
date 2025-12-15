@@ -4,8 +4,9 @@ SQLAlchemy ORM models for IMS FastAPI backend
 
 from datetime import datetime
 from decimal import Decimal
-from sqlalchemy import Column, Integer, String, Numeric, Boolean, DateTime, ForeignKey, Text, CheckConstraint, JSON, Enum
+from sqlalchemy import Column, Integer, String, Numeric, Boolean, DateTime, ForeignKey, Text, CheckConstraint, JSON, Enum, ARRAY
 from sqlalchemy.orm import relationship
+from sqlalchemy.dialects.postgresql import JSONB
 import enum
 from app.database import Base
 
@@ -16,8 +17,15 @@ from app.database import Base
 
 class ConnectionType(enum.Enum):
     """User's database connection type choice"""
-    OWN_DATABASE = "own_database"
-    OUR_DATABASE = "our_database"
+    OWN_DATABASE = "own_database"           # Full IMS with table creation
+    OUR_DATABASE = "our_database"           # Platform database
+    SCHEMA_QUERY_ONLY = "schema_query_only" # Agent + Analytics only (no table creation)
+
+
+class ConnectionMode(enum.Enum):
+    """Connection mode for own_database users"""
+    FULL_IMS = "full_ims"                   # Creates IMS tables (inventory_items, bills, etc.)
+    SCHEMA_QUERY = "schema_query"           # Read-only access to existing schema
 
 
 class MCPStatus(enum.Enum):
@@ -60,7 +68,7 @@ class UserConnection(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False, index=True)
-    connection_type = Column(String(50), nullable=False)  # 'own_database' or 'our_database'
+    connection_type = Column(String(50), nullable=False)  # 'own_database', 'our_database', 'schema_query_only'
     database_uri = Column(Text, nullable=True)  # User's DATABASE_URI (encrypted at rest ideally)
     mcp_server_status = Column(String(50), default="disconnected")  # 'connected', 'disconnected', 'connecting', 'error'
     mcp_session_id = Column(String(255), nullable=True)  # MCP session reference
@@ -68,13 +76,19 @@ class UserConnection(Base):
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
+    # Schema Query Mode fields (Phase 9)
+    connection_mode = Column(String(50), default="full_ims")  # 'full_ims' or 'schema_query'
+    schema_metadata = Column(JSONB, nullable=True)  # Cached schema: tables, columns, relationships
+    schema_last_updated = Column(DateTime, nullable=True)  # When schema was last discovered
+    allowed_schemas = Column(JSONB, default=["public"])  # PostgreSQL schemas to query (JSONB array)
+
     __table_args__ = ({"extend_existing": True},)
 
     # Relationships
     user = relationship("User", back_populates="connection")
 
     def __repr__(self):
-        return f"<UserConnection(user_id={self.user_id}, type={self.connection_type}, status={self.mcp_server_status})>"
+        return f"<UserConnection(user_id={self.user_id}, type={self.connection_type}, mode={self.connection_mode}, status={self.mcp_server_status})>"
 
 
 class Item(Base):

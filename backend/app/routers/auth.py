@@ -61,8 +61,8 @@ class RefreshRequest(BaseModel):
 
 class ConnectionChoiceRequest(BaseModel):
     """User's service choice"""
-    connection_type: str  # 'own_database' or 'our_database'
-    database_uri: Optional[str] = None  # Required if connection_type is 'own_database'
+    connection_type: str  # 'own_database', 'our_database', or 'schema_query_only'
+    database_uri: Optional[str] = None  # Required if connection_type is 'own_database' or 'schema_query_only'
 
 
 class UserWithConnectionResponse(BaseModel):
@@ -258,15 +258,51 @@ async def choose_connection_type(
     """
     Set user's database connection preference (first-time setup).
 
-    - 'own_database': User connects their own PostgreSQL
+    - 'own_database': User connects their own PostgreSQL (Full IMS with Admin/POS)
     - 'our_database': User uses the shared IMS database
+    - 'schema_query_only': User connects for AI Agent + Analytics only (read-only)
     """
-    # Validate connection type
-    if request.connection_type not in ['own_database', 'our_database']:
-        raise HTTPException(status_code=400, detail="Invalid connection type")
+    from app.services.schema_discovery import test_connection, discover_schema, TooManyTablesError, SchemaDiscoveryError
 
-    if request.connection_type == 'own_database' and not request.database_uri:
-        raise HTTPException(status_code=400, detail="database_uri required for own_database")
+    # Validate connection type
+    valid_types = ['own_database', 'our_database', 'schema_query_only']
+    if request.connection_type not in valid_types:
+        raise HTTPException(status_code=400, detail=f"Invalid connection type. Must be one of: {valid_types}")
+
+    # Require database_uri for own_database and schema_query_only
+    if request.connection_type in ['own_database', 'schema_query_only'] and not request.database_uri:
+        raise HTTPException(status_code=400, detail="database_uri required for this connection type")
+
+    # Determine connection_mode based on connection_type
+    connection_mode = 'schema_query' if request.connection_type == 'schema_query_only' else 'full_ims'
+
+    # For schema_query_only, test the PostgreSQL connection first
+    schema_metadata = None
+    if request.connection_type == 'schema_query_only':
+        logger.info(f"[Auth] Testing PostgreSQL connection for user {user.email}")
+
+        # Test connection
+        test_result = await test_connection(request.database_uri)
+        if test_result["status"] != "success":
+            raise HTTPException(
+                status_code=400,
+                detail=f"Database connection failed: {test_result.get('message', 'Unknown error')}"
+            )
+
+        logger.info(f"[Auth] Connection successful, discovering schema...")
+
+        # Discover schema
+        try:
+            schema_metadata = await discover_schema(
+                request.database_uri,
+                allowed_schemas=["public"]
+            )
+            logger.info(f"[Auth] Schema discovered: {schema_metadata.get('total_tables', 0)} tables found")
+        except TooManyTablesError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        except SchemaDiscoveryError as e:
+            logger.warning(f"[Auth] Schema discovery failed: {e}, continuing without schema")
+            # Continue without schema - can be discovered later
 
     # Check if user already has a connection
     result = await db.execute(
@@ -277,28 +313,44 @@ async def choose_connection_type(
     if existing:
         # Update existing
         existing.connection_type = request.connection_type
-        existing.database_uri = request.database_uri if request.connection_type == 'own_database' else None
-        existing.mcp_server_status = 'disconnected'
+        existing.database_uri = request.database_uri if request.connection_type in ['own_database', 'schema_query_only'] else None
+        existing.connection_mode = connection_mode
+        existing.mcp_server_status = 'connected' if request.connection_type == 'schema_query_only' else 'disconnected'
         existing.updated_at = datetime.utcnow()
+        existing.allowed_schemas = ["public"]
+        # Set schema metadata for schema_query_only
+        if request.connection_type == 'schema_query_only':
+            existing.schema_metadata = schema_metadata
+            existing.schema_last_updated = datetime.utcnow() if schema_metadata else None
+            existing.last_connected_at = datetime.utcnow()
     else:
         # Create new
         connection = UserConnection(
             user_id=user.id,
             connection_type=request.connection_type,
-            database_uri=request.database_uri if request.connection_type == 'own_database' else None,
-            mcp_server_status='disconnected'
+            database_uri=request.database_uri if request.connection_type in ['own_database', 'schema_query_only'] else None,
+            connection_mode=connection_mode,
+            mcp_server_status='connected' if request.connection_type == 'schema_query_only' else 'disconnected',
+            allowed_schemas=["public"],
+            schema_metadata=schema_metadata if request.connection_type == 'schema_query_only' else None,
+            schema_last_updated=datetime.utcnow() if schema_metadata else None,
+            last_connected_at=datetime.utcnow() if request.connection_type == 'schema_query_only' else None
         )
         db.add(connection)
 
     await db.commit()
 
-    logger.info(f"[Auth] User {user.email} chose connection type: {request.connection_type}")
+    logger.info(f"[Auth] User {user.email} chose connection type: {request.connection_type} (mode: {connection_mode})")
 
     return {
         "success": True,
         "message": f"Connection type set to {request.connection_type}",
         "connection_type": request.connection_type,
-        "needs_mcp_connect": request.connection_type == 'own_database'
+        "connection_mode": connection_mode,
+        "needs_mcp_connect": request.connection_type == 'own_database',
+        "needs_schema_discovery": False,  # Schema already discovered
+        "tables_found": schema_metadata.get("total_tables", 0) if schema_metadata else 0,
+        "connected": request.connection_type == 'schema_query_only'
     }
 
 
@@ -320,17 +372,31 @@ async def get_connection_status(
             "has_connection": False,
             "needs_setup": True,
             "connection_type": None,
-            "mcp_status": None
+            "mcp_status": None,
+            "schema_status": None
         }
+
+    # Determine schema status for schema_query_only connections
+    schema_status = None
+    if connection.connection_type == 'schema_query_only':
+        if connection.schema_metadata:
+            schema_status = 'ready'
+        elif connection.mcp_server_status == 'connected':
+            schema_status = 'pending'  # Connected but schema not discovered
+        else:
+            schema_status = 'not_connected'
 
     return {
         "has_connection": True,
         "needs_setup": False,
         "connection_type": connection.connection_type,
+        "connection_mode": connection.connection_mode,
         "mcp_status": connection.mcp_server_status,
         "mcp_session_id": connection.mcp_session_id,
         "last_connected_at": connection.last_connected_at,
-        "database_uri_set": connection.database_uri is not None
+        "database_uri_set": connection.database_uri is not None,
+        "schema_status": schema_status,
+        "tables_count": connection.schema_metadata.get("total_tables", 0) if connection.schema_metadata else 0
     }
 
 

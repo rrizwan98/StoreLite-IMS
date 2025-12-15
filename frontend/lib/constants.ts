@@ -73,6 +73,10 @@ export const ROUTES = {
   DB_CONNECT: '/dashboard/connect',
   MCP_ADMIN: '/dashboard/mcp-admin',
   MCP_POS: '/dashboard/mcp-pos',
+  // Schema Query Only routes (Agent + Analytics only)
+  SCHEMA_CONNECT: '/dashboard/schema-connect',
+  SCHEMA_AGENT: '/dashboard/schema-agent',
+  SCHEMA_ANALYTICS: '/dashboard/schema-analytics',
   // Legacy routes (kept for backwards compatibility)
   LEGACY_ADMIN: '/admin',
   LEGACY_POS: '/pos',

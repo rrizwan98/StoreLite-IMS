@@ -45,6 +45,7 @@ export default function DashboardPage() {
   // Derived state for connection type
   const isOwnDatabase = connectionStatus?.connection_type === 'own_database';
   const isOurDatabase = connectionStatus?.connection_type === 'our_database';
+  const isSchemaQueryOnly = connectionStatus?.connection_type === 'schema_query_only';
   const mcpConnected = connectionStatus?.mcp_status === 'connected';
   const mcpSessionId = connectionStatus?.mcp_session_id;
 
@@ -100,6 +101,36 @@ export default function DashboardPage() {
       await refreshConnectionStatus();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to set connection');
+    } finally {
+      setChoosing(false);
+    }
+  };
+
+  // Handle choosing schema query only (Agent + Analytics)
+  const handleChooseSchemaQueryOnly = async () => {
+    if (!databaseUri.trim()) {
+      setError('Please enter a database URI');
+      return;
+    }
+
+    setChoosing(true);
+    setError('');
+
+    try {
+      // Connect and discover schema (backend tests connection first)
+      const result = await chooseConnection({
+        connection_type: 'schema_query_only',
+        database_uri: databaseUri,
+      });
+
+      // Connection successful - redirect to AI Agent page
+      if (result.connected) {
+        router.push(ROUTES.SCHEMA_AGENT);
+      } else {
+        router.push(ROUTES.SCHEMA_CONNECT);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to connect to database');
     } finally {
       setChoosing(false);
     }
@@ -317,97 +348,139 @@ export default function DashboardPage() {
               </div>
             )}
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              {/* Option 1: Connect Own Database */}
-              <div className="bg-white rounded-2xl shadow-lg p-8 border-2 border-blue-200">
-                <div className="text-center mb-6">
-                  <div className="text-6xl mb-4">🔌</div>
-                  <h2 className="text-2xl font-bold text-gray-900">Connect Your Database</h2>
-                  <p className="text-gray-600 mt-2">
-                    Use your own PostgreSQL database with our AI tools
+            {/* Database URI Input (shared between options 1 and 3) */}
+            <div className="bg-white rounded-xl shadow-md p-6 mb-8">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                PostgreSQL Database URI (for options 1 or 3)
+              </label>
+              <input
+                type="text"
+                value={databaseUri}
+                onChange={(e) => setDatabaseUri(e.target.value)}
+                placeholder="postgresql://user:pass@host:5432/db"
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
+              />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {/* Option 1: Full IMS Connection */}
+              <div className="bg-white rounded-2xl shadow-lg p-6 border-2 border-blue-200 flex flex-col">
+                <div className="text-center mb-4">
+                  <div className="text-5xl mb-3">🔌</div>
+                  <h2 className="text-xl font-bold text-gray-900">Full IMS Connection</h2>
+                  <p className="text-gray-600 mt-2 text-sm">
+                    Complete system with Admin, POS & AI
                   </p>
                 </div>
 
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      PostgreSQL Database URI
-                    </label>
-                    <input
-                      type="text"
-                      value={databaseUri}
-                      onChange={(e) => setDatabaseUri(e.target.value)}
-                      placeholder="postgresql://user:pass@host:5432/db"
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
-                    />
-                  </div>
-
-                  <button
-                    onClick={handleChooseOwnDatabase}
-                    disabled={choosing || !databaseUri.trim()}
-                    className="w-full bg-blue-600 text-white py-3 px-4 rounded-lg hover:bg-blue-700 disabled:bg-blue-400 transition-colors font-semibold"
-                  >
-                    {choosing ? 'Setting up...' : 'Connect My Database'}
-                  </button>
+                <div className="flex-grow">
+                  <ul className="space-y-2 text-sm text-gray-600 mb-4">
+                    <li className="flex items-center">
+                      <span className="text-green-500 mr-2">✓</span>
+                      Inventory Admin Panel
+                    </li>
+                    <li className="flex items-center">
+                      <span className="text-green-500 mr-2">✓</span>
+                      Point of Sale (POS)
+                    </li>
+                    <li className="flex items-center">
+                      <span className="text-green-500 mr-2">✓</span>
+                      AI Analytics & Agent
+                    </li>
+                    <li className="flex items-center">
+                      <span className="text-yellow-500 mr-2">!</span>
+                      <span className="text-yellow-700">Creates IMS tables</span>
+                    </li>
+                  </ul>
                 </div>
 
-                <ul className="mt-6 space-y-2 text-sm text-gray-600">
-                  <li className="flex items-center">
-                    <span className="text-green-500 mr-2">✓</span>
-                    Your data stays in your database
-                  </li>
-                  <li className="flex items-center">
-                    <span className="text-green-500 mr-2">✓</span>
-                    AI Analytics on your data
-                  </li>
-                  <li className="flex items-center">
-                    <span className="text-green-500 mr-2">✓</span>
-                    MCP Protocol for secure access
-                  </li>
-                </ul>
+                <button
+                  onClick={handleChooseOwnDatabase}
+                  disabled={choosing || !databaseUri.trim()}
+                  className="w-full bg-blue-600 text-white py-3 px-4 rounded-lg hover:bg-blue-700 disabled:bg-blue-400 transition-colors font-semibold"
+                >
+                  {choosing ? 'Setting up...' : 'Connect Full IMS'}
+                </button>
               </div>
 
-              {/* Option 2: Use Our Database */}
-              <div className="bg-white rounded-2xl shadow-lg p-8 border-2 border-purple-200">
-                <div className="text-center mb-6">
-                  <div className="text-6xl mb-4">☁️</div>
-                  <h2 className="text-2xl font-bold text-gray-900">Use Our Platform</h2>
-                  <p className="text-gray-600 mt-2">
-                    Start immediately with our hosted database
+              {/* Option 2: Use Our Platform */}
+              <div className="bg-white rounded-2xl shadow-lg p-6 border-2 border-purple-200 flex flex-col">
+                <div className="text-center mb-4">
+                  <div className="text-5xl mb-3">☁️</div>
+                  <h2 className="text-xl font-bold text-gray-900">Use Our Platform</h2>
+                  <p className="text-gray-600 mt-2 text-sm">
+                    Hosted database, no setup needed
                   </p>
                 </div>
 
-                <div className="space-y-4">
-                  <div className="bg-purple-50 rounded-lg p-4 text-center">
-                    <p className="text-purple-800">
-                      No setup required! Start managing inventory right away with
-                      full Admin, POS, and Analytics features.
-                    </p>
-                  </div>
-
-                  <button
-                    onClick={handleChooseOurDatabase}
-                    disabled={choosing}
-                    className="w-full bg-purple-600 text-white py-3 px-4 rounded-lg hover:bg-purple-700 disabled:bg-purple-400 transition-colors font-semibold"
-                  >
-                    {choosing ? 'Setting up...' : 'Use Our Database'}
-                  </button>
+                <div className="flex-grow">
+                  <ul className="space-y-2 text-sm text-gray-600 mb-4">
+                    <li className="flex items-center">
+                      <span className="text-green-500 mr-2">✓</span>
+                      Inventory Admin Panel
+                    </li>
+                    <li className="flex items-center">
+                      <span className="text-green-500 mr-2">✓</span>
+                      Point of Sale (POS)
+                    </li>
+                    <li className="flex items-center">
+                      <span className="text-green-500 mr-2">✓</span>
+                      AI Analytics & Agent
+                    </li>
+                    <li className="flex items-center">
+                      <span className="text-green-500 mr-2">✓</span>
+                      No database required
+                    </li>
+                  </ul>
                 </div>
 
-                <ul className="mt-6 space-y-2 text-sm text-gray-600">
-                  <li className="flex items-center">
-                    <span className="text-green-500 mr-2">✓</span>
-                    No database setup needed
-                  </li>
-                  <li className="flex items-center">
-                    <span className="text-green-500 mr-2">✓</span>
-                    Full Admin & POS features
-                  </li>
-                  <li className="flex items-center">
-                    <span className="text-green-500 mr-2">✓</span>
-                    AI Analytics included
-                  </li>
-                </ul>
+                <button
+                  onClick={handleChooseOurDatabase}
+                  disabled={choosing}
+                  className="w-full bg-purple-600 text-white py-3 px-4 rounded-lg hover:bg-purple-700 disabled:bg-purple-400 transition-colors font-semibold"
+                >
+                  {choosing ? 'Setting up...' : 'Use Our Platform'}
+                </button>
+              </div>
+
+              {/* Option 3: Agent + Analytics Only */}
+              <div className="bg-white rounded-2xl shadow-lg p-6 border-2 border-emerald-200 flex flex-col">
+                <div className="text-center mb-4">
+                  <div className="text-5xl mb-3">🧠</div>
+                  <h2 className="text-xl font-bold text-gray-900">Agent + Analytics</h2>
+                  <p className="text-gray-600 mt-2 text-sm">
+                    Query your existing database with AI
+                  </p>
+                </div>
+
+                <div className="flex-grow">
+                  <ul className="space-y-2 text-sm text-gray-600 mb-4">
+                    <li className="flex items-center">
+                      <span className="text-green-500 mr-2">✓</span>
+                      AI-powered queries
+                    </li>
+                    <li className="flex items-center">
+                      <span className="text-green-500 mr-2">✓</span>
+                      Natural language analytics
+                    </li>
+                    <li className="flex items-center">
+                      <span className="text-green-500 mr-2">✓</span>
+                      <span className="text-emerald-700 font-medium">NO table modifications</span>
+                    </li>
+                    <li className="flex items-center">
+                      <span className="text-gray-400 mr-2">✗</span>
+                      <span className="text-gray-400">No Admin/POS</span>
+                    </li>
+                  </ul>
+                </div>
+
+                <button
+                  onClick={handleChooseSchemaQueryOnly}
+                  disabled={choosing || !databaseUri.trim()}
+                  className="w-full bg-emerald-600 text-white py-3 px-4 rounded-lg hover:bg-emerald-700 disabled:bg-emerald-400 transition-colors font-semibold"
+                >
+                  {choosing ? 'Setting up...' : 'Connect Agent Only'}
+                </button>
               </div>
             </div>
           </div>
@@ -500,6 +573,97 @@ export default function DashboardPage() {
                   </p>
                 </div>
               </Link>
+            </div>
+          </div>
+        ) : connectionStatus?.connection_type === 'schema_query_only' ? (
+          /* User with Schema Query Only (Agent + Analytics) */
+          <div>
+            <div className="flex justify-between items-center mb-8">
+              <div>
+                <h1 className="text-2xl font-bold text-gray-900">AI Analytics Dashboard</h1>
+                <p className="text-gray-600">Query your database with natural language</p>
+              </div>
+              <button
+                onClick={handleDisconnect}
+                className="text-red-600 hover:text-red-700 font-medium"
+              >
+                Disconnect
+              </button>
+            </div>
+
+            {/* Status Card */}
+            <div className="bg-white rounded-xl shadow-md p-6 mb-8">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-4">
+                  <div className={`w-4 h-4 rounded-full ${
+                    connectionStatus.schema_status === 'ready' ? 'bg-green-500' : 'bg-yellow-500'
+                  }`} />
+                  <div>
+                    <h3 className="font-semibold text-gray-900">Schema Status</h3>
+                    <p className="text-sm text-gray-600 capitalize">{connectionStatus.schema_status || 'Not Discovered'}</p>
+                  </div>
+                </div>
+                {connectionStatus.schema_status !== 'ready' && (
+                  <Link
+                    href={ROUTES.SCHEMA_CONNECT}
+                    className="bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700 transition-colors"
+                  >
+                    Discover Schema
+                  </Link>
+                )}
+              </div>
+            </div>
+
+            {/* Feature Cards - Only Agent + Analytics */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <Link href={connectionStatus.schema_status === 'ready' ? ROUTES.SCHEMA_AGENT : ROUTES.SCHEMA_CONNECT}>
+                <div className="bg-white rounded-xl shadow-md p-6 hover:shadow-lg transition-shadow cursor-pointer border-2 border-emerald-200">
+                  <div className="text-4xl mb-4">🧠</div>
+                  <h2 className="text-xl font-semibold mb-2">AI Agent</h2>
+                  <p className="text-gray-600">
+                    Ask questions about your data in natural language.
+                  </p>
+                  {connectionStatus.schema_status !== 'ready' && (
+                    <span className="text-xs text-yellow-600 mt-2 block">Discover schema first</span>
+                  )}
+                </div>
+              </Link>
+
+              <Link href={connectionStatus.schema_status === 'ready' ? ROUTES.SCHEMA_ANALYTICS : ROUTES.SCHEMA_CONNECT}>
+                <div className="bg-white rounded-xl shadow-md p-6 hover:shadow-lg transition-shadow cursor-pointer">
+                  <div className="text-4xl mb-4">📊</div>
+                  <h2 className="text-xl font-semibold mb-2">Analytics</h2>
+                  <p className="text-gray-600">
+                    Visualize your data with AI-powered charts.
+                  </p>
+                  {connectionStatus.schema_status !== 'ready' && (
+                    <span className="text-xs text-yellow-600 mt-2 block">Discover schema first</span>
+                  )}
+                </div>
+              </Link>
+
+              <Link href={ROUTES.SCHEMA_CONNECT}>
+                <div className="bg-white rounded-xl shadow-md p-6 hover:shadow-lg transition-shadow cursor-pointer">
+                  <div className="text-4xl mb-4">🔌</div>
+                  <h2 className="text-xl font-semibold mb-2">Connection</h2>
+                  <p className="text-gray-600">
+                    View schema, refresh metadata, or upgrade mode.
+                  </p>
+                </div>
+              </Link>
+            </div>
+
+            {/* Read-Only Notice */}
+            <div className="mt-8 bg-emerald-50 border border-emerald-200 rounded-lg p-4">
+              <div className="flex items-start space-x-3">
+                <span className="text-emerald-600 text-xl">🛡️</span>
+                <div>
+                  <h4 className="font-semibold text-emerald-800">Read-Only Mode</h4>
+                  <p className="text-sm text-emerald-700">
+                    Your data is safe. This connection only allows SELECT queries - no modifications to your database.
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
         ) : (
