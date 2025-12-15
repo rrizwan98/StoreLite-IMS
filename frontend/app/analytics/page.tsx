@@ -71,6 +71,7 @@ export default function AnalyticsPage() {
   const [isLoadingViz, setIsLoadingViz] = useState(false);
   const chatkitRef = useRef<HTMLElement | null>(null);
   const configuredRef = useRef(false);
+  const checkIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const [sessionId] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -248,29 +249,60 @@ export default function AnalyticsPage() {
     setTimeout(initChatKit, 300);
   }, [isLoaded, sessionId, fetchVisualization]);
 
-  // Handle script load with fast polling
-  const handleScriptLoad = () => {
-    console.log('[Analytics] ChatKit script loaded');
-    setScriptLoaded(true);
+  // Check if ChatKit is already registered (from cache or previous page)
+  useEffect(() => {
+    // Check immediately if already registered (cached/previous load)
+    if (customElements.get('openai-chatkit')) {
+      console.log('[Analytics] ChatKit element already registered on mount');
+      setIsLoaded(true);
+      setScriptLoaded(true);
+      return;
+    }
 
+    // Start polling for element registration
     let attempts = 0;
-    const maxAttempts = 100; // 5 seconds max (50ms * 100)
+    const maxAttempts = 200; // 10 seconds max (50ms * 200)
 
     const checkElement = () => {
       attempts++;
       if (customElements.get('openai-chatkit')) {
         console.log('[Analytics] ChatKit element registered after', attempts, 'attempts');
         setIsLoaded(true);
-      } else if (attempts < maxAttempts) {
-        setTimeout(checkElement, 50); // Fast polling every 50ms
-      } else {
+        if (checkIntervalRef.current) {
+          clearInterval(checkIntervalRef.current);
+          checkIntervalRef.current = null;
+        }
+      } else if (attempts >= maxAttempts) {
         console.error('[Analytics] ChatKit element not registered after max attempts');
         setLoadError('ChatKit failed to initialize. Please refresh the page.');
+        if (checkIntervalRef.current) {
+          clearInterval(checkIntervalRef.current);
+          checkIntervalRef.current = null;
+        }
       }
     };
 
-    // Start checking immediately
-    checkElement();
+    // Poll every 50ms
+    checkIntervalRef.current = setInterval(checkElement, 50);
+
+    return () => {
+      if (checkIntervalRef.current) {
+        clearInterval(checkIntervalRef.current);
+        checkIntervalRef.current = null;
+      }
+    };
+  }, []);
+
+  // Handle script load
+  const handleScriptLoad = () => {
+    console.log('[Analytics] ChatKit script loaded');
+    setScriptLoaded(true);
+
+    // Check immediately after script loads
+    if (customElements.get('openai-chatkit')) {
+      console.log('[Analytics] ChatKit element registered immediately after script load');
+      setIsLoaded(true);
+    }
   };
 
   // Format value for display
