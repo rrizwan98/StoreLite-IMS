@@ -15,7 +15,6 @@ from pydantic import BaseModel, EmailStr
 
 from app.database import get_db
 from app.models import User, UserConnection
-from app.routers.schema_agent import clear_agent_cache
 from app.services.auth_service import (
     UserCreate,
     UserLogin,
@@ -313,6 +312,8 @@ async def choose_connection_type(
 
     if existing:
         # Clear cached agent when connection changes (important for reconnection)
+        # Lazy import to avoid circular dependency
+        from app.routers.schema_agent import clear_agent_cache
         clear_agent_cache(user.id)
 
         # Update existing
@@ -455,6 +456,8 @@ async def disconnect_database(
         await db.commit()
 
     # Clear cached schema agent for this user (important for reconnection)
+    # Lazy import to avoid circular dependency
+    from app.routers.schema_agent import clear_agent_cache
     clear_agent_cache(user.id)
 
     logger.info(f"[Auth] User {user.email} disconnected their database")
