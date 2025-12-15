@@ -62,10 +62,12 @@ export default function DashboardAnalyticsPage() {
   const [metrics, setMetrics] = useState<MetricData[]>([]);
   const [charts, setCharts] = useState<ChartConfig[]>([]);
   const [isChatkitLoaded, setIsChatkitLoaded] = useState(false);
+  const [scriptLoaded, setScriptLoaded] = useState(false);
   const [lastQuery, setLastQuery] = useState<string>('');
   const [isLoadingViz, setIsLoadingViz] = useState(false);
   const chatkitRef = useRef<HTMLElement | null>(null);
   const configuredRef = useRef(false);
+  const checkIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Determine which API endpoint to use based on user's connection type
   const isOwnDatabase = connectionStatus?.connection_type === 'own_database';
@@ -298,16 +300,59 @@ export default function DashboardAnalyticsPage() {
     setTimeout(initChatKit, 300);
   }, [isChatkitLoaded, sessionId, mcpSessionId, user?.id, isOwnDatabase, mcpConnected, fetchVisualization]);
 
-  // Handle script load
-  const handleScriptLoad = () => {
+  // Check if ChatKit is already registered (from cache or previous page)
+  useEffect(() => {
+    // Check immediately if already registered (cached/previous load)
+    if (customElements.get('openai-chatkit')) {
+      console.log('[Dashboard Analytics] ChatKit element already registered on mount');
+      setIsChatkitLoaded(true);
+      setScriptLoaded(true);
+      return;
+    }
+
+    // Start polling for element registration
+    let attempts = 0;
+    const maxAttempts = 200; // 10 seconds max (50ms * 200)
+
     const checkElement = () => {
+      attempts++;
       if (customElements.get('openai-chatkit')) {
+        console.log('[Dashboard Analytics] ChatKit element registered after', attempts, 'attempts');
         setIsChatkitLoaded(true);
-      } else {
-        setTimeout(checkElement, 100);
+        if (checkIntervalRef.current) {
+          clearInterval(checkIntervalRef.current);
+          checkIntervalRef.current = null;
+        }
+      } else if (attempts >= maxAttempts) {
+        console.error('[Dashboard Analytics] ChatKit element not registered after max attempts');
+        if (checkIntervalRef.current) {
+          clearInterval(checkIntervalRef.current);
+          checkIntervalRef.current = null;
+        }
       }
     };
-    checkElement();
+
+    // Poll every 50ms
+    checkIntervalRef.current = setInterval(checkElement, 50);
+
+    return () => {
+      if (checkIntervalRef.current) {
+        clearInterval(checkIntervalRef.current);
+        checkIntervalRef.current = null;
+      }
+    };
+  }, []);
+
+  // Handle script load
+  const handleScriptLoad = () => {
+    console.log('[Dashboard Analytics] ChatKit script loaded');
+    setScriptLoaded(true);
+
+    // Check immediately after script loads
+    if (customElements.get('openai-chatkit')) {
+      console.log('[Dashboard Analytics] ChatKit element registered immediately after script load');
+      setIsChatkitLoaded(true);
+    }
   };
 
   // Format value for display

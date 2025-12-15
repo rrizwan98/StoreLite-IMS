@@ -40,6 +40,7 @@ export default function DashboardPage() {
   const [chatLoadError, setChatLoadError] = useState<string | null>(null);
   const chatkitRef = useRef<HTMLElement | null>(null);
   const configuredRef = useRef(false);
+  const checkIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Derived state for connection type
   const isOwnDatabase = connectionStatus?.connection_type === 'own_database';
@@ -199,29 +200,59 @@ export default function DashboardPage() {
     }
   }, [isChatOpen]);
 
-  // Handle ChatKit script load with fast polling
-  const handleScriptLoad = () => {
-    console.log('[Dashboard] ChatKit script loaded');
-    setScriptLoaded(true);
+  // Check if ChatKit is already registered (from cache or previous page)
+  useEffect(() => {
+    // Check immediately if already registered (cached/previous load)
+    if (customElements.get('openai-chatkit')) {
+      console.log('[Dashboard] ChatKit element already registered on mount');
+      setIsChatkitLoaded(true);
+      setScriptLoaded(true);
+      return;
+    }
 
+    // Start polling for element registration
     let attempts = 0;
-    const maxAttempts = 100; // 5 seconds max (50ms * 100)
+    const maxAttempts = 200; // 10 seconds max (50ms * 200)
 
     const checkElement = () => {
       attempts++;
       if (customElements.get('openai-chatkit')) {
         console.log('[Dashboard] ChatKit element registered after', attempts, 'attempts');
         setIsChatkitLoaded(true);
-      } else if (attempts < maxAttempts) {
-        setTimeout(checkElement, 50); // Fast polling every 50ms
-      } else {
+        if (checkIntervalRef.current) {
+          clearInterval(checkIntervalRef.current);
+          checkIntervalRef.current = null;
+        }
+      } else if (attempts >= maxAttempts) {
         console.error('[Dashboard] ChatKit element not registered after max attempts');
-        setChatLoadError('ChatKit failed to initialize. Please refresh the page.');
+        if (checkIntervalRef.current) {
+          clearInterval(checkIntervalRef.current);
+          checkIntervalRef.current = null;
+        }
       }
     };
 
-    // Start checking immediately
-    checkElement();
+    // Poll every 50ms
+    checkIntervalRef.current = setInterval(checkElement, 50);
+
+    return () => {
+      if (checkIntervalRef.current) {
+        clearInterval(checkIntervalRef.current);
+        checkIntervalRef.current = null;
+      }
+    };
+  }, []);
+
+  // Handle ChatKit script load
+  const handleScriptLoad = () => {
+    console.log('[Dashboard] ChatKit script loaded');
+    setScriptLoaded(true);
+
+    // Check immediately after script loads
+    if (customElements.get('openai-chatkit')) {
+      console.log('[Dashboard] ChatKit element registered immediately after script load');
+      setIsChatkitLoaded(true);
+    }
   };
 
   if (isLoading) {
@@ -533,18 +564,16 @@ export default function DashboardPage() {
         )}
       </main>
 
-      {/* ChatKit Script - Load early, outside conditional */}
-      {isChatAvailable && (
-        <Script
-          src="https://cdn.platform.openai.com/deployments/chatkit/chatkit.js"
-          strategy="afterInteractive"
-          onLoad={handleScriptLoad}
-          onError={(e) => {
-            console.error('[Dashboard] Failed to load ChatKit:', e);
-            setChatLoadError('Failed to load ChatKit script. Please check your network connection.');
-          }}
-        />
-      )}
+      {/* ChatKit Script - Load always for preloading, not conditionally */}
+      <Script
+        src="https://cdn.platform.openai.com/deployments/chatkit/chatkit.js"
+        strategy="afterInteractive"
+        onLoad={handleScriptLoad}
+        onError={(e) => {
+          console.error('[Dashboard] Failed to load ChatKit:', e);
+          setChatLoadError('Failed to load ChatKit script. Please check your network connection.');
+        }}
+      />
 
       {/* Floating Chat Button - Show for both our_database and own_database users */}
       {isChatAvailable && chatSessionId && (
