@@ -95,3 +95,35 @@ class AgentSession(Base):
 
     def __repr__(self):
         return f"<AgentSession(session_id={self.session_id}, messages={len(self.conversation_history)})>"
+
+
+class ConversationHistory(Base):
+    """
+    Persistent storage for ChatKit conversations.
+    Enables conversation recovery if user refreshes page (SC-005).
+    """
+    __tablename__ = "conversation_history"
+
+    id = Column(Integer, primary_key=True, index=True)
+    session_id = Column(String(100), nullable=False, index=True)
+    user_id = Column(String(255), nullable=True, index=True)
+
+    # Message content
+    user_message = Column(Text, nullable=False)  # What user typed
+    agent_response = Column(Text, nullable=False)  # What agent said
+
+    # Response metadata
+    response_type = Column(
+        String(50),
+        nullable=True,
+        default="text"  # "text", "item_created", "bill_created", "item_list"
+    )
+    structured_data = Column(Text, nullable=True)  # JSON for UI rendering
+
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+    __table_args__ = ({"extend_existing": True},)
+
+    def __repr__(self):
+        return f"<ConversationHistory(session={self.session_id}, type={self.response_type})>"

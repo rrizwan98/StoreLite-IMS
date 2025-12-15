@@ -74,10 +74,10 @@ async def get_agent() -> OpenAIAgent:
 
 
 @router.post(
-    "/chat",
+    "/chat-legacy",
     response_model=AgentMessageResponse,
     status_code=status.HTTP_200_OK,
-    summary="Chat with inventory/billing agent",
+    summary="Chat with inventory/billing agent (Legacy endpoint - use /chat for ChatKit)",
     description="Send a natural language message to the agent. Agent will discover available tools, understand intent, and execute operations.",
 )
 async def chat(
