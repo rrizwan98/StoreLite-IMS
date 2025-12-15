@@ -12,7 +12,11 @@ from app.mcp_server.exceptions import (
     MCPNotFoundError,
     MCPDatabaseError,
 )
-from app.mcp_server.utils import mcp_error_handler
+from app.mcp_server.utils import (
+    mcp_error_handler,
+    normalize_category,
+    get_valid_categories,
+)
 from app.mcp_server.schemas import ItemRead, ItemListResponse, PaginationInfo
 
 logger = logging.getLogger(__name__)
@@ -32,20 +36,21 @@ def validate_item_input(
     unit: str,
     unit_price: float,
     stock_qty: float
-):
-    """Validate item input fields."""
+) -> tuple:
+    """
+    Validate item input fields and return normalized values.
+
+    Returns:
+        Tuple of (name, normalized_category, unit, unit_price, stock_qty)
+    """
     if not name or len(name) > 255:
         raise MCPValidationError(
             "NAME_INVALID",
             "Name must be 1-255 characters"
         )
 
-    if category not in VALID_CATEGORIES:
-        raise MCPValidationError(
-            "CATEGORY_INVALID",
-            f"Category must be one of: {', '.join(sorted(VALID_CATEGORIES))}",
-            {"category": category}
-        )
+    # Normalize category (will raise helpful error if invalid)
+    normalized_category = normalize_category(category)
 
     if unit not in VALID_UNITS:
         raise MCPValidationError(
@@ -67,6 +72,8 @@ def validate_item_input(
             "Stock qty must be >= 0",
             {"stock_qty": stock_qty}
         )
+
+    return name, normalized_category, unit, unit_price, stock_qty
 
 
 def convert_item_to_response(item_orm) -> dict:
@@ -100,15 +107,17 @@ async def inventory_add_item(
     stock_qty: float,
     session: AsyncSession
 ) -> dict:
-    """Create new inventory item."""
-    # Validate input
-    validate_item_input(name, category, unit, unit_price, stock_qty)
+    """Create new inventory item with normalized category."""
+    # Validate input and get normalized values
+    name, normalized_category, unit, unit_price, stock_qty = validate_item_input(
+        name, category, unit, unit_price, stock_qty
+    )
 
     try:
-        # Create item
+        # Create item with normalized category
         item = Item(
             name=name,
-            category=category,
+            category=normalized_category,
             unit=unit,
             unit_price=Decimal(str(unit_price)),
             stock_qty=Decimal(str(stock_qty)),
@@ -119,7 +128,7 @@ async def inventory_add_item(
         await session.flush()  # Get the ID
         await session.commit()
 
-        logger.info(f"Created item: {item.id} ({item.name})")
+        logger.info(f"Created item: {item.id} ({item.name}) in category {normalized_category}")
         return convert_item_to_response(item)
 
     except Exception as e:
@@ -162,12 +171,9 @@ async def inventory_update_item(
             item.name = name
 
         if category is not None:
-            if category not in VALID_CATEGORIES:
-                raise MCPValidationError(
-                    "CATEGORY_INVALID",
-                    f"Category must be one of: {', '.join(sorted(VALID_CATEGORIES))}"
-                )
-            item.category = category
+            # Normalize category (will raise helpful error if invalid)
+            normalized_category = normalize_category(category)
+            item.category = normalized_category
 
         if unit is not None:
             if unit not in VALID_UNITS:
@@ -271,21 +277,23 @@ async def inventory_list_items(
         if limit > 100:
             limit = 100
 
-        # Build filter query
+        # Build filter query (case-insensitive for category)
         stmt = select(Item).where(Item.is_active == True)
 
         if name:
             stmt = stmt.where(Item.name.ilike(f"%{name}%"))
 
         if category:
-            stmt = stmt.where(Item.category == category)
+            # Case-insensitive category filter
+            stmt = stmt.where(Item.category.ilike(category))
 
-        # Get total count
+        # Get total count (apply same filters)
         count_stmt = select(Item).where(Item.is_active == True)
         if name:
             count_stmt = count_stmt.where(Item.name.ilike(f"%{name}%"))
         if category:
-            count_stmt = count_stmt.where(Item.category == category)
+            # Case-insensitive category filter
+            count_stmt = count_stmt.where(Item.category.ilike(category))
 
         count_result = await session.execute(count_stmt)
         total = len(count_result.scalars().all())

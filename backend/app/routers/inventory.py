@@ -64,7 +64,7 @@ async def list_items(
             query = query.where(Item.name.ilike(f"%{name}%"))
 
         if category:
-            query = query.where(Item.category == category)
+            query = query.where(Item.category.ilike(category))
 
         query = query.order_by(Item.name.asc())
         result = await db.execute(query)

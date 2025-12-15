@@ -139,9 +139,10 @@ async def root():
 
 # ============ Include Routers ============
 
-from app.routers import inventory, billing
+from app.routers import inventory, billing, agent
 
 app.include_router(inventory.router)
 app.include_router(billing.router)
+app.include_router(agent.router)
 
 logger.info("FastAPI application initialized")

@@ -7,8 +7,8 @@ from decimal import Decimal
 from typing import Optional, List
 from pydantic import BaseModel, field_validator, field_serializer, Field
 
-# Valid item categories
-VALID_CATEGORIES = ['Grocery', 'Beauty', 'Garments', 'Utilities']
+# Valid item categories (source of truth, proper case)
+VALID_CATEGORIES = {'Grocery', 'Garments', 'Beauty', 'Utilities', 'Other'}
 
 
 # ============ Item Schemas ============
@@ -24,9 +24,24 @@ class ItemCreate(BaseModel):
     @field_validator("category")
     @classmethod
     def validate_category(cls, v):
-        if v not in VALID_CATEGORIES:
-            raise ValueError(f"Category must be one of: {', '.join(VALID_CATEGORIES)}")
-        return v
+        """Normalize category to valid case-insensitive format"""
+        if not v or not isinstance(v, str):
+            raise ValueError("Category must be a non-empty string")
+
+        # Try exact match first
+        if v in VALID_CATEGORIES:
+            return v
+
+        # Try case-insensitive match
+        lower_input = v.lower()
+        for valid_cat in sorted(VALID_CATEGORIES):
+            if valid_cat.lower() == lower_input:
+                return valid_cat
+
+        # No match found
+        suggestions = ", ".join(sorted(VALID_CATEGORIES))
+        raise ValueError(f"Category '{v}' not found. Valid categories: {suggestions}")
+
 
     @field_validator("unit_price", "stock_qty", mode="before")
     @classmethod
@@ -64,9 +79,26 @@ class ItemUpdate(BaseModel):
     @field_validator("category")
     @classmethod
     def validate_category(cls, v):
-        if v is not None and v not in VALID_CATEGORIES:
-            raise ValueError(f"Category must be one of: {', '.join(VALID_CATEGORIES)}")
-        return v
+        """Normalize category to valid case-insensitive format (allows None for partial updates)"""
+        if v is None:
+            return None
+
+        if not isinstance(v, str):
+            raise ValueError("Category must be a string")
+
+        # Try exact match first
+        if v in VALID_CATEGORIES:
+            return v
+
+        # Try case-insensitive match
+        lower_input = v.lower()
+        for valid_cat in sorted(VALID_CATEGORIES):
+            if valid_cat.lower() == lower_input:
+                return valid_cat
+
+        # No match found
+        suggestions = ", ".join(sorted(VALID_CATEGORIES))
+        raise ValueError(f"Category '{v}' not found. Valid categories: {suggestions}")
 
     @field_validator("unit_price", "stock_qty", mode="before")
     @classmethod
@@ -192,3 +224,53 @@ class BillResponse(BaseModel):
     def serialize_total_amount(self, value: Decimal) -> str:
         """Serialize total_amount to string for JSON response"""
         return str(value)
+
+
+# ============ Agent Schemas (Phase 5) ============
+
+class AgentMessageRequest(BaseModel):
+    """Request schema for agent chat endpoint"""
+    session_id: str = Field(..., min_length=1, max_length=255, description="Conversation session ID")
+    message: str = Field(..., min_length=1, max_length=4096, description="User message in natural language")
+    metadata: Optional[dict] = Field(None, description="Optional metadata (user_context, store_name, etc.)")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "session_id": "user123-session",
+                "message": "Add 10kg sugar to inventory",
+                "metadata": {"user_id": "user123", "store_name": "Store A"}
+            }
+        }
+
+
+class ToolCall(BaseModel):
+    """Tool call made by agent"""
+    tool: str = Field(..., description="Tool/function name")
+    arguments: dict = Field(..., description="Tool arguments")
+    result: Optional[dict] = Field(None, description="Tool execution result")
+
+
+class AgentMessageResponse(BaseModel):
+    """Response schema for agent chat endpoint"""
+    session_id: str = Field(..., description="Conversation session ID")
+    response: str = Field(..., description="Agent's natural language response")
+    status: str = Field(..., description="Response status: success, pending_confirmation, or error")
+    tool_calls: List[ToolCall] = Field(default_factory=list, description="List of tool calls made by agent")
+
+    class Config:
+        from_attributes = True
+        json_schema_extra = {
+            "example": {
+                "session_id": "user123-session",
+                "response": "Added 10kg sugar to inventory. Current stock: 25kg",
+                "status": "success",
+                "tool_calls": [
+                    {
+                        "tool": "add_inventory_item",
+                        "arguments": {"item_name": "sugar", "quantity": 10, "unit": "kg"},
+                        "result": {"status": "success", "item_id": 42}
+                    }
+                ]
+            }
+        }

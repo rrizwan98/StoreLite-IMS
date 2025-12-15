@@ -118,3 +118,82 @@ def decimal_to_str(value):
     if isinstance(value, Decimal):
         return str(value)
     return value
+
+
+# ============================================================================
+# Case-Insensitive Category Handling
+# ============================================================================
+
+VALID_CATEGORIES = {"Grocery", "Garments", "Beauty", "Utilities", "Other"}
+
+
+def get_valid_categories():
+    """Return sorted list of valid categories (source of truth)."""
+    return sorted(VALID_CATEGORIES)
+
+
+def normalize_category(category: str) -> str:
+    """
+    Normalize user input category to valid category value.
+
+    Tries exact match first, then case-insensitive match.
+    Raises helpful error if no match found with valid categories listed.
+
+    Args:
+        category: User input category (any case)
+
+    Returns:
+        Normalized category name (proper case)
+
+    Raises:
+        MCPValidationError: If category not found
+    """
+    if not category or not isinstance(category, str):
+        raise MCPValidationError(
+            "CATEGORY_INVALID",
+            "Category must be a non-empty string"
+        )
+
+    # Try exact match first (fastest path)
+    if category in VALID_CATEGORIES:
+        return category
+
+    # Try case-insensitive match
+    lower_input = category.lower()
+    for valid_cat in sorted(VALID_CATEGORIES):
+        if valid_cat.lower() == lower_input:
+            return valid_cat
+
+    # No match - provide helpful suggestions
+    suggestions = ", ".join(sorted(VALID_CATEGORIES))
+    raise MCPValidationError(
+        "CATEGORY_INVALID",
+        f"Category '{category}' not found. Valid categories: {suggestions}",
+        {"category": category, "valid_categories": list(sorted(VALID_CATEGORIES))}
+    )
+
+
+def category_exists(category: str) -> bool:
+    """
+    Check if category exists (case-insensitive).
+
+    Args:
+        category: Category name to check (any case)
+
+    Returns:
+        True if category exists, False otherwise
+    """
+    if not category or not isinstance(category, str):
+        return False
+
+    # Check exact match
+    if category in VALID_CATEGORIES:
+        return True
+
+    # Check case-insensitive match
+    lower_input = category.lower()
+    for valid_cat in VALID_CATEGORIES:
+        if valid_cat.lower() == lower_input:
+            return True
+
+    return False

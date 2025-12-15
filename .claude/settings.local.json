@@ -3,7 +3,8 @@
     "allow": [
       "Bash(.specify/scripts/bash/check-prerequisites.sh:*)",
       "Bash(python -m pytest:*)",
-      "Bash(python:*)"
+      "Bash(python:*)",
+      "Bash(curl:*)"
     ],
     "deny": [],
     "ask": []
