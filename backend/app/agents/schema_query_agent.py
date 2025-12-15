@@ -1,9 +1,15 @@
 """
-Schema Query Agent (Phase 9)
+Schema Query Agent (Phase 9) - MCP Version
 
-AI agent for querying user's existing database schema.
-Uses natural language to generate and execute SQL queries.
+AI agent for querying user's existing database schema using postgres-mcp.
+Uses natural language to generate and execute SQL queries via MCP tools.
 Read-only operations only - no table modifications.
+
+Key Features:
+- Connects to postgres-mcp server for database operations
+- Uses MCP tools (execute_sql, list_tables, etc.) for all DB operations
+- Read-only mode enforced at MCP server level
+- Schema-aware prompts for intelligent querying
 """
 
 import logging
@@ -12,30 +18,109 @@ import asyncio
 from typing import Optional, Dict, Any, List
 from datetime import datetime
 
-from agents import Agent, Runner, function_tool
+from agents import Agent, Runner
+from agents.mcp import MCPServerStdio
 from agents.extensions.models.litellm_model import LitellmModel
+from agents.model_settings import ModelSettings
 
 from app.services.schema_discovery import format_schema_for_prompt
-from app.services.query_validator import validate_select_query
-from app.mcp_server.tools_schema_query import (
-    schema_list_tables,
-    schema_describe_table,
-    schema_execute_query,
-    schema_get_sample_data,
-    schema_get_table_stats,
-    format_query_results_for_agent
-)
 
 logger = logging.getLogger(__name__)
 
 
+# ============================================================================
+# Configuration
+# ============================================================================
+
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini/gemini-2.0-flash")
+
+
+def get_llm_model():
+    """
+    Get the LLM model instance.
+    Uses Gemini via LiteLLM if GEMINI_API_KEY is set, otherwise falls back to OpenAI.
+    """
+    if GEMINI_API_KEY:
+        logger.info(f"[Schema Agent] Using Gemini model: {GEMINI_MODEL}")
+        return LitellmModel(
+            model=GEMINI_MODEL,
+            api_key=GEMINI_API_KEY,
+        )
+    else:
+        # Fallback to OpenAI if no Gemini key
+        openai_model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+        logger.info(f"[Schema Agent] Using OpenAI model: {openai_model}")
+        return openai_model
+
+
+# ============================================================================
+# System Prompt Generator
+# ============================================================================
+
+def generate_schema_agent_prompt(schema_metadata: dict) -> str:
+    """
+    Generate system prompt with schema context for the agent.
+
+    Args:
+        schema_metadata: Discovered schema metadata dict
+
+    Returns:
+        System prompt string with database schema information
+    """
+    schema_description = format_schema_for_prompt(schema_metadata)
+
+    return f"""You are a database query assistant that helps users explore and analyze their data.
+
+## Your Capabilities
+1. Convert natural language questions to SQL queries
+2. Execute SELECT queries against the database using MCP tools
+3. Present results in a clear, readable format
+4. Suggest visualizations for data when appropriate
+
+## Database Schema
+{schema_description}
+
+## Rules (CRITICAL - You MUST follow these)
+1. **READ-ONLY**: You can ONLY execute SELECT queries. The database is in read-only mode.
+2. **USE MCP TOOLS**: Always use the available MCP tools to interact with the database.
+3. **EXPLAIN FIRST**: Before executing a query, briefly explain what you will do.
+4. **VALIDATE DATA**: Check if the query makes sense given the schema.
+5. **FORMAT RESULTS**: Present results clearly. For large results, summarize key findings.
+6. **SUGGEST CHARTS**: When appropriate, suggest chart types (bar, line, pie) for visualization.
+7. **HANDLE ERRORS**: If a query fails, explain why and suggest alternatives.
+8. **BE HELPFUL**: If the user's question is ambiguous, ask for clarification.
+
+## Available MCP Tools (from postgres-mcp)
+- `execute_sql`: Execute a SQL query and return results
+- `list_tables`: List all tables in the database
+- `describe_table`: Get table structure with columns and types
+- `get_table_stats`: Get statistics about a table
+- `list_schemas`: List all schemas in the database
+
+## Response Format
+When presenting query results:
+1. Briefly state what you found
+2. Show the key data points
+3. If applicable, suggest a visualization type
+4. Offer follow-up questions the user might want to ask
+
+Remember: You are analyzing the user's OWN data. Be helpful, accurate, and never attempt to modify anything."""
+
+
+# ============================================================================
+# Schema Query Agent with MCP
+# ============================================================================
+
 class SchemaQueryAgent:
     """
     AI Agent for natural language queries against user's existing database.
+    Uses postgres-mcp for all database operations.
 
     Key Features:
+    - MCP-based: Uses postgres-mcp server for database access
     - Schema-aware: Understands user's database structure
-    - Read-only: Only executes SELECT queries
+    - Read-only: Only executes SELECT queries (enforced by MCP)
     - Natural language: Converts questions to SQL
     - Visualization hints: Suggests charts for results
 
@@ -44,16 +129,16 @@ class SchemaQueryAgent:
             database_uri="postgresql://...",
             schema_metadata={"tables": [...], ...}
         )
+        await agent.initialize()
         result = await agent.query("Show me top 10 customers")
+        await agent.close()
     """
 
     def __init__(
         self,
         database_uri: str,
         schema_metadata: dict,
-        gemini_api_key: Optional[str] = None,
-        temperature: float = 0.3,  # Lower temperature for more deterministic SQL
-        max_tokens: int = 4096,
+        read_only: bool = True,
     ):
         """
         Initialize Schema Query Agent.
@@ -61,262 +146,132 @@ class SchemaQueryAgent:
         Args:
             database_uri: PostgreSQL connection string for user's database
             schema_metadata: Discovered schema metadata dict
-            gemini_api_key: Google Gemini API key
-            temperature: Model temperature (lower = more deterministic)
-            max_tokens: Max output tokens
+            read_only: Whether to use read-only mode (default: True)
         """
         self.database_uri = database_uri
         self.schema_metadata = schema_metadata
+        self.read_only = read_only
 
-        # Validate Gemini API Key
-        self.gemini_api_key = gemini_api_key or os.getenv("GEMINI_API_KEY")
-        if not self.gemini_api_key:
-            raise ValueError("GEMINI_API_KEY must be provided or set in environment")
-
-        # Model configuration
-        self.model_name = os.getenv("GEMINI_MODEL", "gemini/gemini-robotics-er-1.5-preview")
-        self.temperature = temperature
-        self.max_tokens = max_tokens
-
-        # Agent instance
+        # MCP server and agent instances
+        self._mcp_server: Optional[MCPServerStdio] = None
         self._agent: Optional[Agent] = None
-        self._model: Optional[LitellmModel] = None
 
         # Conversation history for context
         self._conversation_history: List[Dict[str, str]] = []
 
+        # Session info
+        self._session_id = f"schema-{datetime.now().strftime('%Y%m%d%H%M%S')}"
+        self._mcp_tools: List[str] = []
+        self._is_initialized = False
+
         logger.info(
-            f"Initializing Schema Query Agent "
-            f"(model={self.model_name}, temp={temperature})"
+            f"[Schema Agent] Created agent instance "
+            f"(read_only={read_only}, session={self._session_id})"
         )
 
-    def _generate_system_prompt(self) -> str:
+    async def initialize(self) -> Dict[str, Any]:
         """
-        Generate system prompt with schema context.
+        Initialize the MCP server and agent.
 
         Returns:
-            System prompt string with database schema information
+            Dict with initialization status and available tools
         """
-        schema_description = format_schema_for_prompt(self.schema_metadata)
+        if self._is_initialized:
+            return {
+                "success": True,
+                "message": "Already initialized",
+                "tools": self._mcp_tools
+            }
 
-        return f"""You are a database query assistant that helps users explore and analyze their data.
-
-## Your Capabilities
-1. Convert natural language questions to SQL queries
-2. Execute SELECT queries against the database
-3. Present results in a clear, readable format
-4. Suggest visualizations for data when appropriate
-
-## Database Schema
-{schema_description}
-
-## Rules (CRITICAL - You MUST follow these)
-1. **READ-ONLY**: You can ONLY execute SELECT queries. Never use INSERT, UPDATE, DELETE, DROP, CREATE, or ALTER.
-2. **EXPLAIN FIRST**: Before executing a query, briefly explain what SQL you will run.
-3. **VALIDATE DATA**: Check if the query makes sense given the schema.
-4. **FORMAT RESULTS**: Present results clearly. For large results, summarize key findings.
-5. **SUGGEST CHARTS**: When appropriate, suggest chart types (bar, line, pie) for visualization.
-6. **HANDLE ERRORS**: If a query fails, explain why and suggest alternatives.
-7. **BE HELPFUL**: If the user's question is ambiguous, ask for clarification.
-
-## Available Tools
-- `execute_query(query)`: Execute a SELECT query and return results
-- `list_tables(schema)`: List all tables in a schema
-- `describe_table(table_name)`: Get table structure
-- `get_sample_data(table_name, limit)`: Preview table data
-- `get_table_stats(table_name)`: Get table statistics
-
-## Response Format
-When presenting query results:
-1. Briefly state what you found
-2. Show the key data points
-3. If applicable, suggest a visualization
-4. Offer follow-up questions the user might want to ask
-
-Remember: You are analyzing the user's OWN data. Be helpful, accurate, and never modify anything."""
-
-    async def initialize(self) -> None:
-        """
-        Initialize the agent with model and tools.
-        """
-        # Initialize LiteLLM model
         try:
-            self._model = LitellmModel(
-                model=self.model_name,
-                api_key=self.gemini_api_key,
+            # Determine access mode
+            access_mode = "read-only" if self.read_only else "unrestricted"
+
+            logger.info(f"[Schema Agent] Starting postgres-mcp (mode={access_mode})...")
+
+            # Create MCP server using postgres-mcp via stdio
+            self._mcp_server = MCPServerStdio(
+                name=f"postgres-mcp-{self._session_id}",
+                params={
+                    "command": "postgres-mcp",
+                    "args": [self.database_uri, f"--access-mode={access_mode}"],
+                },
+                cache_tools_list=True,
+                client_session_timeout_seconds=60.0,  # 60 seconds for cloud DB connections
             )
-            logger.info(f"LiteLLMModel initialized: {self.model_name}")
+
+            # Start the MCP server (enters async context)
+            await self._mcp_server.__aenter__()
+
+            # Get available tools from the MCP server
+            tools = await self._mcp_server.list_tools()
+            self._mcp_tools = [t.name for t in tools]
+
+            logger.info(f"[Schema Agent] Connected with tools: {self._mcp_tools}")
+
+            # Generate system prompt with schema context
+            system_prompt = generate_schema_agent_prompt(self.schema_metadata)
+
+            # Create the agent with MCP server
+            self._agent = Agent(
+                name="Schema Query Agent",
+                instructions=system_prompt,
+                model=get_llm_model(),
+                mcp_servers=[self._mcp_server],
+                model_settings=ModelSettings(tool_choice="auto"),
+            )
+
+            self._is_initialized = True
+
+            logger.info(f"[Schema Agent] Initialized successfully")
+
+            return {
+                "success": True,
+                "message": f"Connected via postgres-mcp (mode={access_mode})",
+                "tools": self._mcp_tools,
+                "session_id": self._session_id,
+            }
+
+        except FileNotFoundError:
+            logger.error("[Schema Agent] postgres-mcp not found")
+            return {
+                "success": False,
+                "error": "postgres-mcp not installed",
+                "install_instructions": "Install postgres-mcp with: pipx install postgres-mcp",
+            }
         except Exception as e:
-            logger.error(f"Failed to initialize LiteLLMModel: {e}")
-            raise ValueError(f"Model initialization failed: {e}") from e
-
-        # Create function tools that capture database_uri
-        database_uri = self.database_uri
-
-        @function_tool
-        async def execute_query(query: str, max_rows: int = 100) -> str:
-            """
-            Execute a SQL SELECT query and return results.
-            Only SELECT queries are allowed - no INSERT, UPDATE, DELETE, etc.
-
-            Args:
-                query: SQL SELECT query to execute
-                max_rows: Maximum rows to return (default: 100, max: 10000)
-
-            Returns:
-                Query results as formatted string
-            """
-            # Validate query first
-            is_valid, error_msg = validate_select_query(query)
-            if not is_valid:
-                return f"Query rejected: {error_msg}"
-
-            result = await schema_execute_query(database_uri, query, max_rows)
-            return format_query_results_for_agent(result)
-
-        @function_tool
-        async def list_tables(schema_name: str = "public") -> str:
-            """
-            List all tables in the specified schema.
-
-            Args:
-                schema_name: PostgreSQL schema name (default: public)
-
-            Returns:
-                List of tables with basic info
-            """
-            result = await schema_list_tables(database_uri, schema_name)
-            if not result.get("success"):
-                return f"Error: {result.get('error')}"
-
-            tables = result.get("tables", [])
-            lines = [f"Tables in schema '{schema_name}':"]
-            for t in tables:
-                lines.append(f"  - {t['name']} ({t['type']}, {t['column_count']} columns)")
-            return "\n".join(lines)
-
-        @function_tool
-        async def describe_table(table_name: str, schema_name: str = "public") -> str:
-            """
-            Get detailed structure of a table including columns and their types.
-
-            Args:
-                table_name: Name of the table to describe
-                schema_name: Schema name (default: public)
-
-            Returns:
-                Table structure with columns, types, and constraints
-            """
-            result = await schema_describe_table(database_uri, table_name, schema_name)
-            if not result.get("success"):
-                return f"Error: {result.get('error')}"
-
-            lines = [
-                f"Table: {result['schema']}.{result['table_name']}",
-                f"Estimated rows: ~{result['estimated_rows']:,}",
-                "",
-                "Columns:"
-            ]
-            for col in result.get("columns", []):
-                pk = " [PK]" if col.get("primary_key") else ""
-                fk = f" -> {col['foreign_key']}" if col.get("foreign_key") else ""
-                nullable = " (nullable)" if col.get("nullable") else ""
-                lines.append(f"  - {col['name']}: {col['type']}{pk}{fk}{nullable}")
-
-            return "\n".join(lines)
-
-        @function_tool
-        async def get_sample_data(table_name: str, schema_name: str = "public", limit: int = 5) -> str:
-            """
-            Get sample rows from a table to preview its data.
-
-            Args:
-                table_name: Name of the table
-                schema_name: Schema name (default: public)
-                limit: Number of sample rows (default: 5, max: 20)
-
-            Returns:
-                Sample data rows
-            """
-            result = await schema_get_sample_data(
-                database_uri, table_name, schema_name, min(limit, 20)
-            )
-            if not result.get("success"):
-                return f"Error: {result.get('error')}"
-
-            data = result.get("data", [])
-            if not data:
-                return f"Table '{table_name}' is empty."
-
-            lines = [f"Sample data from {table_name} ({len(data)} rows):"]
-            for i, row in enumerate(data, 1):
-                row_str = ", ".join(f"{k}={v}" for k, v in list(row.items())[:5])
-                if len(row) > 5:
-                    row_str += ", ..."
-                lines.append(f"  {i}. {row_str}")
-
-            return "\n".join(lines)
-
-        @function_tool
-        async def get_table_stats(table_name: str, schema_name: str = "public") -> str:
-            """
-            Get statistics for a table (row count, size, indexes).
-
-            Args:
-                table_name: Name of the table
-                schema_name: Schema name (default: public)
-
-            Returns:
-                Table statistics
-            """
-            result = await schema_get_table_stats(database_uri, table_name, schema_name)
-            if not result.get("success"):
-                return f"Error: {result.get('error')}"
-
-            return (
-                f"Statistics for {table_name}:\n"
-                f"  - Estimated rows: ~{result.get('estimated_rows', 0):,}\n"
-                f"  - Table size: {result.get('size', 'unknown')}\n"
-                f"  - Columns: {result.get('column_count', 0)}\n"
-                f"  - Indexes: {result.get('index_count', 0)}"
-            )
-
-        # Create the agent
-        self._agent = Agent(
-            name="Schema Query Agent",
-            instructions=self._generate_system_prompt(),
-            model=self._model,
-            tools=[
-                execute_query,
-                list_tables,
-                describe_table,
-                get_sample_data,
-                get_table_stats
-            ],
-        )
-
-        logger.info("Schema Query Agent initialized with 5 tools")
+            logger.error(f"[Schema Agent] Failed to initialize: {e}", exc_info=True)
+            return {
+                "success": False,
+                "error": str(e),
+            }
 
     async def query(
         self,
         natural_query: str,
-        include_sql: bool = True
     ) -> Dict[str, Any]:
         """
-        Process a natural language query.
+        Process a natural language query using the MCP-connected agent.
 
         Args:
             natural_query: User's question in natural language
-            include_sql: Whether to include generated SQL in response
 
         Returns:
-            dict with response, data, and optional visualization hint
+            dict with response, and optional visualization hint
         """
-        if not self._agent:
-            await self.initialize()
+        if not self._is_initialized:
+            init_result = await self.initialize()
+            if not init_result.get("success"):
+                return {
+                    "success": False,
+                    "error": init_result.get("error", "Failed to initialize"),
+                    "response": "I couldn't connect to the database. Please try again."
+                }
 
         try:
-            # Run the agent
+            logger.info(f"[Schema Agent] Processing query: {natural_query[:50]}...")
+
+            # Run the agent - it will use MCP tools automatically
             result = await Runner.run(
                 self._agent,
                 input=natural_query,
@@ -339,6 +294,8 @@ Remember: You are analyzing the user's OWN data. Be helpful, accurate, and never
             # Detect if response contains data suitable for visualization
             visualization_hint = self._detect_visualization(response_text, natural_query)
 
+            logger.info(f"[Schema Agent] Query completed successfully")
+
             return {
                 "success": True,
                 "response": response_text,
@@ -346,7 +303,7 @@ Remember: You are analyzing the user's OWN data. Be helpful, accurate, and never
             }
 
         except Exception as e:
-            logger.error(f"Agent query failed: {e}")
+            logger.error(f"[Schema Agent] Query failed: {e}", exc_info=True)
             return {
                 "success": False,
                 "error": str(e),
@@ -377,6 +334,21 @@ Remember: You are analyzing the user's OWN data. Be helpful, accurate, and never
 
         return None
 
+    async def close(self) -> None:
+        """
+        Close the MCP server connection.
+        """
+        if self._mcp_server:
+            try:
+                await self._mcp_server.__aexit__(None, None, None)
+                logger.info(f"[Schema Agent] MCP server closed for session {self._session_id}")
+            except Exception as e:
+                logger.error(f"[Schema Agent] Error closing MCP server: {e}")
+            finally:
+                self._mcp_server = None
+                self._agent = None
+                self._is_initialized = False
+
     def clear_history(self) -> None:
         """Clear conversation history."""
         self._conversation_history = []
@@ -385,12 +357,26 @@ Remember: You are analyzing the user's OWN data. Be helpful, accurate, and never
         """Get conversation history."""
         return self._conversation_history.copy()
 
+    @property
+    def is_initialized(self) -> bool:
+        """Check if agent is initialized."""
+        return self._is_initialized
 
-# Factory function for creating agent instances
+    @property
+    def mcp_tools(self) -> List[str]:
+        """Get list of available MCP tools."""
+        return self._mcp_tools.copy()
+
+
+# ============================================================================
+# Factory Function
+# ============================================================================
+
 async def create_schema_query_agent(
     database_uri: str,
     schema_metadata: dict,
-    auto_initialize: bool = True
+    auto_initialize: bool = True,
+    read_only: bool = True,
 ) -> SchemaQueryAgent:
     """
     Factory function to create and initialize a Schema Query Agent.
@@ -399,16 +385,20 @@ async def create_schema_query_agent(
         database_uri: PostgreSQL connection string
         schema_metadata: Discovered schema metadata
         auto_initialize: Whether to initialize immediately
+        read_only: Whether to use read-only mode
 
     Returns:
         Initialized SchemaQueryAgent instance
     """
     agent = SchemaQueryAgent(
         database_uri=database_uri,
-        schema_metadata=schema_metadata
+        schema_metadata=schema_metadata,
+        read_only=read_only,
     )
 
     if auto_initialize:
-        await agent.initialize()
+        result = await agent.initialize()
+        if not result.get("success"):
+            raise RuntimeError(f"Failed to initialize agent: {result.get('error')}")
 
     return agent

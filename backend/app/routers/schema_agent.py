@@ -938,9 +938,10 @@ class ChatResponse(BaseModel):
 _agent_cache: Dict[int, SchemaQueryAgent] = {}
 
 
-def clear_agent_cache(user_id: int) -> bool:
+async def clear_agent_cache_async(user_id: int) -> bool:
     """
-    Clear the cached agent for a specific user.
+    Clear the cached agent for a specific user (async version).
+    Properly closes the MCP connection before removing from cache.
 
     This should be called when:
     - User disconnects their database
@@ -953,21 +954,82 @@ def clear_agent_cache(user_id: int) -> bool:
         True if agent was cleared, False if no agent was cached
     """
     if user_id in _agent_cache:
-        del _agent_cache[user_id]
-        logger.info(f"[Schema Agent] Cleared cached agent for user {user_id}")
+        agent = _agent_cache[user_id]
+        try:
+            # Close MCP connection properly
+            await agent.close()
+            logger.info(f"[Schema Agent] Closed MCP connection for user {user_id}")
+        except Exception as e:
+            logger.error(f"[Schema Agent] Error closing MCP connection for user {user_id}: {e}")
+        finally:
+            del _agent_cache[user_id]
+            logger.info(f"[Schema Agent] Cleared cached agent for user {user_id}")
         return True
     return False
 
 
-def clear_all_agent_cache() -> int:
+def clear_agent_cache(user_id: int) -> bool:
     """
-    Clear all cached agents.
+    Clear the cached agent for a specific user (sync version).
+    Creates a new event loop if needed to close MCP connection.
+
+    This should be called when:
+    - User disconnects their database
+    - User connects to a different database
+
+    Args:
+        user_id: The user ID whose agent should be cleared
+
+    Returns:
+        True if agent was cleared, False if no agent was cached
+    """
+    if user_id in _agent_cache:
+        agent = _agent_cache[user_id]
+        try:
+            # Try to close MCP connection
+            import asyncio
+            try:
+                loop = asyncio.get_running_loop()
+                # We're in an async context, schedule the close
+                loop.create_task(agent.close())
+            except RuntimeError:
+                # No running loop, create one
+                asyncio.run(agent.close())
+            logger.info(f"[Schema Agent] Closed MCP connection for user {user_id}")
+        except Exception as e:
+            logger.error(f"[Schema Agent] Error closing MCP connection for user {user_id}: {e}")
+        finally:
+            del _agent_cache[user_id]
+            logger.info(f"[Schema Agent] Cleared cached agent for user {user_id}")
+        return True
+    return False
+
+
+async def clear_all_agent_cache_async() -> int:
+    """
+    Clear all cached agents (async version).
+    Properly closes all MCP connections.
 
     Returns:
         Number of agents cleared
     """
     count = len(_agent_cache)
-    _agent_cache.clear()
+    for user_id in list(_agent_cache.keys()):
+        await clear_agent_cache_async(user_id)
+    logger.info(f"[Schema Agent] Cleared all {count} cached agents")
+    return count
+
+
+def clear_all_agent_cache() -> int:
+    """
+    Clear all cached agents (sync version).
+
+    Returns:
+        Number of agents cleared
+    """
+    count = len(_agent_cache)
+    for user_id in list(_agent_cache.keys()):
+        clear_agent_cache(user_id)
     logger.info(f"[Schema Agent] Cleared all {count} cached agents")
     return count
 
