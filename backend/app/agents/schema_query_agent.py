@@ -27,13 +27,17 @@ from app.services.schema_discovery import format_schema_for_prompt
 
 logger = logging.getLogger(__name__)
 
+# Version marker for debugging
+SCHEMA_AGENT_VERSION = "2.0.0-mcp"
+logger.info(f"[Schema Agent] Module loaded - Version {SCHEMA_AGENT_VERSION} (MCP-enabled)")
+
 
 # ============================================================================
 # Configuration
 # ============================================================================
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini/gemini-2.0-flash")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini/gemini-robotics-er-1.5-preview")
 
 
 def get_llm_model():
@@ -171,7 +175,10 @@ class SchemaQueryAgent:
 
     async def initialize(self) -> Dict[str, Any]:
         """
-        Initialize the MCP server and agent.
+        Test connection to postgres-mcp and verify it works.
+
+        Note: We create fresh MCP connections per query to avoid stale connection issues.
+        This method just validates the setup.
 
         Returns:
             Dict with initialization status and available tools
@@ -183,51 +190,47 @@ class SchemaQueryAgent:
                 "tools": self._mcp_tools
             }
 
+        mcp_server = None
         try:
-            # Determine access mode
-            access_mode = "read-only" if self.read_only else "unrestricted"
+            # Determine access mode (postgres-mcp uses "restricted" for read-only)
+            access_mode = "restricted" if self.read_only else "unrestricted"
 
-            logger.info(f"[Schema Agent] Starting postgres-mcp (mode={access_mode})...")
+            # Log sanitized URI (hide password)
+            sanitized_uri = self.database_uri
+            if "@" in sanitized_uri:
+                # Hide password: postgresql://user:pass@host -> postgresql://user:***@host
+                prefix, rest = sanitized_uri.split("@", 1)
+                if ":" in prefix:
+                    proto_user = prefix.rsplit(":", 1)[0]
+                    sanitized_uri = f"{proto_user}:***@{rest}"
 
-            # Create MCP server using postgres-mcp via stdio
-            self._mcp_server = MCPServerStdio(
-                name=f"postgres-mcp-{self._session_id}",
+            logger.info(f"[Schema Agent] Testing postgres-mcp connection (mode={access_mode}, db={sanitized_uri[:60]}...)")
+
+            # Create test MCP server to verify setup
+            mcp_server = MCPServerStdio(
+                name=f"postgres-mcp-init-{self._session_id}",
                 params={
                     "command": "postgres-mcp",
                     "args": [self.database_uri, f"--access-mode={access_mode}"],
                 },
                 cache_tools_list=True,
-                client_session_timeout_seconds=60.0,  # 60 seconds for cloud DB connections
+                client_session_timeout_seconds=30.0,  # 30 seconds for init test
             )
 
             # Start the MCP server (enters async context)
-            await self._mcp_server.__aenter__()
+            await mcp_server.__aenter__()
 
             # Get available tools from the MCP server
-            tools = await self._mcp_server.list_tools()
+            tools = await mcp_server.list_tools()
             self._mcp_tools = [t.name for t in tools]
 
-            logger.info(f"[Schema Agent] Connected with tools: {self._mcp_tools}")
-
-            # Generate system prompt with schema context
-            system_prompt = generate_schema_agent_prompt(self.schema_metadata)
-
-            # Create the agent with MCP server
-            self._agent = Agent(
-                name="Schema Query Agent",
-                instructions=system_prompt,
-                model=get_llm_model(),
-                mcp_servers=[self._mcp_server],
-                model_settings=ModelSettings(tool_choice="auto"),
-            )
+            logger.info(f"[Schema Agent] postgres-mcp verified with tools: {self._mcp_tools}")
 
             self._is_initialized = True
 
-            logger.info(f"[Schema Agent] Initialized successfully")
-
             return {
                 "success": True,
-                "message": f"Connected via postgres-mcp (mode={access_mode})",
+                "message": f"postgres-mcp verified (mode={access_mode})",
                 "tools": self._mcp_tools,
                 "session_id": self._session_id,
             }
@@ -240,11 +243,35 @@ class SchemaQueryAgent:
                 "install_instructions": "Install postgres-mcp with: pipx install postgres-mcp",
             }
         except Exception as e:
-            logger.error(f"[Schema Agent] Failed to initialize: {e}", exc_info=True)
-            return {
-                "success": False,
-                "error": str(e),
-            }
+            error_msg = str(e)
+            # Better error messages for common issues
+            if "Connection closed" in error_msg:
+                logger.error(f"[Schema Agent] postgres-mcp connection failed - likely database connection issue")
+                return {
+                    "success": False,
+                    "error": "Database connection failed. Please verify your database URI is correct and the database is accessible.",
+                    "details": error_msg,
+                }
+            elif "timeout" in error_msg.lower():
+                logger.error(f"[Schema Agent] postgres-mcp connection timeout")
+                return {
+                    "success": False,
+                    "error": "Database connection timed out. The database may be slow or unreachable.",
+                    "details": error_msg,
+                }
+            else:
+                logger.error(f"[Schema Agent] Failed to initialize: {e}", exc_info=True)
+                return {
+                    "success": False,
+                    "error": error_msg,
+                }
+        finally:
+            # Clean up test MCP server
+            if mcp_server:
+                try:
+                    await mcp_server.__aexit__(None, None, None)
+                except Exception:
+                    pass
 
     async def query(
         self,
@@ -253,27 +280,58 @@ class SchemaQueryAgent:
         """
         Process a natural language query using the MCP-connected agent.
 
+        Creates a fresh MCP connection for each query to avoid stale connection issues.
+
         Args:
             natural_query: User's question in natural language
 
         Returns:
             dict with response, and optional visualization hint
         """
-        if not self._is_initialized:
-            init_result = await self.initialize()
-            if not init_result.get("success"):
-                return {
-                    "success": False,
-                    "error": init_result.get("error", "Failed to initialize"),
-                    "response": "I couldn't connect to the database. Please try again."
-                }
+        mcp_server = None
 
         try:
             logger.info(f"[Schema Agent] Processing query: {natural_query[:50]}...")
 
+            # Determine access mode
+            access_mode = "restricted" if self.read_only else "unrestricted"
+
+            # Create fresh MCP server for this query
+            # This avoids stale connection issues on Windows
+            mcp_server = MCPServerStdio(
+                name=f"postgres-mcp-query-{datetime.now().strftime('%H%M%S%f')}",
+                params={
+                    "command": "postgres-mcp",
+                    "args": [self.database_uri, f"--access-mode={access_mode}"],
+                },
+                cache_tools_list=True,
+                client_session_timeout_seconds=120.0,  # 2 minutes for query execution
+            )
+
+            # Start MCP server
+            logger.info(f"[Schema Agent] Starting postgres-mcp for query...")
+            await mcp_server.__aenter__()
+
+            # Get tools (for logging)
+            tools = await mcp_server.list_tools()
+            tool_names = [t.name for t in tools]
+            logger.info(f"[Schema Agent] MCP connected with tools: {tool_names}")
+
+            # Generate system prompt with schema context
+            system_prompt = generate_schema_agent_prompt(self.schema_metadata)
+
+            # Create agent with fresh MCP server
+            agent = Agent(
+                name="Schema Query Agent",
+                instructions=system_prompt,
+                model=get_llm_model(),
+                mcp_servers=[mcp_server],
+                model_settings=ModelSettings(tool_choice="auto"),
+            )
+
             # Run the agent - it will use MCP tools automatically
             result = await Runner.run(
-                self._agent,
+                agent,
                 input=natural_query,
                 max_turns=10  # Limit iterations
             )
@@ -303,12 +361,30 @@ class SchemaQueryAgent:
             }
 
         except Exception as e:
+            error_msg = str(e)
             logger.error(f"[Schema Agent] Query failed: {e}", exc_info=True)
+
+            # Provide better error messages
+            if "ClosedResourceError" in error_msg or "Connection closed" in error_msg:
+                return {
+                    "success": False,
+                    "error": "Database connection was interrupted. Please try again.",
+                    "response": "The database connection was interrupted. Please try your query again."
+                }
+
             return {
                 "success": False,
-                "error": str(e),
-                "response": f"I encountered an error processing your request: {str(e)}"
+                "error": error_msg,
+                "response": f"I encountered an error processing your request: {error_msg}"
             }
+        finally:
+            # Always clean up MCP server
+            if mcp_server:
+                try:
+                    await mcp_server.__aexit__(None, None, None)
+                    logger.info(f"[Schema Agent] MCP server closed")
+                except Exception as e:
+                    logger.warning(f"[Schema Agent] Error closing MCP server: {e}")
 
     def _detect_visualization(self, response: str, query: str) -> Optional[Dict[str, str]]:
         """
@@ -336,18 +412,15 @@ class SchemaQueryAgent:
 
     async def close(self) -> None:
         """
-        Close the MCP server connection.
+        Close the agent and reset state.
+
+        Note: MCP connections are created per-query and cleaned up automatically.
+        This method just resets the agent state.
         """
-        if self._mcp_server:
-            try:
-                await self._mcp_server.__aexit__(None, None, None)
-                logger.info(f"[Schema Agent] MCP server closed for session {self._session_id}")
-            except Exception as e:
-                logger.error(f"[Schema Agent] Error closing MCP server: {e}")
-            finally:
-                self._mcp_server = None
-                self._agent = None
-                self._is_initialized = False
+        logger.info(f"[Schema Agent] Closing agent for session {self._session_id}")
+        self._is_initialized = False
+        self._mcp_tools = []
+        self._conversation_history = []
 
     def clear_history(self) -> None:
         """Clear conversation history."""

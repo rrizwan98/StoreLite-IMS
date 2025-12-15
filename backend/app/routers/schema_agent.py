@@ -1133,6 +1133,28 @@ async def get_chat_history(
     return {"history": [], "message_count": 0}
 
 
+@router.post("/reset-agent")
+async def reset_agent(
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Reset/clear the cached agent for current user.
+    This forces a new agent to be created on next message.
+    Useful when database connection changes or agent is in bad state.
+    """
+    cleared = await clear_agent_cache_async(user.id)
+    if cleared:
+        return {
+            "success": True,
+            "message": "Agent cache cleared. A new agent will be created on next message."
+        }
+    return {
+        "success": True,
+        "message": "No cached agent found. A new agent will be created on next message."
+    }
+
+
 # ============================================================================
 # ChatKit Endpoint for OpenAI ChatKit UI
 # ============================================================================
