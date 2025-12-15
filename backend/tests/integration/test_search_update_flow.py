@@ -135,7 +135,7 @@ class TestSearchByPriceRangeFlow:
         service.add_item("Sugar", "Grocery", "kg", "50.00", "100")
         test_session.commit()
 
-        with pytest.raises(ValueError, match="min_price must be less than or equal to max_price"):
+        with pytest.raises(ValueError, match="min_price must be <= max_price"):
             service.search_by_price_range(Decimal("100.00"), Decimal("50.00"))
 
     def test_search_by_price_range_returns_empty_for_no_matches(self, test_session: Session):

@@ -26,9 +26,10 @@ class Item(Base):
     # Check constraint: category must be one of the allowed values
     __table_args__ = (
         CheckConstraint(
-            "category IN ('Grocery', 'Beauty', 'Garments', 'Utilities')",
+            "category IN ('Grocery', 'Beauty', 'Garments', 'Utilities', 'Other')",
             name="items_category_check"
         ),
+        {"extend_existing": True},
     )
 
     # Relationships
@@ -48,6 +49,8 @@ class Bill(Base):
     total_amount = Column(Numeric(12, 2), nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
+    __table_args__ = ({"extend_existing": True},)
+
     # Relationships
     bill_items = relationship("BillItem", back_populates="bill", cascade="all, delete-orphan")
 
@@ -66,6 +69,8 @@ class BillItem(Base):
     unit_price = Column(Numeric(12, 2), nullable=False)  # Snapshot of unit price at time of sale
     quantity = Column(Numeric(12, 3), nullable=False)
     line_total = Column(Numeric(12, 2), nullable=False)
+
+    __table_args__ = ({"extend_existing": True},)
 
     # Relationships
     bill = relationship("Bill", back_populates="bill_items")
