@@ -74,8 +74,8 @@ class OpenAIAgent:
         if not self.gemini_api_key:
             raise ValueError("GEMINI_API_KEY must be provided or set in environment")
 
-        # Model configuration (Gemini 2.0 Flash Lite - latest December 2025)
-        self.model_name = "gemini/gemini-robotics-er-1.5-preview"
+        # Model configuration (Gemini 2.0 Flash - latest December 2025)
+        self.model_name = os.getenv("GEMINI_MODEL", "gemini/gemini-robotics-er-1.5-preview")
         self.temperature = temperature
         self.max_tokens = max_tokens
 
@@ -97,6 +97,9 @@ class OpenAIAgent:
         self._discovered_tools: List[Dict[str, Any]] = []
         self._mcp_tool_mapping: Dict[str, Dict[str, Any]] = {}
         self._model: Optional[LitellmModel] = None
+
+        # Current user ID for data isolation (set before each request)
+        self.current_user_id: Optional[int] = None
 
         logger.info(
             f"Initializing OpenAI Agent with LiteLLM Gemini 2.0 Flash Lite "
@@ -196,7 +199,7 @@ class OpenAIAgent:
         return tools
 
     async def process_message(
-        self, session_id: str, user_message: str
+        self, session_id: str, user_message: str, user_id: Optional[int] = None
     ) -> Dict[str, Any]:
         """
         Process a user message through the agent with latest December 2025 patterns.
@@ -210,10 +213,12 @@ class OpenAIAgent:
         - PostgreSQL session persistence
         - Exponential backoff retry for transient failures
         - Comprehensive logging
+        - User-scoped data isolation via user_id
 
         Args:
             session_id: Session ID for conversation context
             user_message: User's natural language message
+            user_id: User ID for data isolation (auto-injected into tool calls)
 
         Returns:
             Response dict with:
@@ -226,6 +231,10 @@ class OpenAIAgent:
         Raises:
             ValueError: If session not found or message invalid
         """
+        # Set current user_id for tool call injection
+        self.current_user_id = user_id
+        logger.info(f"Processing message for user_id={user_id}, session_id={session_id}")
+
         # Validate input
         if not user_message or not user_message.strip():
             logger.debug(f"Empty message for session {session_id}")
@@ -525,10 +534,11 @@ class OpenAIAgent:
 
                 # Create tool wrapper function with PROPER PARAMETERS
                 # This function accepts the actual parameters from the agent
-                def create_tool_wrapper(name, client, properties, required_fields):
+                def create_tool_wrapper(name, client, properties, required_fields, agent_ref):
                     """
                     Factory function to create a tool wrapper with proper signature.
                     Uses exec to dynamically create a function with correct parameters.
+                    Auto-injects user_id from agent's current_user_id for data isolation.
                     """
                     # Build parameter list for function signature
                     params = []
@@ -553,15 +563,21 @@ class OpenAIAgent:
                         args_code = "arguments = {}"
 
                     # Create function code with proper parameters
+                    # AUTO-INJECTS user_id from agent's current_user_id!
                     func_code = f"""
 def tool_wrapper({param_string}) -> str:
-    \"\"\"Execute MCP tool call.\"\"\"
+    \"\"\"Execute MCP tool call with auto-injected user_id.\"\"\"
     try:
         # Build arguments dict from parameters
         {args_code}
 
         # Remove None values (optional parameters not provided)
         arguments = {{k: v for k, v in arguments.items() if v is not None}}
+
+        # AUTO-INJECT user_id from agent's current_user_id for data isolation
+        if agent_ref.current_user_id is not None:
+            arguments['user_id'] = agent_ref.current_user_id
+            logger.debug(f"Auto-injected user_id={{agent_ref.current_user_id}} into tool {name}")
 
         # Call MCP server
         result = client.call_tool('{name}', arguments)
@@ -579,6 +595,7 @@ def tool_wrapper({param_string}) -> str:
                     # Create a namespace for exec
                     namespace = {
                         'client': client,
+                        'agent_ref': agent_ref,
                         'json': __import__('json'),
                         'logger': logger
                     }
@@ -588,11 +605,13 @@ def tool_wrapper({param_string}) -> str:
                     return namespace['tool_wrapper']
 
                 # Create the tool wrapper with correct signature
+                # Pass self (agent_ref) to enable auto-injection of user_id
                 tool_wrapper = create_tool_wrapper(
                     tool_name,
                     self.tools_client,
                     properties,
-                    required
+                    required,
+                    self  # agent_ref for user_id injection
                 )
                 tool_wrapper.__name__ = tool_name
 
@@ -725,6 +744,39 @@ def tool_wrapper({param_string}) -> str:
             "  - Use billing_list_bills to show all bills\n"
             "  - Use billing_get_bill to fetch specific bill details\n"
             "\n"
+            "For SALES ANALYTICS (Task T025 - AI Dashboard):\n"
+            "  - Use get_sales_by_month to analyze sales for a specific month:\n"
+            "    • Returns total sales, transaction count, average transaction value\n"
+            "    • Lists top 5 products by revenue with quantities\n"
+            "    • Provides daily sales trends for the month\n"
+            "    • Example: 'What were our sales in November 2025?' → get_sales_by_month(year=2025, month=11)\n"
+            "  - Use compare_sales to compare two periods:\n"
+            "    • Shows sales change percentage and direction\n"
+            "    • Identifies products with biggest changes\n"
+            "    • Lists new and discontinued products\n"
+            "    • Example: 'Compare November to October sales' → compare_sales(period1='2025-10', period2='2025-11')\n"
+            "  - Use get_sales_trends for trend analysis:\n"
+            "    • Shows daily sales over specified days (default 30)\n"
+            "    • Includes 7-day moving averages\n"
+            "    • Highlights best and worst performing days\n"
+            "    • Breaks down sales by category\n"
+            "    • Example: 'Show me sales trends for the last 30 days' → get_sales_trends(days=30)\n"
+            "\n"
+            "For INVENTORY ANALYTICS (Task T025 - AI Dashboard):\n"
+            "  - Use get_inventory_analytics for comprehensive stock analysis:\n"
+            "    • Total items, inventory value, stock health status\n"
+            "    • Alerts: out-of-stock, low stock (< 10 units), overstocked (> 1000 units)\n"
+            "    • Category breakdown with item counts and values\n"
+            "    • AI-generated recommendations for restocking\n"
+            "    • Example: 'What's our inventory status?' → get_inventory_analytics()\n"
+            "\n"
+            "ANALYTICS RESPONSE STRATEGY:\n"
+            "  - When answering sales/analytics questions, ALWAYS use analytics tools\n"
+            "  - Present data with clear formatting: use bullet points, numbers, percentages\n"
+            "  - Highlight key insights: trends, anomalies, recommendations\n"
+            "  - For comparisons, show both absolute and percentage changes\n"
+            "  - If user asks vague analytics questions, suggest specific analyses\n"
+            "\n"
             "RESPONSE STRATEGY:\n"
             "1. Parse the user's question to identify what information they need\n"
             "2. Call the appropriate MCP tool(s) to fetch current data from the database\n"
@@ -754,6 +806,22 @@ def tool_wrapper({param_string}) -> str:
             "  → Call: inventory_add_item(...)\n"
             "  → Response: 'Added [item name] with ID [id] to [category]'\n"
             "\n"
+            "User: 'How did we do last month?'\n"
+            "  → Call: get_sales_by_month(year=2025, month=11) [use current month - 1]\n"
+            "  → Response: 'November 2025 Sales Summary: Total: $X, Transactions: Y, Avg: $Z. Top products: ...'\n"
+            "\n"
+            "User: 'Compare this month to last month'\n"
+            "  → Call: compare_sales(period1='2025-10', period2='2025-11')\n"
+            "  → Response: 'Compared to October, November sales [increased/decreased] by X% ($Y)...'\n"
+            "\n"
+            "User: 'What's trending in sales?'\n"
+            "  → Call: get_sales_trends(days=30)\n"
+            "  → Response: 'Sales Trends (30 days): Total: $X, Growth: Y%. Best day: [date]. Categories: ...'\n"
+            "\n"
+            "User: 'Show inventory health' or 'What needs restocking?'\n"
+            "  → Call: get_inventory_analytics()\n"
+            "  → Response: 'Inventory Health: X items total ($Y value). Alerts: Z out of stock, W low stock...'\n"
+            "\n"
             "IMPORTANT:\n"
             "- ALWAYS use tools to fetch current data when answering questions\n"
             "- NEVER make up inventory numbers or item details\n"
@@ -762,7 +830,14 @@ def tool_wrapper({param_string}) -> str:
             "- If user provides invalid category, respond smartly: explain valid options and ask them to retry\n"
             "- ALWAYS provide confirmation after modifying inventory or creating bills\n"
             "- ALWAYS ask for confirmation BEFORE executing destructive actions\n"
-            "- Treat the MCP tools as your source of truth for all inventory and billing data"
+            "- Treat the MCP tools as your source of truth for all inventory and billing data\n"
+            "\n"
+            "CRITICAL - USER DATA ISOLATION:\n"
+            "- If the message contains [SYSTEM CONTEXT: Current logged-in user_id=X], you MUST extract that user_id\n"
+            "- You MUST include user_id parameter in EVERY tool call for data isolation\n"
+            "- Example: If user_id=5, call inventory_list_items(user_id=5) not inventory_list_items()\n"
+            "- If no user_id is provided, warn the user that data won't be user-specific\n"
+            "- This ensures each user only sees their own inventory and bills"
         )
 
     def _generate_fallback_system_prompt(self) -> str:

@@ -62,8 +62,26 @@ export const ERROR_CODES = {
 // Routes
 export const ROUTES = {
   HOME: '/',
-  ADMIN: '/admin',
-  POS: '/pos',
+  LOGIN: '/login',
+  SIGNUP: '/signup',
+  DASHBOARD: '/dashboard',
+  // Platform database routes
+  ADMIN: '/dashboard/admin',
+  POS: '/dashboard/pos',
+  ANALYTICS: '/dashboard/analytics',
+  // Own database routes (MCP-connected)
+  DB_CONNECT: '/dashboard/connect',
+  MCP_ADMIN: '/dashboard/mcp-admin',
+  MCP_POS: '/dashboard/mcp-pos',
+  // Schema Query Only routes (Agent + Analytics only)
+  SCHEMA_CONNECT: '/dashboard/schema-connect',
+  SCHEMA_AGENT: '/dashboard/schema-agent',
+  SCHEMA_ANALYTICS: '/dashboard/schema-analytics',
+  // Legacy routes (kept for backwards compatibility)
+  LEGACY_ADMIN: '/admin',
+  LEGACY_POS: '/pos',
+  LEGACY_ANALYTICS: '/analytics',
+  LEGACY_DB_CONNECT: '/db-connect',
 };
 
 // API Endpoints

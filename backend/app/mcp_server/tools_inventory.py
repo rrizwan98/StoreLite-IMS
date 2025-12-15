@@ -1,10 +1,11 @@
 """
-MCP tool implementations for inventory operations
+MCP tool implementations for inventory operations (user-scoped)
 """
 import logging
 from decimal import Decimal
+from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, and_
 
 from app.models import Item
 from app.mcp_server.exceptions import (
@@ -105,30 +106,32 @@ async def inventory_add_item(
     unit: str,
     unit_price: float,
     stock_qty: float,
-    session: AsyncSession
+    session: AsyncSession = None,
+    user_id: Optional[int] = None
 ) -> dict:
-    """Create new inventory item with normalized category."""
+    """Create new inventory item with normalized category (user-scoped)."""
     # Validate input and get normalized values
     name, normalized_category, unit, unit_price, stock_qty = validate_item_input(
         name, category, unit, unit_price, stock_qty
     )
 
     try:
-        # Create item with normalized category
+        # Create item with normalized category - associate with user if provided
         item = Item(
             name=name,
             category=normalized_category,
             unit=unit,
             unit_price=Decimal(str(unit_price)),
             stock_qty=Decimal(str(stock_qty)),
-            is_active=True
+            is_active=True,
+            user_id=user_id  # Associate item with user
         )
 
         session.add(item)
         await session.flush()  # Get the ID
         await session.commit()
 
-        logger.info(f"Created item: {item.id} ({item.name}) in category {normalized_category}")
+        logger.info(f"Created item: {item.id} ({item.name}) in category {normalized_category} for user {user_id}")
         return convert_item_to_response(item)
 
     except Exception as e:
@@ -149,12 +152,17 @@ async def inventory_update_item(
     unit: str = None,
     unit_price: float = None,
     stock_qty: float = None,
-    session: AsyncSession = None
+    session: AsyncSession = None,
+    user_id: Optional[int] = None
 ) -> dict:
-    """Update inventory item (partial update allowed)."""
+    """Update inventory item (partial update allowed, user-scoped)."""
     try:
-        # Get item
-        stmt = select(Item).where(Item.id == item_id)
+        # Get item - filter by user_id if provided
+        conditions = [Item.id == item_id]
+        if user_id is not None:
+            conditions.append(Item.user_id == user_id)
+
+        stmt = select(Item).where(and_(*conditions))
         result = await session.execute(stmt)
         item = result.scalar_one_or_none()
 
@@ -216,12 +224,17 @@ async def inventory_update_item(
 @mcp_error_handler("inventory_delete_item")
 async def inventory_delete_item(
     item_id: int,
-    session: AsyncSession = None
+    session: AsyncSession = None,
+    user_id: Optional[int] = None
 ) -> dict:
-    """Soft delete inventory item (sets is_active = FALSE)."""
+    """Soft delete inventory item (sets is_active = FALSE, user-scoped)."""
     try:
-        # Get item
-        stmt = select(Item).where(Item.id == item_id)
+        # Get item - filter by user_id if provided
+        conditions = [Item.id == item_id]
+        if user_id is not None:
+            conditions.append(Item.user_id == user_id)
+
+        stmt = select(Item).where(and_(*conditions))
         result = await session.execute(stmt)
         item = result.scalar_one_or_none()
 
@@ -258,16 +271,31 @@ async def inventory_list_items(
     category: str = None,
     page: int = 1,
     limit: int = 20,
-    session: AsyncSession = None
+    session: AsyncSession = None,
+    user_id: Optional[int] = None
 ) -> dict:
     """
-    List inventory items with optional filtering and pagination.
+    List inventory items with optional filtering and pagination (user-scoped).
 
     Performance:
     - Single query with WHERE is_active=TRUE and optional filters
     - Pagination handled by OFFSET/LIMIT
     - Expected <100ms for typical inventory sizes
     """
+    # === DEBUG: Print received parameters ===
+    import sys
+    print("\n" + "="*60)
+    print("[MCP TOOL] inventory_list_items - Parameters Received")
+    print("="*60)
+    print(f"  name: {name}")
+    print(f"  category: {category}")
+    print(f"  page: {page}")
+    print(f"  limit: {limit}")
+    print(f"  user_id: {user_id}")
+    print(f"  session: {session}")
+    print("="*60 + "\n")
+    sys.stdout.flush()
+
     try:
         # Validate pagination
         if page < 1:
@@ -277,8 +305,13 @@ async def inventory_list_items(
         if limit > 100:
             limit = 100
 
+        # Build base conditions - always filter by is_active and optionally by user_id
+        base_conditions = [Item.is_active == True]
+        if user_id is not None:
+            base_conditions.append(Item.user_id == user_id)
+
         # Build filter query (case-insensitive for category)
-        stmt = select(Item).where(Item.is_active == True)
+        stmt = select(Item).where(and_(*base_conditions))
 
         if name:
             stmt = stmt.where(Item.name.ilike(f"%{name}%"))
@@ -288,7 +321,7 @@ async def inventory_list_items(
             stmt = stmt.where(Item.category.ilike(category))
 
         # Get total count (apply same filters)
-        count_stmt = select(Item).where(Item.is_active == True)
+        count_stmt = select(Item).where(and_(*base_conditions))
         if name:
             count_stmt = count_stmt.where(Item.name.ilike(f"%{name}%"))
         if category:

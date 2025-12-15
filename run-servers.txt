@@ -1,0 +1,24 @@
+# StoreLite-IMS Server Commands
+
+## Backend (FastAPI + Uvicorn)
+cd backend && uvicorn app.main:app --reload --port 8000
+
+## Frontend (Next.js)
+cd frontend && npm run dev
+
+## Python MCP Server (HTTP mode with REST endpoints for agent integration)
+cd backend && python -m app.mcp_server.main
+
+## Python MCP Server (STDIO mode for Claude Code CLI)
+cd backend && python -m app.mcp_server.server --stdio
+
+## MCP Server (postgres-mcp) - Auto-started by inventory_agent when connecting to database
+# No manual command needed - MCP server is spawned automatically via inventory_agent.py
+
+## All-in-One (Run in separate terminals)
+# Terminal 1: Backend
+cd backend && uvicorn app.main:app --reload --port 8000
+# Terminal 2: Frontend
+cd frontend && npm run dev
+# Terminal 3: Python MCP Server (HTTP mode on port 8001)
+cd backend && python -m app.mcp_server.main
