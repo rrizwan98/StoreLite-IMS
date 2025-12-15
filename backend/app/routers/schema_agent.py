@@ -938,6 +938,40 @@ class ChatResponse(BaseModel):
 _agent_cache: Dict[int, SchemaQueryAgent] = {}
 
 
+def clear_agent_cache(user_id: int) -> bool:
+    """
+    Clear the cached agent for a specific user.
+
+    This should be called when:
+    - User disconnects their database
+    - User connects to a different database
+
+    Args:
+        user_id: The user ID whose agent should be cleared
+
+    Returns:
+        True if agent was cleared, False if no agent was cached
+    """
+    if user_id in _agent_cache:
+        del _agent_cache[user_id]
+        logger.info(f"[Schema Agent] Cleared cached agent for user {user_id}")
+        return True
+    return False
+
+
+def clear_all_agent_cache() -> int:
+    """
+    Clear all cached agents.
+
+    Returns:
+        Number of agents cleared
+    """
+    count = len(_agent_cache)
+    _agent_cache.clear()
+    logger.info(f"[Schema Agent] Cleared all {count} cached agents")
+    return count
+
+
 @router.post("/chat", response_model=ChatResponse)
 async def chat_with_agent(
     request: ChatRequest,
