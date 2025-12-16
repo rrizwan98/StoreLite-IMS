@@ -116,7 +116,12 @@ async def send_email(
         AI Data Assistant
     """
     try:
-        logger.info(f"send_email tool called - Subject: {subject[:50]}...")
+        logger.info("=" * 60)
+        logger.info("SEND_EMAIL TOOL INVOKED!")
+        logger.info(f"Subject: {subject[:50]}...")
+        logger.info(f"Body length: {len(body)} chars")
+        logger.info(f"To: {to_email or 'default recipient'}")
+        logger.info("=" * 60)
 
         # Get user_id from context
         user_context = context.context if hasattr(context, 'context') else {}

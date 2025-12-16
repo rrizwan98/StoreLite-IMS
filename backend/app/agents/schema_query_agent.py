@@ -38,6 +38,7 @@ logger.info(f"[Schema Agent] Module loaded - Version {SCHEMA_AGENT_VERSION} (MCP
 # ============================================================================
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+# Use Gemini 2.0 Flash which supports function calling well
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini/gemini-robotics-er-1.5-preview")
 
 
@@ -76,6 +77,13 @@ def generate_schema_agent_prompt(schema_metadata: dict) -> str:
     schema_description = format_schema_for_prompt(schema_metadata)
 
     return f"""You are a world-class database analyst and query assistant. Your job is to deeply understand user questions, execute precise SQL queries, and provide comprehensive, well-structured answers grounded in actual data.
+
+############################################
+URGENT: CHECK FOR TOOL PREFIX FIRST
+############################################
+BEFORE doing anything else, check if the user's message starts with [TOOL:GMAIL].
+If YES: You MUST call the send_email tool after getting query results. This is NON-NEGOTIABLE.
+If the message contains [TOOL:GMAIL], failure to call send_email is a critical error.
 
 ############################################
 CORE MISSION
@@ -493,6 +501,10 @@ class SchemaQueryAgent:
             # Build context for tools (needed for Gmail to access user_id)
             run_context = {"user_id": self.user_id} if self.user_id else {}
 
+            # Log final query being sent to agent
+            logger.info(f"[Schema Agent] Sending query to agent: {natural_query[:150]}...")
+            logger.info(f"[Schema Agent] Function tools available: {[t.name if hasattr(t, 'name') else str(t) for t in function_tools]}")
+
             # Run the agent - it will use MCP tools automatically
             result = await Runner.run(
                 agent,
@@ -501,8 +513,18 @@ class SchemaQueryAgent:
                 context=run_context,
             )
 
+            # Log detailed result info
+            logger.info(f"[Schema Agent] Run completed. Checking tool calls...")
+            if hasattr(result, 'new_items'):
+                for item in result.new_items:
+                    item_type = type(item).__name__
+                    logger.info(f"[Schema Agent] Result item: {item_type}")
+                    if hasattr(item, 'raw_item'):
+                        logger.info(f"[Schema Agent] Raw item: {item.raw_item}")
+
             # Extract response
             response_text = str(result.final_output) if result.final_output else ""
+            logger.info(f"[Schema Agent] Final output (first 200 chars): {response_text[:200]}...")
 
             # Add to conversation history
             self._conversation_history.append({

@@ -13,6 +13,7 @@ import logging
 import json
 import uuid
 import asyncio
+import re
 from datetime import datetime
 from typing import Optional, List, Dict, Any, AsyncIterator
 from fastapi import APIRouter, HTTPException, Depends, status, Request
@@ -319,6 +320,15 @@ class SchemaChatKitServer(ChatKitServer):
             # Check if tool prefix is present (from frontend tool selection)
             if '[TOOL:' in user_message:
                 logger.info(f"[Schema ChatKit] Tool prefix detected in message!")
+
+            # Get selected tool from context (set by chatkit_endpoint)
+            selected_tool = context.get("selected_tool")
+            if selected_tool:
+                logger.info(f"[Schema ChatKit] Tool from context: {selected_tool}")
+                # Prepend the tool instruction if not already in message
+                if f'[TOOL:{selected_tool.upper()}]' not in user_message:
+                    user_message = f"[TOOL:{selected_tool.upper()}] {user_message}"
+                    logger.info(f"[Schema ChatKit] Prepended tool prefix to message")
 
             # Get user_id and connection info from context
             user_id = context.get("user_id")
@@ -1187,12 +1197,31 @@ async def chatkit_endpoint(
         body = await request.body()
         logger.info(f"[Schema ChatKit] Request received from user {user.id}")
 
-        # Log raw body for debugging tool injection
+        # Parse raw body to extract tool selection BEFORE ChatKit processes it
+        selected_tool = None
         try:
             body_str = body.decode('utf-8')
             logger.info(f"[Schema ChatKit] Raw body (first 500 chars): {body_str[:500]}")
+
+            # Check for tool prefix in the raw body
             if '[TOOL:' in body_str:
                 logger.info(f"[Schema ChatKit] TOOL PREFIX FOUND IN BODY!")
+                # Extract tool name from prefix like [TOOL:GMAIL]
+                tool_match = re.search(r'\[TOOL:(\w+)\]', body_str)
+                if tool_match:
+                    selected_tool = tool_match.group(1).lower()
+                    logger.info(f"[Schema ChatKit] Extracted tool: {selected_tool}")
+
+            # Also check for metadata.selected_tool in JSON body
+            if not selected_tool:
+                try:
+                    body_json = json.loads(body_str)
+                    if body_json.get('metadata', {}).get('selected_tool'):
+                        selected_tool = body_json['metadata']['selected_tool']
+                        logger.info(f"[Schema ChatKit] Tool from metadata: {selected_tool}")
+                except json.JSONDecodeError:
+                    pass
+
         except Exception as e:
             logger.warning(f"[Schema ChatKit] Could not decode body: {e}")
 
@@ -1218,7 +1247,11 @@ async def chatkit_endpoint(
             "database_uri": connection.database_uri,
             "schema_metadata": connection.schema_metadata,
             "allowed_schemas": connection.allowed_schemas or ["public"],
+            "selected_tool": selected_tool,  # Pass tool selection to agent
         }
+
+        if selected_tool:
+            logger.info(f"[Schema ChatKit] Passing tool '{selected_tool}' to agent context")
 
         # Process with ChatKit server
         result = await _schema_chatkit_server.process(body, context)
