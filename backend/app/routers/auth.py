@@ -311,6 +311,11 @@ async def choose_connection_type(
     existing = result.scalar_one_or_none()
 
     if existing:
+        # Clear cached agent when connection changes (important for reconnection)
+        # Lazy import to avoid circular dependency
+        from app.routers.schema_agent import clear_agent_cache
+        clear_agent_cache(user.id)
+
         # Update existing
         existing.connection_type = request.connection_type
         existing.database_uri = request.database_uri if request.connection_type in ['own_database', 'schema_query_only'] else None
@@ -449,6 +454,11 @@ async def disconnect_database(
     if connection:
         await db.delete(connection)
         await db.commit()
+
+    # Clear cached schema agent for this user (important for reconnection)
+    # Lazy import to avoid circular dependency
+    from app.routers.schema_agent import clear_agent_cache
+    clear_agent_cache(user.id)
 
     logger.info(f"[Auth] User {user.email} disconnected their database")
 

@@ -13,6 +13,7 @@ import logging
 import json
 import uuid
 import asyncio
+import re
 from datetime import datetime
 from typing import Optional, List, Dict, Any, AsyncIterator
 from fastapi import APIRouter, HTTPException, Depends, status, Request
@@ -313,6 +314,22 @@ class SchemaChatKitServer(ChatKitServer):
                     if hasattr(content, 'text'):
                         user_message += content.text
 
+            # Log the raw message for debugging
+            logger.info(f"[Schema ChatKit] Raw user message: {user_message[:100]}...")
+
+            # Check if tool prefix is present (from frontend tool selection)
+            if '[TOOL:' in user_message:
+                logger.info(f"[Schema ChatKit] Tool prefix detected in message!")
+
+            # Get selected tool from context (set by chatkit_endpoint)
+            selected_tool = context.get("selected_tool")
+            if selected_tool:
+                logger.info(f"[Schema ChatKit] Tool from context: {selected_tool}")
+                # Prepend the tool instruction if not already in message
+                if f'[TOOL:{selected_tool.upper()}]' not in user_message:
+                    user_message = f"[TOOL:{selected_tool.upper()}] {user_message}"
+                    logger.info(f"[Schema ChatKit] Prepended tool prefix to message")
+
             # Get user_id and connection info from context
             user_id = context.get("user_id")
             database_uri = context.get("database_uri")
@@ -378,10 +395,12 @@ class SchemaChatKitServer(ChatKitServer):
                     agent = await create_schema_query_agent(
                         database_uri=database_uri,
                         schema_metadata=schema_metadata,
-                        auto_initialize=True
+                        auto_initialize=True,
+                        user_id=user_id,  # Pass user_id for Gmail tool context
+                        enable_gmail=True,
                     )
                     _agent_cache[user_id] = agent
-                    logger.info(f"Created new Schema Query Agent for user {user_id}")
+                    logger.info(f"Created new Schema Query Agent for user {user_id} with Gmail tools")
                 except Exception as e:
                     logger.error(f"Failed to create agent for user {user_id}: {e}")
                     error_text = f"Failed to initialize agent: {str(e)}"
@@ -938,6 +957,102 @@ class ChatResponse(BaseModel):
 _agent_cache: Dict[int, SchemaQueryAgent] = {}
 
 
+async def clear_agent_cache_async(user_id: int) -> bool:
+    """
+    Clear the cached agent for a specific user (async version).
+    Properly closes the MCP connection before removing from cache.
+
+    This should be called when:
+    - User disconnects their database
+    - User connects to a different database
+
+    Args:
+        user_id: The user ID whose agent should be cleared
+
+    Returns:
+        True if agent was cleared, False if no agent was cached
+    """
+    if user_id in _agent_cache:
+        agent = _agent_cache[user_id]
+        try:
+            # Close MCP connection properly
+            await agent.close()
+            logger.info(f"[Schema Agent] Closed MCP connection for user {user_id}")
+        except Exception as e:
+            logger.error(f"[Schema Agent] Error closing MCP connection for user {user_id}: {e}")
+        finally:
+            del _agent_cache[user_id]
+            logger.info(f"[Schema Agent] Cleared cached agent for user {user_id}")
+        return True
+    return False
+
+
+def clear_agent_cache(user_id: int) -> bool:
+    """
+    Clear the cached agent for a specific user (sync version).
+    Creates a new event loop if needed to close MCP connection.
+
+    This should be called when:
+    - User disconnects their database
+    - User connects to a different database
+
+    Args:
+        user_id: The user ID whose agent should be cleared
+
+    Returns:
+        True if agent was cleared, False if no agent was cached
+    """
+    if user_id in _agent_cache:
+        agent = _agent_cache[user_id]
+        try:
+            # Try to close MCP connection
+            import asyncio
+            try:
+                loop = asyncio.get_running_loop()
+                # We're in an async context, schedule the close
+                loop.create_task(agent.close())
+            except RuntimeError:
+                # No running loop, create one
+                asyncio.run(agent.close())
+            logger.info(f"[Schema Agent] Closed MCP connection for user {user_id}")
+        except Exception as e:
+            logger.error(f"[Schema Agent] Error closing MCP connection for user {user_id}: {e}")
+        finally:
+            del _agent_cache[user_id]
+            logger.info(f"[Schema Agent] Cleared cached agent for user {user_id}")
+        return True
+    return False
+
+
+async def clear_all_agent_cache_async() -> int:
+    """
+    Clear all cached agents (async version).
+    Properly closes all MCP connections.
+
+    Returns:
+        Number of agents cleared
+    """
+    count = len(_agent_cache)
+    for user_id in list(_agent_cache.keys()):
+        await clear_agent_cache_async(user_id)
+    logger.info(f"[Schema Agent] Cleared all {count} cached agents")
+    return count
+
+
+def clear_all_agent_cache() -> int:
+    """
+    Clear all cached agents (sync version).
+
+    Returns:
+        Number of agents cleared
+    """
+    count = len(_agent_cache)
+    for user_id in list(_agent_cache.keys()):
+        clear_agent_cache(user_id)
+    logger.info(f"[Schema Agent] Cleared all {count} cached agents")
+    return count
+
+
 @router.post("/chat", response_model=ChatResponse)
 async def chat_with_agent(
     request: ChatRequest,
@@ -973,10 +1088,12 @@ async def chat_with_agent(
             agent = await create_schema_query_agent(
                 database_uri=connection.database_uri,
                 schema_metadata=connection.schema_metadata,
-                auto_initialize=True
+                auto_initialize=True,
+                user_id=user.id,  # Pass user_id for Gmail tool context
+                enable_gmail=True,
             )
             _agent_cache[user.id] = agent
-            logger.info(f"Created new Schema Query Agent for user {user.id}")
+            logger.info(f"Created new Schema Query Agent for user {user.id} with Gmail tools")
         except Exception as e:
             logger.error(f"Failed to create agent for user {user.id}: {e}")
             return ChatResponse(
@@ -1037,6 +1154,28 @@ async def get_chat_history(
     return {"history": [], "message_count": 0}
 
 
+@router.post("/reset-agent")
+async def reset_agent(
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Reset/clear the cached agent for current user.
+    This forces a new agent to be created on next message.
+    Useful when database connection changes or agent is in bad state.
+    """
+    cleared = await clear_agent_cache_async(user.id)
+    if cleared:
+        return {
+            "success": True,
+            "message": "Agent cache cleared. A new agent will be created on next message."
+        }
+    return {
+        "success": True,
+        "message": "No cached agent found. A new agent will be created on next message."
+    }
+
+
 # ============================================================================
 # ChatKit Endpoint for OpenAI ChatKit UI
 # ============================================================================
@@ -1057,6 +1196,34 @@ async def chatkit_endpoint(
     try:
         body = await request.body()
         logger.info(f"[Schema ChatKit] Request received from user {user.id}")
+
+        # Parse raw body to extract tool selection BEFORE ChatKit processes it
+        selected_tool = None
+        try:
+            body_str = body.decode('utf-8')
+            logger.info(f"[Schema ChatKit] Raw body (first 500 chars): {body_str[:500]}")
+
+            # Check for tool prefix in the raw body
+            if '[TOOL:' in body_str:
+                logger.info(f"[Schema ChatKit] TOOL PREFIX FOUND IN BODY!")
+                # Extract tool name from prefix like [TOOL:GMAIL]
+                tool_match = re.search(r'\[TOOL:(\w+)\]', body_str)
+                if tool_match:
+                    selected_tool = tool_match.group(1).lower()
+                    logger.info(f"[Schema ChatKit] Extracted tool: {selected_tool}")
+
+            # Also check for metadata.selected_tool in JSON body
+            if not selected_tool:
+                try:
+                    body_json = json.loads(body_str)
+                    if body_json.get('metadata', {}).get('selected_tool'):
+                        selected_tool = body_json['metadata']['selected_tool']
+                        logger.info(f"[Schema ChatKit] Tool from metadata: {selected_tool}")
+                except json.JSONDecodeError:
+                    pass
+
+        except Exception as e:
+            logger.warning(f"[Schema ChatKit] Could not decode body: {e}")
 
         # Get user's connection
         connection = await get_user_connection(user, db)
@@ -1080,7 +1247,11 @@ async def chatkit_endpoint(
             "database_uri": connection.database_uri,
             "schema_metadata": connection.schema_metadata,
             "allowed_schemas": connection.allowed_schemas or ["public"],
+            "selected_tool": selected_tool,  # Pass tool selection to agent
         }
+
+        if selected_tool:
+            logger.info(f"[Schema ChatKit] Passing tool '{selected_tool}' to agent context")
 
         # Process with ChatKit server
         result = await _schema_chatkit_server.process(body, context)

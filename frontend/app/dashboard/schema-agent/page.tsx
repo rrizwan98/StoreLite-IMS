@@ -16,6 +16,10 @@ import { ROUTES, API_BASE_URL } from '@/lib/constants';
 import { useAuth } from '@/lib/auth-context';
 import { getAccessToken } from '@/lib/auth-api';
 
+// Track selected tool globally for the fetch interceptor
+// Tool selection comes from ChatKit's + button (composer tools)
+let selectedToolId: string | null = null;
+
 // Declare ChatKit element type for TypeScript
 declare global {
   namespace JSX {
@@ -87,9 +91,57 @@ export default function SchemaAgentPage() {
             url: apiUrl,
             // domainKey is required for custom API - using empty string for development
             domainKey: '',
-            // Custom fetch for auth token
+            // Custom fetch for auth token and tool injection
             fetch: async (url: string, options: RequestInit) => {
               try {
+                // Check if this is a message request and we have a selected tool
+                if (options.body && selectedToolId) {
+                  try {
+                    const body = JSON.parse(options.body as string);
+                    console.log('[ChatKit] Original body:', JSON.stringify(body).substring(0, 200));
+
+                    // Add tool metadata to the request
+                    body.metadata = {
+                      ...body.metadata,
+                      selected_tool: selectedToolId,
+                    };
+
+                    // Prefix the message content for the agent to understand
+                    // ChatKit sends messages in different formats, handle all cases
+                    if (body.input && typeof body.input === 'string') {
+                      body.input = `[TOOL:${selectedToolId.toUpperCase()}] ${body.input}`;
+                      console.log('[ChatKit] Modified input:', body.input.substring(0, 100));
+                    }
+
+                    // Also check for messages array (alternative format)
+                    if (body.messages && Array.isArray(body.messages)) {
+                      const lastUserMsg = body.messages.findLast((m: any) => m.role === 'user');
+                      if (lastUserMsg && lastUserMsg.content) {
+                        if (typeof lastUserMsg.content === 'string') {
+                          lastUserMsg.content = `[TOOL:${selectedToolId.toUpperCase()}] ${lastUserMsg.content}`;
+                        } else if (Array.isArray(lastUserMsg.content)) {
+                          // Handle content array format
+                          for (const part of lastUserMsg.content) {
+                            if (part.type === 'text' && part.text) {
+                              part.text = `[TOOL:${selectedToolId.toUpperCase()}] ${part.text}`;
+                              break;
+                            }
+                          }
+                        }
+                        console.log('[ChatKit] Modified message in messages array');
+                      }
+                    }
+
+                    options.body = JSON.stringify(body);
+                    console.log('[ChatKit] Tool applied:', selectedToolId);
+
+                    // Reset tool after use - user can reselect from + button for next message
+                    selectedToolId = null;
+                  } catch (parseError) {
+                    console.error('[ChatKit] Parse error:', parseError);
+                  }
+                }
+
                 return fetch(url, {
                   ...options,
                   headers: {
@@ -126,7 +178,26 @@ export default function SchemaAgentPage() {
           },
           // Composer configuration (ComposerOption)
           composer: {
-            placeholder: 'Ask about your data...',
+            placeholder: 'Ask about your data... (Type / for tools)',
+            // Tools menu - appears when user clicks tool button or types /
+            tools: [
+              {
+                id: 'gmail',
+                label: 'Send via Gmail',
+                shortLabel: 'Gmail',
+                icon: 'mail',
+                placeholderOverride: 'What would you like to email? (Results will be formatted and sent)',
+                persistent: false,
+              },
+              // Future tools can be added here:
+              // {
+              //   id: 'export-csv',
+              //   label: 'Export to CSV',
+              //   shortLabel: 'CSV',
+              //   icon: 'document',
+              //   placeholderOverride: 'What data would you like to export?',
+              // },
+            ],
           },
           // Disclaimer configuration (DisclaimerOption)
           disclaimer: {
@@ -142,6 +213,43 @@ export default function SchemaAgentPage() {
         chatkit.addEventListener('chatkit.error', (e: CustomEvent) => {
           console.error('ChatKit error event:', e.detail);
           setError(e.detail?.message || 'An error occurred');
+        });
+
+        // Track tool selection via log events from ChatKit's + button
+        chatkit.addEventListener('chatkit.log', (e: CustomEvent) => {
+          const { name, data } = e.detail || {};
+          console.log('[ChatKit Log]', name, JSON.stringify(data));
+
+          // Detect tool selection from various log event formats
+          // ChatKit may emit different event names for tool selection
+          if (name === 'tool_selected' || name === 'composer.tool.selected' || name === 'tool.selected') {
+            const toolId = data?.toolId || data?.tool || data?.id || null;
+            if (toolId) {
+              selectedToolId = toolId;
+              console.log('[Tool] Selected from ChatKit:', toolId);
+            }
+          }
+          // Also check for composer tool changes
+          if (name?.includes('tool') || name?.includes('composer')) {
+            if (data?.id || data?.toolId) {
+              selectedToolId = data.id || data.toolId;
+              console.log('[Tool] Selected from ChatKit:', selectedToolId);
+            }
+          }
+          // Check for tool deselection
+          if (name === 'tool_deselected' || name === 'composer.tool.deselected') {
+            selectedToolId = null;
+            console.log('[Tool] Deselected from ChatKit');
+          }
+        });
+
+        // Also listen for any custom events that might indicate tool selection
+        chatkit.addEventListener('chatkit.composer.tool', (e: CustomEvent) => {
+          console.log('[ChatKit] Composer tool event:', e.detail);
+          if (e.detail?.id) {
+            selectedToolId = e.detail.id;
+            console.log('[Tool] Selected from composer event:', selectedToolId);
+          }
         });
 
       } catch (err) {
