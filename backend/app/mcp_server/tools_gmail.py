@@ -8,8 +8,8 @@ from typing import Optional, Any
 
 from agents import function_tool, RunContextWrapper
 
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
+from sqlalchemy.pool import NullPool
 
 from app.services.gmail_service import (
     get_gmail_service,
@@ -28,9 +28,26 @@ _async_engine = None
 _async_session_maker = None
 
 
-def _get_db_session_maker():
-    """Get or create async session maker for database access in tools."""
+def _reset_db_connection():
+    """Reset database connection - call when connection errors occur."""
     global _async_engine, _async_session_maker
+    logger.info("Resetting database connection for Gmail tools...")
+    if _async_engine is not None:
+        # Don't await dispose in sync context - just reset references
+        _async_engine = None
+    _async_session_maker = None
+
+
+def _get_db_session_maker(force_new: bool = False):
+    """Get or create async session maker for database access in tools.
+
+    Args:
+        force_new: If True, force creation of a new connection pool
+    """
+    global _async_engine, _async_session_maker
+
+    if force_new:
+        _reset_db_connection()
 
     if _async_session_maker is None:
         import os
@@ -57,12 +74,19 @@ def _get_db_session_maker():
             new_query = urlencode(query_params, doseq=True)
             database_url = urlunparse(parsed._replace(query=new_query))
 
-        _async_engine = create_async_engine(database_url, echo=False)
-        _async_session_maker = sessionmaker(
+        # Use NullPool to avoid stale connection issues
+        # Each request gets a fresh connection
+        _async_engine = create_async_engine(
+            database_url,
+            echo=False,
+            poolclass=NullPool,  # No connection pooling - fresh connection each time
+        )
+        _async_session_maker = async_sessionmaker(
             _async_engine,
             class_=AsyncSession,
             expire_on_commit=False,
         )
+        logger.info("Created new database session maker for Gmail tools")
 
     return _async_session_maker
 
@@ -136,32 +160,68 @@ async def send_email(
 
         logger.info(f"send_email: user_id={user_id}, getting database session...")
 
-        # Get database session
-        session_maker = _get_db_session_maker()
-        async with session_maker() as db:
-            gmail_service = get_gmail_service()
+        # Retry logic for database connection issues
+        max_retries = 2
+        last_error = None
 
-            logger.info("send_email: Calling gmail_service.send_email...")
-            result = await gmail_service.send_email(
-                db=db,
-                user_id=user_id,
-                subject=subject,
-                body=body,
-                to_email=to_email,
-            )
+        for attempt in range(max_retries + 1):
+            try:
+                # Force new connection on retry
+                force_new = attempt > 0
+                if force_new:
+                    logger.info(f"send_email: Retry attempt {attempt} with fresh connection...")
 
-            if result.success:
-                recipient_info = f" to {to_email}" if to_email else " to your default recipient"
-                logger.info(f"send_email: SUCCESS - Message ID: {result.message_id}")
-                return (
-                    f"✅ Email sent successfully{recipient_info}!\n\n"
-                    f"📧 Subject: {subject}\n"
-                    f"🆔 Message ID: {result.message_id}\n\n"
-                    "The email has been delivered to the recipient's inbox."
-                )
-            else:
-                logger.error(f"send_email: FAILED - {result.error}")
-                return f"❌ Failed to send email: {result.error}"
+                # Get database session
+                session_maker = _get_db_session_maker(force_new=force_new)
+                async with session_maker() as db:
+                    gmail_service = get_gmail_service()
+
+                    logger.info("send_email: Calling gmail_service.send_email...")
+                    result = await gmail_service.send_email(
+                        db=db,
+                        user_id=user_id,
+                        subject=subject,
+                        body=body,
+                        to_email=to_email,
+                    )
+
+                    if result.success:
+                        recipient_info = f" to {to_email}" if to_email else " to your default recipient"
+                        logger.info(f"send_email: SUCCESS - Message ID: {result.message_id}")
+                        return (
+                            f"✅ Email sent successfully{recipient_info}!\n\n"
+                            f"📧 Subject: {subject}\n"
+                            f"🆔 Message ID: {result.message_id}\n\n"
+                            "The email has been delivered to the recipient's inbox."
+                        )
+                    else:
+                        logger.error(f"send_email: FAILED - {result.error}")
+                        return f"❌ Failed to send email: {result.error}"
+
+            except Exception as db_error:
+                error_str = str(db_error).lower()
+                # Check for connection-related errors that might be recoverable
+                is_connection_error = any(x in error_str for x in [
+                    "connection is closed",
+                    "connection was closed",
+                    "connection reset",
+                    "interfaceerror",
+                    "connection refused",
+                    "server closed the connection",
+                ])
+
+                if is_connection_error and attempt < max_retries:
+                    logger.warning(f"send_email: Connection error on attempt {attempt + 1}: {db_error}")
+                    last_error = db_error
+                    _reset_db_connection()  # Reset before retry
+                    continue
+                else:
+                    # Not a connection error or out of retries, re-raise
+                    raise
+
+        # If we get here, all retries failed
+        if last_error:
+            raise last_error
 
     except GmailNotConnectedError:
         logger.warning("send_email: Gmail not connected")
@@ -226,31 +286,61 @@ async def check_email_status(
         if not user_id:
             return "I cannot check email status without access to your user session."
 
-        # Get database session
-        session_maker = _get_db_session_maker()
-        async with session_maker() as db:
-            gmail_service = get_gmail_service()
-            status = await gmail_service.get_gmail_status(db, user_id)
+        # Retry logic for database connection issues
+        max_retries = 2
+        last_error = None
 
-            if status["connected"]:
-                recipient_info = (
-                    f"\nDefault recipient: {status['recipient_email']}"
-                    if status.get('recipient_email')
-                    else "\nNo default recipient configured."
-                )
-                return (
-                    f"Gmail is connected!\n"
-                    f"Account: {status['email']}\n"
-                    f"Connected since: {status['connected_at']}"
-                    f"{recipient_info}\n\n"
-                    "I can send emails on your behalf. Just ask me to email any content!"
-                )
-            else:
-                return (
-                    "Gmail is not connected.\n"
-                    "To enable email functionality, please go to Dashboard > Connect Tools "
-                    "and connect your Gmail account."
-                )
+        for attempt in range(max_retries + 1):
+            try:
+                # Force new connection on retry
+                force_new = attempt > 0
+
+                # Get database session
+                session_maker = _get_db_session_maker(force_new=force_new)
+                async with session_maker() as db:
+                    gmail_service = get_gmail_service()
+                    status = await gmail_service.get_gmail_status(db, user_id)
+
+                    if status["connected"]:
+                        recipient_info = (
+                            f"\nDefault recipient: {status['recipient_email']}"
+                            if status.get('recipient_email')
+                            else "\nNo default recipient configured."
+                        )
+                        return (
+                            f"Gmail is connected!\n"
+                            f"Account: {status['email']}\n"
+                            f"Connected since: {status['connected_at']}"
+                            f"{recipient_info}\n\n"
+                            "I can send emails on your behalf. Just ask me to email any content!"
+                        )
+                    else:
+                        return (
+                            "Gmail is not connected.\n"
+                            "To enable email functionality, please go to Dashboard > Connect Tools "
+                            "and connect your Gmail account."
+                        )
+
+            except Exception as db_error:
+                error_str = str(db_error).lower()
+                is_connection_error = any(x in error_str for x in [
+                    "connection is closed",
+                    "connection was closed",
+                    "connection reset",
+                    "interfaceerror",
+                    "connection refused",
+                ])
+
+                if is_connection_error and attempt < max_retries:
+                    logger.warning(f"check_email_status: Connection error on attempt {attempt + 1}: {db_error}")
+                    last_error = db_error
+                    _reset_db_connection()
+                    continue
+                else:
+                    raise
+
+        if last_error:
+            raise last_error
 
     except Exception as e:
         logger.error(f"Error checking email status: {e}")
