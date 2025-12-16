@@ -5,6 +5,7 @@ Uses OAuth2 tokens to authenticate and send emails on behalf of users.
 
 import base64
 import logging
+import re
 from datetime import datetime, timezone
 from email.message import EmailMessage
 from typing import Optional
@@ -26,6 +27,203 @@ from app.services.gmail_oauth_service import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def format_email_html(body: str, subject: str = "") -> str:
+    """
+    Convert plain text or markdown-like body to professional HTML email.
+
+    Args:
+        body: Email body content (plain text or markdown-like)
+        subject: Email subject for header
+
+    Returns:
+        Formatted HTML email string
+    """
+    # Escape HTML special characters first
+    def escape_html(text: str) -> str:
+        return (text
+            .replace("&", "&amp;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;")
+            .replace('"', "&quot;"))
+
+    # Process the body content
+    lines = body.split('\n')
+    html_lines = []
+    in_table = False
+    table_rows = []
+    in_code_block = False
+    code_lines = []
+
+    for line in lines:
+        stripped = line.strip()
+
+        # Handle code blocks ```
+        if stripped.startswith('```'):
+            if in_code_block:
+                # End code block
+                code_content = '\n'.join(code_lines)
+                html_lines.append(f'<pre style="background-color: #f4f4f4; padding: 12px; border-radius: 6px; overflow-x: auto; font-family: \'Courier New\', monospace; font-size: 13px; border: 1px solid #e0e0e0;">{escape_html(code_content)}</pre>')
+                code_lines = []
+                in_code_block = False
+            else:
+                in_code_block = True
+            continue
+
+        if in_code_block:
+            code_lines.append(line)
+            continue
+
+        # Handle markdown tables
+        if '|' in stripped and stripped.startswith('|') and stripped.endswith('|'):
+            if not in_table:
+                in_table = True
+                table_rows = []
+            # Skip separator rows (|---|---|)
+            if re.match(r'^\|[\s\-:]+\|$', stripped.replace('|', '|').replace('-', '-')):
+                continue
+            cells = [c.strip() for c in stripped.split('|')[1:-1]]
+            table_rows.append(cells)
+            continue
+        elif in_table:
+            # End of table
+            html_lines.append(_render_table(table_rows))
+            table_rows = []
+            in_table = False
+
+        # Handle headers
+        if stripped.startswith('### '):
+            html_lines.append(f'<h3 style="color: #1a1a1a; font-size: 16px; margin: 20px 0 10px 0; font-weight: 600;">{escape_html(stripped[4:])}</h3>')
+            continue
+        elif stripped.startswith('## '):
+            html_lines.append(f'<h2 style="color: #1a1a1a; font-size: 18px; margin: 24px 0 12px 0; font-weight: 600;">{escape_html(stripped[3:])}</h2>')
+            continue
+        elif stripped.startswith('# '):
+            html_lines.append(f'<h1 style="color: #1a1a1a; font-size: 22px; margin: 28px 0 14px 0; font-weight: 700;">{escape_html(stripped[2:])}</h1>')
+            continue
+
+        # Handle bullet points
+        if stripped.startswith('- ') or stripped.startswith('* '):
+            content = escape_html(stripped[2:])
+            content = _format_inline(content)
+            html_lines.append(f'<div style="margin: 6px 0 6px 20px; padding-left: 10px; border-left: 3px solid #10b981;">&#8226; {content}</div>')
+            continue
+
+        # Handle numbered lists
+        num_match = re.match(r'^(\d+)\.\s+(.+)$', stripped)
+        if num_match:
+            num, content = num_match.groups()
+            content = _format_inline(escape_html(content))
+            html_lines.append(f'<div style="margin: 6px 0 6px 20px;"><span style="color: #10b981; font-weight: 600;">{num}.</span> {content}</div>')
+            continue
+
+        # Handle horizontal rule
+        if stripped in ['---', '***', '___']:
+            html_lines.append('<hr style="border: none; border-top: 1px solid #e0e0e0; margin: 20px 0;">')
+            continue
+
+        # Handle empty lines
+        if not stripped:
+            html_lines.append('<div style="height: 12px;"></div>')
+            continue
+
+        # Regular paragraph
+        content = _format_inline(escape_html(stripped))
+        html_lines.append(f'<p style="margin: 8px 0; line-height: 1.6; color: #333;">{content}</p>')
+
+    # Handle any remaining table
+    if in_table and table_rows:
+        html_lines.append(_render_table(table_rows))
+
+    # Handle any remaining code block
+    if in_code_block and code_lines:
+        code_content = '\n'.join(code_lines)
+        html_lines.append(f'<pre style="background-color: #f4f4f4; padding: 12px; border-radius: 6px; overflow-x: auto; font-family: \'Courier New\', monospace; font-size: 13px;">{escape_html(code_content)}</pre>')
+
+    body_html = '\n'.join(html_lines)
+
+    # Wrap in professional email template
+    return f'''<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f5f5f5;">
+    <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f5f5f5; padding: 20px 0;">
+        <tr>
+            <td align="center">
+                <table width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); overflow: hidden; max-width: 100%;">
+                    <!-- Header -->
+                    <tr>
+                        <td style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); padding: 24px 30px;">
+                            <h1 style="margin: 0; color: #ffffff; font-size: 20px; font-weight: 600;">
+                                AI Data Assistant
+                            </h1>
+                            {f'<p style="margin: 8px 0 0 0; color: rgba(255,255,255,0.9); font-size: 14px;">{escape_html(subject)}</p>' if subject else ''}
+                        </td>
+                    </tr>
+                    <!-- Content -->
+                    <tr>
+                        <td style="padding: 30px;">
+                            {body_html}
+                        </td>
+                    </tr>
+                    <!-- Footer -->
+                    <tr>
+                        <td style="background-color: #f9fafb; padding: 20px 30px; border-top: 1px solid #e5e7eb;">
+                            <p style="margin: 0; color: #6b7280; font-size: 12px; text-align: center;">
+                                Sent by AI Data Assistant<br>
+                                <span style="color: #9ca3af;">This is an automated message from your database query assistant.</span>
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>'''
+
+
+def _format_inline(text: str) -> str:
+    """Format inline markdown elements like bold, italic, code."""
+    # Bold: **text** or __text__
+    text = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', text)
+    text = re.sub(r'__(.+?)__', r'<strong>\1</strong>', text)
+    # Italic: *text* or _text_
+    text = re.sub(r'\*(.+?)\*', r'<em>\1</em>', text)
+    text = re.sub(r'_(.+?)_', r'<em>\1</em>', text)
+    # Inline code: `code`
+    text = re.sub(r'`(.+?)`', r'<code style="background-color: #f4f4f4; padding: 2px 6px; border-radius: 4px; font-family: monospace; font-size: 13px;">\1</code>', text)
+    return text
+
+
+def _render_table(rows: list) -> str:
+    """Render a list of table rows as HTML table."""
+    if not rows:
+        return ""
+
+    html = ['<table style="width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 14px;">']
+
+    for i, row in enumerate(rows):
+        if i == 0:
+            # Header row
+            html.append('<thead><tr>')
+            for cell in row:
+                html.append(f'<th style="background-color: #10b981; color: white; padding: 12px 16px; text-align: left; font-weight: 600; border: 1px solid #059669;">{cell}</th>')
+            html.append('</tr></thead><tbody>')
+        else:
+            # Data row
+            bg_color = '#f9fafb' if i % 2 == 0 else '#ffffff'
+            html.append(f'<tr style="background-color: {bg_color};">')
+            for cell in row:
+                html.append(f'<td style="padding: 10px 16px; border: 1px solid #e5e7eb; color: #374151;">{cell}</td>')
+            html.append('</tr>')
+
+    html.append('</tbody></table>')
+    return '\n'.join(html)
 
 
 class GmailSendError(Exception):

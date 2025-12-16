@@ -389,6 +389,10 @@ class SchemaChatKitServer(ChatKitServer):
                 )
                 await asyncio.sleep(0.1)
 
+            # Get thread_id from ChatKit thread for session persistence
+            thread_id = thread.id if thread else None
+            logger.info(f"[Schema ChatKit] Thread ID for session: {thread_id}")
+
             # Get or create agent for this user
             if user_id not in _agent_cache:
                 try:
@@ -398,9 +402,10 @@ class SchemaChatKitServer(ChatKitServer):
                         auto_initialize=True,
                         user_id=user_id,  # Pass user_id for Gmail tool context
                         enable_gmail=True,
+                        thread_id=thread_id,  # Pass thread_id for persistent session
                     )
                     _agent_cache[user_id] = agent
-                    logger.info(f"Created new Schema Query Agent for user {user_id} with Gmail tools")
+                    logger.info(f"Created new Schema Query Agent for user {user_id} with Gmail tools and PostgreSQL session")
                 except Exception as e:
                     logger.error(f"Failed to create agent for user {user_id}: {e}")
                     error_text = f"Failed to initialize agent: {str(e)}"
@@ -413,8 +418,8 @@ class SchemaChatKitServer(ChatKitServer):
             else:
                 agent = _agent_cache[user_id]
 
-            # Run agent query
-            result = await agent.query(user_message)
+            # Run agent query with thread_id for session persistence
+            result = await agent.query(user_message, thread_id=thread_id)
             response_text = result.get("response", "I couldn't process your request.")
 
             # Calculate total time
@@ -1082,6 +1087,9 @@ async def chat_with_agent(
             error="Schema metadata not available. Call /schema-agent/discover-schema first."
         )
 
+    # Use session_id from request or generate default
+    session_thread_id = request.session_id or f"chat-user-{user.id}"
+
     # Get or create agent for this user
     if user.id not in _agent_cache:
         try:
@@ -1091,9 +1099,10 @@ async def chat_with_agent(
                 auto_initialize=True,
                 user_id=user.id,  # Pass user_id for Gmail tool context
                 enable_gmail=True,
+                thread_id=session_thread_id,  # Pass session_id for persistent conversation
             )
             _agent_cache[user.id] = agent
-            logger.info(f"Created new Schema Query Agent for user {user.id} with Gmail tools")
+            logger.info(f"Created new Schema Query Agent for user {user.id} with Gmail tools and PostgreSQL session")
         except Exception as e:
             logger.error(f"Failed to create agent for user {user.id}: {e}")
             return ChatResponse(
@@ -1104,9 +1113,9 @@ async def chat_with_agent(
     else:
         agent = _agent_cache[user.id]
 
-    # Process the query
+    # Process the query with session persistence
     try:
-        result = await agent.query(request.message)
+        result = await agent.query(request.message, thread_id=session_thread_id)
 
         return ChatResponse(
             success=result.get("success", False),
