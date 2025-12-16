@@ -16,6 +16,7 @@ import Script from 'next/script';
 import { ROUTES, APP_METADATA, API_BASE_URL } from '@/lib/constants';
 import { useAuth } from '@/lib/auth-context';
 import { getAccessToken } from '@/lib/auth-api';
+import ConnectToolsSection from './components/ConnectToolsSection';
 
 export default function DashboardPage() {
   const {
@@ -118,17 +119,14 @@ export default function DashboardPage() {
 
     try {
       // Connect and discover schema (backend tests connection first)
-      const result = await chooseConnection({
+      await chooseConnection({
         connection_type: 'schema_query_only',
         database_uri: databaseUri,
       });
 
       // Connection successful - redirect to AI Agent page
-      if (result.connected) {
-        router.push(ROUTES.SCHEMA_AGENT);
-      } else {
-        router.push(ROUTES.SCHEMA_CONNECT);
-      }
+      // (If connection fails, an error is thrown and caught below)
+      router.push(ROUTES.SCHEMA_AGENT);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to connect to database');
     } finally {
@@ -652,6 +650,9 @@ export default function DashboardPage() {
                 </div>
               </Link>
             </div>
+
+            {/* Connect Tools Section */}
+            <ConnectToolsSection className="mt-8" />
 
             {/* Read-Only Notice */}
             <div className="mt-8 bg-emerald-50 border border-emerald-200 rounded-lg p-4">

@@ -313,6 +313,13 @@ class SchemaChatKitServer(ChatKitServer):
                     if hasattr(content, 'text'):
                         user_message += content.text
 
+            # Log the raw message for debugging
+            logger.info(f"[Schema ChatKit] Raw user message: {user_message[:100]}...")
+
+            # Check if tool prefix is present (from frontend tool selection)
+            if '[TOOL:' in user_message:
+                logger.info(f"[Schema ChatKit] Tool prefix detected in message!")
+
             # Get user_id and connection info from context
             user_id = context.get("user_id")
             database_uri = context.get("database_uri")
@@ -378,10 +385,12 @@ class SchemaChatKitServer(ChatKitServer):
                     agent = await create_schema_query_agent(
                         database_uri=database_uri,
                         schema_metadata=schema_metadata,
-                        auto_initialize=True
+                        auto_initialize=True,
+                        user_id=user_id,  # Pass user_id for Gmail tool context
+                        enable_gmail=True,
                     )
                     _agent_cache[user_id] = agent
-                    logger.info(f"Created new Schema Query Agent for user {user_id}")
+                    logger.info(f"Created new Schema Query Agent for user {user_id} with Gmail tools")
                 except Exception as e:
                     logger.error(f"Failed to create agent for user {user_id}: {e}")
                     error_text = f"Failed to initialize agent: {str(e)}"
@@ -1069,10 +1078,12 @@ async def chat_with_agent(
             agent = await create_schema_query_agent(
                 database_uri=connection.database_uri,
                 schema_metadata=connection.schema_metadata,
-                auto_initialize=True
+                auto_initialize=True,
+                user_id=user.id,  # Pass user_id for Gmail tool context
+                enable_gmail=True,
             )
             _agent_cache[user.id] = agent
-            logger.info(f"Created new Schema Query Agent for user {user.id}")
+            logger.info(f"Created new Schema Query Agent for user {user.id} with Gmail tools")
         except Exception as e:
             logger.error(f"Failed to create agent for user {user.id}: {e}")
             return ChatResponse(
@@ -1175,6 +1186,15 @@ async def chatkit_endpoint(
     try:
         body = await request.body()
         logger.info(f"[Schema ChatKit] Request received from user {user.id}")
+
+        # Log raw body for debugging tool injection
+        try:
+            body_str = body.decode('utf-8')
+            logger.info(f"[Schema ChatKit] Raw body (first 500 chars): {body_str[:500]}")
+            if '[TOOL:' in body_str:
+                logger.info(f"[Schema ChatKit] TOOL PREFIX FOUND IN BODY!")
+        except Exception as e:
+            logger.warning(f"[Schema ChatKit] Could not decode body: {e}")
 
         # Get user's connection
         connection = await get_user_connection(user, db)

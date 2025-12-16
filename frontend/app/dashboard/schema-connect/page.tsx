@@ -391,7 +391,7 @@ export default function SchemaConnectPage() {
                   Discover Your Schema
                 </h2>
                 <p className="text-gray-600 mb-6">
-                  Click "Discover Schema" to analyze your database and enable AI-powered queries.
+                  Click &quot;Discover Schema&quot; to analyze your database and enable AI-powered queries.
                 </p>
               </div>
             ) : (

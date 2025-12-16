@@ -148,7 +148,7 @@ async def root():
 
 # ============ Include Routers ============
 
-from app.routers import inventory, billing, agent, chatkit_server, analytics, db_connect, inventory_agent, auth, schema_agent
+from app.routers import inventory, billing, agent, chatkit_server, analytics, db_connect, inventory_agent, auth, schema_agent, gmail
 
 # Authentication router (must be first for auth to work)
 app.include_router(auth.router)
@@ -164,6 +164,9 @@ app.include_router(inventory_agent.router)
 
 # Schema Query Agent router (Phase 9 - Agent + Analytics Only mode)
 app.include_router(schema_agent.router)
+
+# Gmail OAuth2 Integration router (Phase 10)
+app.include_router(gmail.router)
 
 logger.info("FastAPI application initialized")
 

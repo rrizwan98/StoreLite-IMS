@@ -82,6 +82,15 @@ class UserConnection(Base):
     schema_last_updated = Column(DateTime, nullable=True)  # When schema was last discovered
     allowed_schemas = Column(JSONB, default=["public"])  # PostgreSQL schemas to query (JSONB array)
 
+    # Gmail OAuth2 Integration fields (Phase 10)
+    gmail_access_token = Column(Text, nullable=True)  # Encrypted OAuth2 access token
+    gmail_refresh_token = Column(Text, nullable=True)  # Encrypted OAuth2 refresh token
+    gmail_token_expiry = Column(DateTime, nullable=True)  # When access token expires
+    gmail_email = Column(String(255), nullable=True)  # Connected Gmail account email
+    gmail_connected_at = Column(DateTime, nullable=True)  # When Gmail was connected
+    gmail_recipient_email = Column(String(255), nullable=True)  # Default recipient for sending emails
+    gmail_scopes = Column(JSONB, nullable=True)  # Granted OAuth2 scopes
+
     __table_args__ = ({"extend_existing": True},)
 
     # Relationships

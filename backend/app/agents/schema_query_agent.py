@@ -1,5 +1,5 @@
 """
-Schema Query Agent (Phase 9) - MCP Version
+Schema Query Agent (Phase 9/10) - MCP Version with Gmail Integration
 
 AI agent for querying user's existing database schema using postgres-mcp.
 Uses natural language to generate and execute SQL queries via MCP tools.
@@ -10,6 +10,7 @@ Key Features:
 - Uses MCP tools (execute_sql, list_tables, etc.) for all DB operations
 - Read-only mode enforced at MCP server level
 - Schema-aware prompts for intelligent querying
+- Gmail integration for sending query results via email (Phase 10)
 """
 
 import logging
@@ -28,8 +29,8 @@ from app.services.schema_discovery import format_schema_for_prompt
 logger = logging.getLogger(__name__)
 
 # Version marker for debugging
-SCHEMA_AGENT_VERSION = "2.0.0-mcp"
-logger.info(f"[Schema Agent] Module loaded - Version {SCHEMA_AGENT_VERSION} (MCP-enabled)")
+SCHEMA_AGENT_VERSION = "2.1.0-mcp-gmail"
+logger.info(f"[Schema Agent] Module loaded - Version {SCHEMA_AGENT_VERSION} (MCP-enabled with Gmail)")
 
 
 # ============================================================================
@@ -96,6 +97,12 @@ AVAILABLE MCP TOOLS
 - `explain_query`: Get query execution plan
 - `get_top_queries`: Find slow queries for optimization
 
+############################################
+AVAILABLE FUNCTION TOOLS
+############################################
+- `send_email`: Send query results or any content via user's connected Gmail
+- `check_email_status`: Check if user's Gmail is connected and ready
+
 <tool_usage_rules>
 - Prefer tools for all data queries - never guess or fabricate results
 - Parallelize independent reads to reduce latency
@@ -103,7 +110,52 @@ AVAILABLE MCP TOOLS
   * What was found (data first!)
   * Key insights or patterns
   * Relevant context or implications
+- Use send_email when user explicitly asks to email/send results
+- If email fails due to not connected, inform user to connect Gmail in settings
 </tool_usage_rules>
+
+############################################
+GMAIL TOOL ACTIVATION (IMPORTANT)
+############################################
+<gmail_tool_rules>
+When message starts with [TOOL:GMAIL], the user has selected the Gmail tool:
+1. Execute the query to get the requested data
+2. ALWAYS call send_email tool with the results - this is MANDATORY
+3. Format email body PROFESSIONALLY with:
+   - Greeting: "Hello,"
+   - Brief description of the data
+   - Data formatted in clean, readable tables (use ASCII tables, not markdown)
+   - Summary/insights section
+   - Sign-off: "Best regards,\nAI Data Assistant\nIMS Inventory System"
+4. Use descriptive email subject based on the query
+
+EMAIL FORMAT TEMPLATE:
+```
+Hello,
+
+Here is the data you requested:
+
+[QUERY DESCRIPTION]
+
+[DATA IN READABLE TABLE FORMAT]
+Example:
++--------+------------+-----------+
+| Column | Column     | Column    |
++--------+------------+-----------+
+| Value  | Value      | Value     |
++--------+------------+-----------+
+
+Summary:
+- [Key insight 1]
+- [Key insight 2]
+
+Best regards,
+AI Data Assistant
+IMS Inventory System
+```
+
+CRITICAL: When [TOOL:GMAIL] is present, sending email is NOT optional - always send!
+</gmail_tool_rules>
 
 ############################################
 EXECUTION BEHAVIOR (NON-NEGOTIABLE)
@@ -233,6 +285,8 @@ class SchemaQueryAgent:
         database_uri: str,
         schema_metadata: dict,
         read_only: bool = True,
+        user_id: Optional[int] = None,
+        enable_gmail: bool = True,
     ):
         """
         Initialize Schema Query Agent.
@@ -241,10 +295,14 @@ class SchemaQueryAgent:
             database_uri: PostgreSQL connection string for user's database
             schema_metadata: Discovered schema metadata dict
             read_only: Whether to use read-only mode (default: True)
+            user_id: User ID for tool context (needed for Gmail integration)
+            enable_gmail: Whether to enable Gmail tools (default: True)
         """
         self.database_uri = database_uri
         self.schema_metadata = schema_metadata
         self.read_only = read_only
+        self.user_id = user_id
+        self.enable_gmail = enable_gmail
 
         # MCP server and agent instances
         self._mcp_server: Optional[MCPServerStdio] = None
@@ -256,11 +314,12 @@ class SchemaQueryAgent:
         # Session info
         self._session_id = f"schema-{datetime.now().strftime('%Y%m%d%H%M%S')}"
         self._mcp_tools: List[str] = []
+        self._function_tools: List[str] = []
         self._is_initialized = False
 
         logger.info(
             f"[Schema Agent] Created agent instance "
-            f"(read_only={read_only}, session={self._session_id})"
+            f"(read_only={read_only}, user_id={user_id}, gmail={enable_gmail}, session={self._session_id})"
         )
 
     async def initialize(self) -> Dict[str, Any]:
@@ -410,20 +469,36 @@ class SchemaQueryAgent:
             # Generate system prompt with schema context
             system_prompt = generate_schema_agent_prompt(self.schema_metadata)
 
-            # Create agent with fresh MCP server
+            # Prepare function tools list (Gmail tools if enabled)
+            function_tools = []
+            if self.enable_gmail and self.user_id:
+                try:
+                    from app.mcp_server.tools_gmail import GMAIL_TOOLS
+                    function_tools = GMAIL_TOOLS
+                    self._function_tools = ["send_email", "check_email_status"]
+                    logger.info(f"[Schema Agent] Gmail tools enabled for user {self.user_id}")
+                except ImportError as e:
+                    logger.warning(f"[Schema Agent] Gmail tools not available: {e}")
+
+            # Create agent with fresh MCP server and function tools
             agent = Agent(
                 name="Schema Query Agent",
                 instructions=system_prompt,
                 model=get_llm_model(),
                 mcp_servers=[mcp_server],
+                tools=function_tools if function_tools else None,
                 model_settings=ModelSettings(tool_choice="auto"),
             )
+
+            # Build context for tools (needed for Gmail to access user_id)
+            run_context = {"user_id": self.user_id} if self.user_id else {}
 
             # Run the agent - it will use MCP tools automatically
             result = await Runner.run(
                 agent,
                 input=natural_query,
-                max_turns=10  # Limit iterations
+                max_turns=10,  # Limit iterations
+                context=run_context,
             )
 
             # Extract response
@@ -540,6 +615,8 @@ async def create_schema_query_agent(
     schema_metadata: dict,
     auto_initialize: bool = True,
     read_only: bool = True,
+    user_id: Optional[int] = None,
+    enable_gmail: bool = True,
 ) -> SchemaQueryAgent:
     """
     Factory function to create and initialize a Schema Query Agent.
@@ -549,6 +626,8 @@ async def create_schema_query_agent(
         schema_metadata: Discovered schema metadata
         auto_initialize: Whether to initialize immediately
         read_only: Whether to use read-only mode
+        user_id: User ID for tool context (needed for Gmail integration)
+        enable_gmail: Whether to enable Gmail tools (default: True)
 
     Returns:
         Initialized SchemaQueryAgent instance
@@ -557,6 +636,8 @@ async def create_schema_query_agent(
         database_uri=database_uri,
         schema_metadata=schema_metadata,
         read_only=read_only,
+        user_id=user_id,
+        enable_gmail=enable_gmail,
     )
 
     if auto_initialize:
