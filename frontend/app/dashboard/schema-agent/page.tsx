@@ -8,7 +8,7 @@
 
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Script from 'next/script';
@@ -17,9 +17,8 @@ import { useAuth } from '@/lib/auth-context';
 import { getAccessToken } from '@/lib/auth-api';
 
 // Track selected tool globally for the fetch interceptor
-// This is persistent - stays selected until user clicks disconnect
+// Tool selection comes from ChatKit's + button (composer tools)
 let selectedToolId: string | null = null;
-let toolPersistent: boolean = false; // When true, tool stays selected after sending
 
 // Declare ChatKit element type for TypeScript
 declare global {
@@ -39,26 +38,9 @@ export default function SchemaAgentPage() {
 
   const [isLoaded, setIsLoaded] = useState(false);
   const [error, setError] = useState('');
-  const [activeTool, setActiveTool] = useState<string | null>(null); // For UI display
   const chatkitRef = useRef<HTMLElement | null>(null);
   const configuredRef = useRef(false);
   const checkIntervalRef = useRef<NodeJS.Timeout | null>(null);
-
-  // Function to set tool (called from UI)
-  const selectTool = useCallback((toolId: string | null) => {
-    selectedToolId = toolId;
-    toolPersistent = toolId !== null; // Make persistent when selected
-    setActiveTool(toolId);
-    console.log('[Tool] Selected:', toolId, 'Persistent:', toolPersistent);
-  }, []);
-
-  // Function to disconnect tool
-  const disconnectTool = useCallback(() => {
-    selectedToolId = null;
-    toolPersistent = false;
-    setActiveTool(null);
-    console.log('[Tool] Disconnected');
-  }, []);
 
   // Redirect if not authenticated or wrong connection type
   useEffect(() => {
@@ -151,12 +133,10 @@ export default function SchemaAgentPage() {
                     }
 
                     options.body = JSON.stringify(body);
-                    console.log('[ChatKit] Tool applied:', selectedToolId, 'Persistent:', toolPersistent);
+                    console.log('[ChatKit] Tool applied:', selectedToolId);
 
-                    // Only reset if not persistent
-                    if (!toolPersistent) {
-                      selectedToolId = null;
-                    }
+                    // Reset tool after use - user can reselect from + button for next message
+                    selectedToolId = null;
                   } catch (parseError) {
                     console.error('[ChatKit] Parse error:', parseError);
                   }
@@ -235,7 +215,7 @@ export default function SchemaAgentPage() {
           setError(e.detail?.message || 'An error occurred');
         });
 
-        // Track tool selection via log events
+        // Track tool selection via log events from ChatKit's + button
         chatkit.addEventListener('chatkit.log', (e: CustomEvent) => {
           const { name, data } = e.detail || {};
           console.log('[ChatKit Log]', name, JSON.stringify(data));
@@ -245,18 +225,21 @@ export default function SchemaAgentPage() {
           if (name === 'tool_selected' || name === 'composer.tool.selected' || name === 'tool.selected') {
             const toolId = data?.toolId || data?.tool || data?.id || null;
             if (toolId) {
-              selectTool(toolId);
+              selectedToolId = toolId;
+              console.log('[Tool] Selected from ChatKit:', toolId);
             }
           }
           // Also check for composer tool changes
           if (name?.includes('tool') || name?.includes('composer')) {
             if (data?.id || data?.toolId) {
-              selectTool(data.id || data.toolId);
+              selectedToolId = data.id || data.toolId;
+              console.log('[Tool] Selected from ChatKit:', selectedToolId);
             }
           }
           // Check for tool deselection
           if (name === 'tool_deselected' || name === 'composer.tool.deselected') {
-            disconnectTool();
+            selectedToolId = null;
+            console.log('[Tool] Deselected from ChatKit');
           }
         });
 
@@ -264,7 +247,8 @@ export default function SchemaAgentPage() {
         chatkit.addEventListener('chatkit.composer.tool', (e: CustomEvent) => {
           console.log('[ChatKit] Composer tool event:', e.detail);
           if (e.detail?.id) {
-            selectTool(e.detail.id);
+            selectedToolId = e.detail.id;
+            console.log('[Tool] Selected from composer event:', selectedToolId);
           }
         });
 
@@ -402,32 +386,6 @@ export default function SchemaAgentPage() {
               ✕
             </button>
           </div>
-        </div>
-      )}
-
-      {/* Tool Selection Bar - Shows above ChatKit */}
-      {isLoaded && (
-        <div className="bg-white border-b border-gray-200 px-4 py-2 flex items-center gap-3">
-          <span className="text-sm text-gray-600">Tools:</span>
-          <button
-            onClick={() => activeTool === 'gmail' ? disconnectTool() : selectTool('gmail')}
-            className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
-              activeTool === 'gmail'
-                ? 'bg-emerald-100 text-emerald-700 border-2 border-emerald-500'
-                : 'bg-gray-100 text-gray-600 hover:bg-gray-200 border-2 border-transparent'
-            }`}
-          >
-            <span>📧</span>
-            <span>Gmail</span>
-            {activeTool === 'gmail' && (
-              <span className="ml-1 text-xs bg-emerald-500 text-white px-1.5 py-0.5 rounded">ON</span>
-            )}
-          </button>
-          {activeTool && (
-            <span className="text-xs text-gray-500 ml-2">
-              All messages will be emailed. Click to disconnect.
-            </span>
-          )}
         </div>
       )}
 
