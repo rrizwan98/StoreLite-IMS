@@ -16,9 +16,17 @@ cd backend && python -m app.mcp_server.server --stdio
 # No manual command needed - MCP server is spawned automatically via inventory_agent.py
 
 ## All-in-One (Run in separate terminals)
+
 # Terminal 1: Backend
 cd backend && uvicorn app.main:app --reload --port 8000
+
 # Terminal 2: Frontend
 cd frontend && npm run dev
+
 # Terminal 3: Python MCP Server (HTTP mode on port 8001)
 cd backend && python -m app.mcp_server.main
+
+# start claude code. For coding
+claude
+
+claude --resume

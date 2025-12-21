@@ -64,6 +64,7 @@ from app.mcp_server.tools_schema_query import (
     schema_get_table_stats
 )
 from app.agents.schema_query_agent import SchemaQueryAgent, create_schema_query_agent
+from app.services.chatkit_store_service import PostgreSQLChatKitStore, create_chatkit_store
 
 logger = logging.getLogger(__name__)
 
@@ -508,9 +509,11 @@ class SchemaChatKitServer(ChatKitServer):
         return steps
 
 
-# Global ChatKit instances
-_schema_store = SchemaAgentStore()
-_schema_chatkit_server = SchemaChatKitServer(_schema_store)
+# Global ChatKit instances - fallback in-memory store for backward compatibility
+_fallback_store = SchemaAgentStore()
+
+# Cache for per-user ChatKit servers (keyed by user_id)
+_chatkit_server_cache: Dict[int, SchemaChatKitServer] = {}
 
 
 # ============================================================================
@@ -1206,11 +1209,24 @@ async def chatkit_endpoint(
         body = await request.body()
         logger.info(f"[Schema ChatKit] Request received from user {user.id}")
 
-        # Parse raw body to extract tool selection BEFORE ChatKit processes it
+        # Parse raw body to extract operation type and tool selection
         selected_tool = None
+        operation = None
         try:
             body_str = body.decode('utf-8')
             logger.info(f"[Schema ChatKit] Raw body (first 500 chars): {body_str[:500]}")
+
+            # Extract operation type from body
+            try:
+                body_json = json.loads(body_str)
+                operation = body_json.get('op')
+                logger.info(f"[Schema ChatKit] Operation: {operation}")
+
+                if body_json.get('metadata', {}).get('selected_tool'):
+                    selected_tool = body_json['metadata']['selected_tool']
+                    logger.info(f"[Schema ChatKit] Tool from metadata: {selected_tool}")
+            except json.JSONDecodeError:
+                pass
 
             # Check for tool prefix in the raw body
             if '[TOOL:' in body_str:
@@ -1221,49 +1237,60 @@ async def chatkit_endpoint(
                     selected_tool = tool_match.group(1).lower()
                     logger.info(f"[Schema ChatKit] Extracted tool: {selected_tool}")
 
-            # Also check for metadata.selected_tool in JSON body
-            if not selected_tool:
-                try:
-                    body_json = json.loads(body_str)
-                    if body_json.get('metadata', {}).get('selected_tool'):
-                        selected_tool = body_json['metadata']['selected_tool']
-                        logger.info(f"[Schema ChatKit] Tool from metadata: {selected_tool}")
-                except json.JSONDecodeError:
-                    pass
-
         except Exception as e:
             logger.warning(f"[Schema ChatKit] Could not decode body: {e}")
 
-        # Get user's connection
+        # Create PostgreSQL-backed store for persistent history (always create for history operations)
+        try:
+            db_store = create_chatkit_store(db, user.id)
+            chatkit_server = SchemaChatKitServer(db_store)
+            logger.info(f"[Schema ChatKit] Using PostgreSQL-backed store for user {user.id}")
+        except Exception as store_error:
+            logger.warning(f"[Schema ChatKit] Failed to create DB store, using fallback: {store_error}")
+            chatkit_server = SchemaChatKitServer(_fallback_store)
+
+        # For read-only history operations, we don't need database connection
+        read_only_operations = ['threads.list', 'threads.get', 'threads.items', 'threads.delete']
+        is_read_only = operation in read_only_operations
+
+        # Get user's connection (needed for chat operations)
         connection = await get_user_connection(user, db)
 
-        if not connection or connection.connection_type != "schema_query_only":
-            return JSONResponse(
-                content={"error": "No schema query connection configured"},
-                status_code=400
-            )
+        # Build context - for read-only operations, provide minimal context
+        if is_read_only:
+            context = {
+                "headers": dict(request.headers),
+                "user_id": user.id,
+            }
+            logger.info(f"[Schema ChatKit] Read-only operation {operation}, skipping connection check")
+        else:
+            # For chat operations, require database connection
+            if not connection or connection.connection_type != "schema_query_only":
+                return JSONResponse(
+                    content={"error": "No schema query connection configured"},
+                    status_code=400
+                )
 
-        if not connection.database_uri:
-            return JSONResponse(
-                content={"error": "Database URI not configured"},
-                status_code=400
-            )
+            if not connection.database_uri:
+                return JSONResponse(
+                    content={"error": "Database URI not configured"},
+                    status_code=400
+                )
 
-        # Build context with user info and connection details
-        context = {
-            "headers": dict(request.headers),
-            "user_id": user.id,
-            "database_uri": connection.database_uri,
-            "schema_metadata": connection.schema_metadata,
-            "allowed_schemas": connection.allowed_schemas or ["public"],
-            "selected_tool": selected_tool,  # Pass tool selection to agent
-        }
+            context = {
+                "headers": dict(request.headers),
+                "user_id": user.id,
+                "database_uri": connection.database_uri,
+                "schema_metadata": connection.schema_metadata,
+                "allowed_schemas": connection.allowed_schemas or ["public"],
+                "selected_tool": selected_tool,  # Pass tool selection to agent
+            }
 
-        if selected_tool:
-            logger.info(f"[Schema ChatKit] Passing tool '{selected_tool}' to agent context")
+            if selected_tool:
+                logger.info(f"[Schema ChatKit] Passing tool '{selected_tool}' to agent context")
 
         # Process with ChatKit server
-        result = await _schema_chatkit_server.process(body, context)
+        result = await chatkit_server.process(body, context)
 
         # Handle different result types (streaming vs JSON)
         if hasattr(result, '__aiter__'):

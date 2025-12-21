@@ -38,7 +38,7 @@ class TestAgentInitialization:
 
         # Assert
         assert agent.gemini_api_key == api_key
-        assert agent.model_name == "gemini/gemini-robotics-er-1.5-preview"
+        assert agent.model_name == "gemini/gemini-2.5-flash-lite"
         assert agent.temperature == 0.7
         assert agent.max_tokens == 8192
 

@@ -222,3 +222,53 @@ class ConversationHistory(Base):
 
     def __repr__(self):
         return f"<ConversationHistory(session={self.session_id}, type={self.response_type})>"
+
+
+# ============================================================================
+# ChatKit Thread & Item Models (Phase 11 - Persistent Chat History)
+# ============================================================================
+
+class ChatKitThread(Base):
+    """
+    ChatKit thread for persistent conversation sessions.
+    Each thread represents a chat conversation for a user.
+    """
+    __tablename__ = "chatkit_threads"
+
+    id = Column(String(100), primary_key=True, index=True)  # Thread ID from ChatKit
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    title = Column(String(255), nullable=True)  # Optional conversation title
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    thread_metadata = Column(JSONB, nullable=True, default={})  # Additional thread metadata (renamed to avoid reserved word)
+
+    __table_args__ = ({"extend_existing": True},)
+
+    # Relationships
+    user = relationship("User", backref="chatkit_threads")
+    items = relationship("ChatKitThreadItem", back_populates="thread", cascade="all, delete-orphan", order_by="ChatKitThreadItem.created_at")
+
+    def __repr__(self):
+        return f"<ChatKitThread(id={self.id}, user_id={self.user_id})>"
+
+
+class ChatKitThreadItem(Base):
+    """
+    ChatKit thread item (message) for persistent conversation history.
+    Stores both user messages and assistant responses.
+    """
+    __tablename__ = "chatkit_thread_items"
+
+    id = Column(String(100), primary_key=True, index=True)  # Item ID from ChatKit
+    thread_id = Column(String(100), ForeignKey("chatkit_threads.id", ondelete="CASCADE"), nullable=False, index=True)
+    item_type = Column(String(50), nullable=False, index=True)  # "user_message", "assistant_message", etc.
+    content = Column(Text, nullable=False)  # JSON serialized content
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+    __table_args__ = ({"extend_existing": True},)
+
+    # Relationships
+    thread = relationship("ChatKitThread", back_populates="items")
+
+    def __repr__(self):
+        return f"<ChatKitThreadItem(id={self.id}, thread_id={self.thread_id}, type={self.item_type})>"

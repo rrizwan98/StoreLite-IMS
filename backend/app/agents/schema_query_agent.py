@@ -41,7 +41,7 @@ logger.info(f"[Schema Agent] Module loaded - Version {SCHEMA_AGENT_VERSION} (MCP
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 # Use Gemini 2.0 Flash which supports function calling well
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini/gemini-robotics-er-1.5-preview")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini/gemini-2.5-flash")
 
 
 def get_llm_model():
