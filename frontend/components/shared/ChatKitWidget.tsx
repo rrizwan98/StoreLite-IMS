@@ -2,15 +2,18 @@
 
 /**
  * Pure OpenAI ChatKit SDK Integration
- * 
+ *
  * Uses the official OpenAI ChatKit web component (<openai-chatkit>)
  * loaded from OpenAI's CDN
  * No custom React chat UI - pure ChatKit SDK only
+ *
+ * Includes ToolAttachButton for selecting tools to use with messages
  */
 
 import { useEffect, useState, useRef } from 'react';
 import Script from 'next/script';
 import { API_BASE_URL } from '@/lib/constants';
+import ToolAttachButton from './ToolAttachButton';
 
 // Generate unique session ID
 const generateSessionId = (): string => {
@@ -24,7 +27,11 @@ export default function ChatKitWidget() {
   const [isLoaded, setIsLoaded] = useState(false);
   const chatkitRef = useRef<HTMLElement | null>(null);
   const configuredRef = useRef(false);
-  
+
+  // Tool selection state
+  const [selectedToolPrefix, setSelectedToolPrefix] = useState<string | null>(null);
+  const [selectedToolName, setSelectedToolName] = useState<string | null>(null);
+
   const [sessionId] = useState(() => {
     if (typeof window !== 'undefined') {
       let id = sessionStorage.getItem('ims-chatkit-session-id');
@@ -64,11 +71,23 @@ export default function ChatKitWidget() {
           url: `${API_BASE_URL}/agent/chatkit`,
           // domainKey is required for custom API - using empty string for development
           domainKey: '',
-          // Custom fetch for session management
+          // Custom fetch for session management and tool prefix injection
           fetch: async (url: string, options: RequestInit) => {
             try {
               const body = options.body ? JSON.parse(options.body as string) : {};
               body.session_id = sessionId;
+
+              // Inject tool prefix into message if a tool is selected
+              if (selectedToolPrefix && body.messages && Array.isArray(body.messages)) {
+                const lastMessage = body.messages[body.messages.length - 1];
+                if (lastMessage && lastMessage.role === 'user' && typeof lastMessage.content === 'string') {
+                  // Only add prefix if not already present
+                  if (!lastMessage.content.startsWith('[TOOL:')) {
+                    lastMessage.content = `${selectedToolPrefix} ${lastMessage.content}`;
+                    console.log('Tool prefix injected:', selectedToolPrefix);
+                  }
+                }
+              }
 
               return fetch(url, {
                 ...options,
@@ -126,7 +145,7 @@ export default function ChatKitWidget() {
 
     // Initialize with delay for element to be ready
     setTimeout(initChatKit, 300);
-  }, [isOpen, isLoaded, sessionId]);
+  }, [isOpen, isLoaded, sessionId, selectedToolPrefix]);
 
   // Reset configured flag when closed
   useEffect(() => {
@@ -182,20 +201,37 @@ export default function ChatKitWidget() {
 
       {/* Pure OpenAI ChatKit Web Component */}
       {isOpen && (
-        <div 
-          className="fixed bottom-24 right-6 z-50 w-96 h-[500px] rounded-xl 
+        <div
+          className="fixed bottom-24 right-6 z-50 w-96 h-[500px] rounded-xl
                      shadow-2xl border border-gray-200 overflow-hidden bg-white"
         >
           {isLoaded ? (
-            <openai-chatkit
-              ref={chatkitRef as any}
-              id="ims-chatkit"
-              style={{ 
-                width: '100%', 
-                height: '100%',
-                display: 'block',
-              }}
-            />
+            <>
+              <openai-chatkit
+                ref={chatkitRef as any}
+                id="ims-chatkit"
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  display: 'block',
+                }}
+              />
+              {/* Tool Selection Bar - overlays at bottom of chat */}
+              <div className="absolute bottom-0 left-0 right-0 bg-white border-t border-gray-100 px-3 py-2 flex items-center gap-2">
+                <ToolAttachButton
+                  selectedTool={selectedToolName}
+                  onToolSelect={(prefix, name) => {
+                    setSelectedToolPrefix(prefix);
+                    setSelectedToolName(name);
+                  }}
+                />
+                {selectedToolName && (
+                  <span className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded-full truncate max-w-[200px]">
+                    Using: {selectedToolName}
+                  </span>
+                )}
+              </div>
+            </>
           ) : (
             <div className="flex items-center justify-center h-full">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>

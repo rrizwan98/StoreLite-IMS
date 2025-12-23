@@ -393,3 +393,141 @@ class ChatKitSessionResponse(BaseModel):
         json_encoders = {
             datetime: lambda v: v.isoformat()
         }
+
+# ============ User MCP Connectors Schemas (Feature 008) ============
+
+from enum import Enum
+from pydantic import HttpUrl
+from typing import Any, Dict
+
+
+class AuthType(str, Enum):
+    """Authentication type for MCP connectors"""
+    NONE = "none"
+    OAUTH = "oauth"
+    API_KEY = "api_key"
+
+
+# --- System Tools Schemas ---
+
+class SystemToolResponse(BaseModel):
+    """System tool with user's connection status"""
+    id: str
+    name: str
+    description: str
+    icon: str
+    category: str
+    auth_type: str
+    is_enabled: bool
+    is_beta: bool
+    is_connected: bool = False  # User-specific
+    config: Optional[Dict[str, Any]] = None
+
+    class Config:
+        from_attributes = True
+
+
+class ToolConnectRequest(BaseModel):
+    """Request to connect to a system tool"""
+    config: Optional[Dict[str, Any]] = None
+
+
+class SystemToolsListResponse(BaseModel):
+    """Response for listing system tools"""
+    tools: List[SystemToolResponse]
+    total: int
+
+
+# --- User Connector Schemas ---
+
+class DiscoveredTool(BaseModel):
+    """Tool discovered from MCP server"""
+    name: str
+    description: Optional[str] = None
+    inputSchema: Optional[Dict[str, Any]] = None
+
+
+class ConnectorCreateRequest(BaseModel):
+    """Request to create a new connector"""
+    name: str = Field(..., min_length=1, max_length=255)
+    description: Optional[str] = Field(None, max_length=1000)
+    server_url: HttpUrl
+    auth_type: AuthType = AuthType.NONE
+    auth_config: Optional[Dict[str, Any]] = None
+
+
+class ConnectorUpdateRequest(BaseModel):
+    """Request to update a connector"""
+    name: Optional[str] = Field(None, min_length=1, max_length=255)
+    description: Optional[str] = Field(None, max_length=1000)
+
+
+class ConnectorTestRequest(BaseModel):
+    """Request to test a connector before saving"""
+    server_url: HttpUrl
+    auth_type: AuthType = AuthType.NONE
+    auth_config: Optional[Dict[str, Any]] = None
+
+
+class ConnectorTestResponse(BaseModel):
+    """Response from connection test"""
+    success: bool
+    error_code: Optional[str] = None
+    error_message: Optional[str] = None
+    tools: Optional[List[DiscoveredTool]] = None
+
+
+class ConnectorToggleRequest(BaseModel):
+    """Request to enable/disable a connector"""
+    is_active: bool
+
+
+class ConnectorResponse(BaseModel):
+    """Full connector response"""
+    id: int
+    name: str
+    description: Optional[str]
+    server_url: str
+    auth_type: str
+    is_active: bool
+    is_verified: bool
+    discovered_tools: Optional[List[DiscoveredTool]] = None
+    tool_count: int = 0
+    last_verified_at: Optional[datetime] = None
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class ConnectorListResponse(BaseModel):
+    """List of user's connectors"""
+    connectors: List[ConnectorResponse]
+    total: int
+
+
+class DeleteResponse(BaseModel):
+    """Generic delete response"""
+    success: bool
+    message: str
+
+
+# --- Combined Tools Response (for Apps Menu) ---
+
+class AppsTool(BaseModel):
+    """Tool for Apps menu display"""
+    id: str
+    name: str
+    description: Optional[str]
+    type: str  # 'system' or 'connector'
+    connector_id: Optional[int] = None  # For connector tools
+    connector_name: Optional[str] = None
+    is_connected: bool
+    icon: Optional[str] = None
+
+
+class AppsMenuResponse(BaseModel):
+    """Response for Apps menu with all available tools"""
+    system_tools: List[SystemToolResponse]
+    user_connectors: List[ConnectorResponse]

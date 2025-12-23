@@ -8,7 +8,7 @@ from sqlalchemy import Column, Integer, String, Numeric, Boolean, DateTime, Fore
 from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.postgresql import JSONB
 import enum
-from app.database import Base
+from app.database import Base, PortableJSON
 
 
 # ============================================================================
@@ -78,9 +78,9 @@ class UserConnection(Base):
 
     # Schema Query Mode fields (Phase 9)
     connection_mode = Column(String(50), default="full_ims")  # 'full_ims' or 'schema_query'
-    schema_metadata = Column(JSONB, nullable=True)  # Cached schema: tables, columns, relationships
+    schema_metadata = Column(PortableJSON, nullable=True)  # Cached schema: tables, columns, relationships
     schema_last_updated = Column(DateTime, nullable=True)  # When schema was last discovered
-    allowed_schemas = Column(JSONB, default=["public"])  # PostgreSQL schemas to query (JSONB array)
+    allowed_schemas = Column(PortableJSON, default=["public"])  # PostgreSQL schemas to query (JSONB array)
 
     # Gmail OAuth2 Integration fields (Phase 10)
     gmail_access_token = Column(Text, nullable=True)  # Encrypted OAuth2 access token
@@ -89,7 +89,7 @@ class UserConnection(Base):
     gmail_email = Column(String(255), nullable=True)  # Connected Gmail account email
     gmail_connected_at = Column(DateTime, nullable=True)  # When Gmail was connected
     gmail_recipient_email = Column(String(255), nullable=True)  # Default recipient for sending emails
-    gmail_scopes = Column(JSONB, nullable=True)  # Granted OAuth2 scopes
+    gmail_scopes = Column(PortableJSON, nullable=True)  # Granted OAuth2 scopes
 
     __table_args__ = ({"extend_existing": True},)
 
@@ -240,7 +240,7 @@ class ChatKitThread(Base):
     title = Column(String(255), nullable=True)  # Optional conversation title
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
-    thread_metadata = Column(JSONB, nullable=True, default={})  # Additional thread metadata (renamed to avoid reserved word)
+    thread_metadata = Column(PortableJSON, nullable=True, default={})  # Additional thread metadata (renamed to avoid reserved word)
 
     __table_args__ = ({"extend_existing": True},)
 
@@ -272,3 +272,89 @@ class ChatKitThreadItem(Base):
 
     def __repr__(self):
         return f"<ChatKitThreadItem(id={self.id}, thread_id={self.thread_id}, type={self.item_type})>"
+
+
+# ============================================================================
+# User MCP Connectors Models (Feature 008)
+# ============================================================================
+
+class UserToolStatus(Base):
+    """
+    Track user's connection status for SYSTEM tools (Gmail, Analytics, etc.).
+    Each user can have one entry per system tool.
+    """
+    __tablename__ = "user_tool_status"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True
+    )
+    tool_id = Column(String(50), nullable=False, index=True)  # 'gmail', 'analytics', 'export'
+    is_connected = Column(Boolean, default=False, nullable=False)
+    config = Column(PortableJSON, nullable=True)  # Tool-specific settings
+    connected_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    __table_args__ = (
+        # One entry per user per tool
+        {"extend_existing": True},
+    )
+
+    # Relationships
+    user = relationship("User", backref="tool_statuses")
+
+    def __repr__(self):
+        return f"<UserToolStatus(user_id={self.user_id}, tool={self.tool_id}, connected={self.is_connected})>"
+
+
+class UserMCPConnection(Base):
+    """
+    User's custom MCP server connection.
+    Stores connection details with encrypted credentials.
+    Max 10 connectors per user (enforced at application level).
+    """
+    __tablename__ = "user_mcp_connections"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True
+    )
+    name = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    server_url = Column(String(500), nullable=False)
+    auth_type = Column(String(50), default="none", nullable=False)  # 'none', 'oauth', 'api_key'
+    auth_config = Column(Text, nullable=True)  # Encrypted JSON with credentials
+    is_active = Column(Boolean, default=True, nullable=False, index=True)
+    is_verified = Column(Boolean, default=False, nullable=False)
+    discovered_tools = Column(PortableJSON, nullable=True)  # Cached list of tools from server
+    last_verified_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    __table_args__ = (
+        CheckConstraint(
+            "auth_type IN ('none', 'oauth', 'api_key')",
+            name="auth_type_check"
+        ),
+        {"extend_existing": True},
+    )
+
+    # Relationships
+    user = relationship("User", backref="mcp_connections")
+
+    @property
+    def tool_count(self) -> int:
+        """Return number of discovered tools"""
+        if self.discovered_tools:
+            return len(self.discovered_tools)
+        return 0
+
+    def __repr__(self):
+        return f"<UserMCPConnection(id={self.id}, name={self.name}, active={self.is_active})>"

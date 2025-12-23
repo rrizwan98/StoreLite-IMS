@@ -31,8 +31,8 @@ from app.services.agent_session_service import create_user_session, AgentSession
 logger = logging.getLogger(__name__)
 
 # Version marker for debugging
-SCHEMA_AGENT_VERSION = "2.2.0-mcp-gmail-session"
-logger.info(f"[Schema Agent] Module loaded - Version {SCHEMA_AGENT_VERSION} (MCP-enabled with Gmail + PostgreSQL Sessions)")
+SCHEMA_AGENT_VERSION = "2.3.0-mcp-gmail-connectors"
+logger.info(f"[Schema Agent] Module loaded - Version {SCHEMA_AGENT_VERSION} (MCP + Gmail + User Connectors)")
 
 
 # ============================================================================
@@ -41,7 +41,7 @@ logger.info(f"[Schema Agent] Module loaded - Version {SCHEMA_AGENT_VERSION} (MCP
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 # Use Gemini 2.0 Flash which supports function calling well
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini/gemini-2.5-flash")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini/gemini-2.5-flash-lite")
 
 
 def get_llm_model():
@@ -112,6 +112,23 @@ AVAILABLE FUNCTION TOOLS
 ############################################
 - `send_email`: Send query results or any content via user's connected Gmail
 - `check_email_status`: Check if user's Gmail is connected and ready
+
+############################################
+MCP CONNECTOR TOOLS (EXTERNAL INTEGRATIONS)
+############################################
+When the user selects an MCP Connector (external tool integration), you will have access to additional tools from that connector.
+
+<connector_tool_rules>
+1. Connector tools are loaded dynamically when user selects them
+2. Analyze the user's query and AUTOMATICALLY select the appropriate connector tool
+3. Do NOT ask user which tool to use - decide based on query context
+4. Common connector use cases:
+   - Documentation lookup: Use tools like "resolve-library-id", "get-library-docs"
+   - API integrations: Use relevant API tools from the connector
+   - External data: Fetch data from connected services
+5. Always check available tools and match to user intent
+6. If connector has multiple tools, chain them as needed (e.g., resolve ID first, then fetch docs)
+</connector_tool_rules>
 
 <tool_usage_rules>
 - Prefer tools for all data queries - never guess or fabricate results
@@ -298,6 +315,7 @@ class SchemaQueryAgent:
         user_id: Optional[int] = None,
         enable_gmail: bool = True,
         thread_id: Optional[str] = None,
+        connector_tools: Optional[List[Any]] = None,
     ):
         """
         Initialize Schema Query Agent.
@@ -309,6 +327,7 @@ class SchemaQueryAgent:
             user_id: User ID for tool context (needed for Gmail integration)
             enable_gmail: Whether to enable Gmail tools (default: True)
             thread_id: Thread ID for ChatKit session (for persistent conversation)
+            connector_tools: Optional list of tools from user's MCP connectors
         """
         self.database_uri = database_uri
         self.schema_metadata = schema_metadata
@@ -316,6 +335,7 @@ class SchemaQueryAgent:
         self.user_id = user_id
         self.enable_gmail = enable_gmail
         self.thread_id = thread_id
+        self.connector_tools = connector_tools or []
 
         # MCP server and agent instances
         self._mcp_server: Optional[MCPServerStdio] = None
@@ -332,16 +352,23 @@ class SchemaQueryAgent:
         self._session_id = f"schema-{datetime.now().strftime('%Y%m%d%H%M%S')}"
         self._mcp_tools: List[str] = []
         self._function_tools: List[str] = []
+        self._connector_tool_names: List[str] = []
         self._is_initialized = False
 
         # Initialize session manager if user_id is provided
         if user_id:
             self._session_manager = AgentSessionManager(user_id)
 
+        # Track connector tool names
+        if connector_tools:
+            self._connector_tool_names = [
+                getattr(t, 'name', str(t)) for t in connector_tools
+            ]
+
         logger.info(
             f"[Schema Agent] Created agent instance "
             f"(read_only={read_only}, user_id={user_id}, gmail={enable_gmail}, "
-            f"thread={thread_id}, session={self._session_id})"
+            f"thread={thread_id}, connectors={len(self.connector_tools)}, session={self._session_id})"
         )
 
     async def initialize(self) -> Dict[str, Any]:
@@ -512,11 +539,16 @@ class SchemaQueryAgent:
             if self.enable_gmail and self.user_id:
                 try:
                     from app.mcp_server.tools_gmail import GMAIL_TOOLS
-                    function_tools = GMAIL_TOOLS
+                    function_tools = list(GMAIL_TOOLS)
                     self._function_tools = ["send_email", "check_email_status"]
                     logger.info(f"[Schema Agent] Gmail tools enabled for user {self.user_id}")
                 except ImportError as e:
                     logger.warning(f"[Schema Agent] Gmail tools not available: {e}")
+
+            # Add connector tools if available
+            if self.connector_tools:
+                function_tools.extend(self.connector_tools)
+                logger.info(f"[Schema Agent] Connector tools added: {self._connector_tool_names}")
 
             # Create agent with fresh MCP server and function tools
             agent = Agent(
@@ -691,6 +723,7 @@ async def create_schema_query_agent(
     user_id: Optional[int] = None,
     enable_gmail: bool = True,
     thread_id: Optional[str] = None,
+    connector_tools: Optional[List[Any]] = None,
 ) -> SchemaQueryAgent:
     """
     Factory function to create and initialize a Schema Query Agent.
@@ -703,6 +736,7 @@ async def create_schema_query_agent(
         user_id: User ID for tool context (needed for Gmail integration)
         enable_gmail: Whether to enable Gmail tools (default: True)
         thread_id: Thread ID for ChatKit session (for persistent conversation)
+        connector_tools: Optional list of tools from user's MCP connectors
 
     Returns:
         Initialized SchemaQueryAgent instance with PostgreSQL session support
@@ -714,6 +748,7 @@ async def create_schema_query_agent(
         user_id=user_id,
         enable_gmail=enable_gmail,
         thread_id=thread_id,
+        connector_tools=connector_tools,
     )
 
     if auto_initialize:

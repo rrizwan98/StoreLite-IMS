@@ -4,9 +4,10 @@ Database connection and session management for FastAPI application
 
 import os
 from urllib.parse import urlparse, parse_qs
-from sqlalchemy import create_engine, event
+from sqlalchemy import create_engine, event, JSON
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import declarative_base
+from sqlalchemy.types import TypeDecorator
 from contextlib import asynccontextmanager
 import logging
 from dotenv import load_dotenv
@@ -63,6 +64,28 @@ async_session = async_sessionmaker(
 )
 
 Base = declarative_base()
+
+
+# ============================================================================
+# Database-Portable JSON Type
+# ============================================================================
+
+class PortableJSON(TypeDecorator):
+    """
+    Database-portable JSON type.
+
+    Uses PostgreSQL JSONB when available, falls back to JSON for SQLite.
+    This allows tests to run with SQLite while production uses PostgreSQL JSONB.
+    """
+    impl = JSON
+    cache_ok = True
+
+    def load_dialect_impl(self, dialect):
+        if dialect.name == "postgresql":
+            from sqlalchemy.dialects.postgresql import JSONB
+            return dialect.type_descriptor(JSONB())
+        else:
+            return dialect.type_descriptor(JSON())
 
 
 async def get_db():

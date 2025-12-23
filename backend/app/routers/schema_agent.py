@@ -65,6 +65,7 @@ from app.mcp_server.tools_schema_query import (
 )
 from app.agents.schema_query_agent import SchemaQueryAgent, create_schema_query_agent
 from app.services.chatkit_store_service import PostgreSQLChatKitStore, create_chatkit_store
+from app.connectors.agent_tools import load_connector_tools
 
 logger = logging.getLogger(__name__)
 
@@ -394,8 +395,28 @@ class SchemaChatKitServer(ChatKitServer):
             thread_id = thread.id if thread else None
             logger.info(f"[Schema ChatKit] Thread ID for session: {thread_id}")
 
-            # Get or create agent for this user
-            if user_id not in _agent_cache:
+            # Check if a connector was selected
+            selected_connector_id = context.get("selected_connector_id")
+            selected_connector_url = context.get("selected_connector_url")
+            connector_tools = []
+
+            # Load connector tools if a connector is selected
+            if selected_connector_url:
+                try:
+                    logger.info(f"[Schema ChatKit] Loading tools from connector: {selected_connector_url}")
+                    connector_tools = await load_connector_tools(
+                        selected_connector_url,
+                        context.get("selected_connector_name", "MCP Connector")
+                    )
+                    logger.info(f"[Schema ChatKit] Loaded {len(connector_tools)} connector tools")
+                except Exception as e:
+                    logger.warning(f"[Schema ChatKit] Failed to load connector tools: {e}")
+
+            # Create a cache key that includes connector selection
+            cache_key = f"{user_id}:{selected_connector_id or 'none'}"
+
+            # Get or create agent for this user (with connector tools if selected)
+            if cache_key not in _agent_cache:
                 try:
                     agent = await create_schema_query_agent(
                         database_uri=database_uri,
@@ -404,9 +425,10 @@ class SchemaChatKitServer(ChatKitServer):
                         user_id=user_id,  # Pass user_id for Gmail tool context
                         enable_gmail=True,
                         thread_id=thread_id,  # Pass thread_id for persistent session
+                        connector_tools=connector_tools,  # Pass connector tools
                     )
-                    _agent_cache[user_id] = agent
-                    logger.info(f"Created new Schema Query Agent for user {user_id} with Gmail tools and PostgreSQL session")
+                    _agent_cache[cache_key] = agent
+                    logger.info(f"Created new Schema Query Agent for user {user_id} with Gmail + {len(connector_tools)} connector tools")
                 except Exception as e:
                     logger.error(f"Failed to create agent for user {user_id}: {e}")
                     error_text = f"Failed to initialize agent: {str(e)}"
@@ -417,7 +439,7 @@ class SchemaChatKitServer(ChatKitServer):
                     )
                     return
             else:
-                agent = _agent_cache[user_id]
+                agent = _agent_cache[cache_key]
 
             # Run agent query with thread_id for session persistence
             result = await agent.query(user_message, thread_id=thread_id)
@@ -1209,8 +1231,11 @@ async def chatkit_endpoint(
         body = await request.body()
         logger.info(f"[Schema ChatKit] Request received from user {user.id}")
 
-        # Parse raw body to extract operation type and tool selection
+        # Parse raw body to extract operation type, tool selection, and connector
         selected_tool = None
+        selected_connector_id = None
+        selected_connector_url = None
+        selected_connector_name = None
         operation = None
         try:
             body_str = body.decode('utf-8')
@@ -1222,9 +1247,17 @@ async def chatkit_endpoint(
                 operation = body_json.get('op')
                 logger.info(f"[Schema ChatKit] Operation: {operation}")
 
-                if body_json.get('metadata', {}).get('selected_tool'):
-                    selected_tool = body_json['metadata']['selected_tool']
+                metadata = body_json.get('metadata', {})
+                if metadata.get('selected_tool'):
+                    selected_tool = metadata['selected_tool']
                     logger.info(f"[Schema ChatKit] Tool from metadata: {selected_tool}")
+
+                # Check for connector selection in metadata
+                if metadata.get('selected_connector_id'):
+                    selected_connector_id = metadata['selected_connector_id']
+                    selected_connector_url = metadata.get('selected_connector_url')
+                    selected_connector_name = metadata.get('selected_connector_name')
+                    logger.info(f"[Schema ChatKit] Connector from metadata: {selected_connector_name} ({selected_connector_id})")
             except json.JSONDecodeError:
                 pass
 
@@ -1236,6 +1269,15 @@ async def chatkit_endpoint(
                 if tool_match:
                     selected_tool = tool_match.group(1).lower()
                     logger.info(f"[Schema ChatKit] Extracted tool: {selected_tool}")
+
+            # Check for connector prefix in the raw body [CONNECTOR:id:url]
+            if '[CONNECTOR:' in body_str:
+                logger.info(f"[Schema ChatKit] CONNECTOR PREFIX FOUND IN BODY!")
+                connector_match = re.search(r'\[CONNECTOR:(\d+):([^\]]+)\]', body_str)
+                if connector_match:
+                    selected_connector_id = int(connector_match.group(1))
+                    selected_connector_url = connector_match.group(2)
+                    logger.info(f"[Schema ChatKit] Extracted connector: {selected_connector_id}")
 
         except Exception as e:
             logger.warning(f"[Schema ChatKit] Could not decode body: {e}")
@@ -1284,10 +1326,15 @@ async def chatkit_endpoint(
                 "schema_metadata": connection.schema_metadata,
                 "allowed_schemas": connection.allowed_schemas or ["public"],
                 "selected_tool": selected_tool,  # Pass tool selection to agent
+                "selected_connector_id": selected_connector_id,
+                "selected_connector_url": selected_connector_url,
+                "selected_connector_name": selected_connector_name,
             }
 
             if selected_tool:
                 logger.info(f"[Schema ChatKit] Passing tool '{selected_tool}' to agent context")
+            if selected_connector_id:
+                logger.info(f"[Schema ChatKit] Passing connector '{selected_connector_name}' to agent context")
 
         # Process with ChatKit server
         result = await chatkit_server.process(body, context)
