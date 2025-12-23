@@ -1,0 +1,658 @@
+openapi: 3.0.3
+info:
+  title: User Connectors API
+  description: |
+    API for managing user's custom MCP server connections.
+    Users can add, test, update, and delete their own MCP connectors.
+  version: 1.0.0
+  contact:
+    name: IMS Development Team
+
+servers:
+  - url: /api
+    description: API base path
+
+tags:
+  - name: Connectors
+    description: User MCP connector management
+
+paths:
+  /connectors:
+    get:
+      summary: List user's connectors
+      description: Get all MCP connectors for the current user
+      operationId: listConnectors
+      tags:
+        - Connectors
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: List of user's connectors
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConnectorListResponse'
+              example:
+                connectors:
+                  - id: 5
+                    name: My Slack Bot
+                    description: Slack integration for notifications
+                    server_url: https://my-slack-mcp.example.com
+                    auth_type: oauth
+                    is_active: true
+                    is_verified: true
+                    tool_count: 3
+                    last_verified_at: "2025-12-21T10:30:00Z"
+                    created_at: "2025-12-20T09:00:00Z"
+                    updated_at: "2025-12-21T10:30:00Z"
+                total: 1
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    post:
+      summary: Create a new connector
+      description: |
+        Create a new MCP connector. The connection must be tested and verified
+        before this endpoint will accept the request.
+      operationId: createConnector
+      tags:
+        - Connectors
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConnectorCreateRequest'
+            example:
+              name: My Slack Bot
+              description: Slack integration for notifications
+              server_url: https://my-slack-mcp.example.com
+              auth_type: oauth
+              auth_config:
+                access_token: xoxb-xxx
+      responses:
+        '201':
+          description: Connector created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConnectorResponse'
+        '400':
+          description: Validation failed or connection not verified
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                notVerified:
+                  summary: Connection not verified
+                  value:
+                    error: CONNECTION_NOT_VERIFIED
+                    message: Please test the connection before saving
+                limitReached:
+                  summary: Connector limit reached
+                  value:
+                    error: CONNECTOR_LIMIT_REACHED
+                    message: Maximum 10 connectors allowed per user
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          description: Invalid request body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationErrorResponse'
+
+  /connectors/test:
+    post:
+      summary: Test a connection
+      description: |
+        Test an MCP server connection before saving.
+        Validates URL, attempts connection, verifies authentication,
+        and discovers available tools.
+      operationId: testConnection
+      tags:
+        - Connectors
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConnectorTestRequest'
+            example:
+              server_url: https://my-slack-mcp.example.com
+              auth_type: oauth
+              auth_config:
+                access_token: xoxb-xxx
+      responses:
+        '200':
+          description: Connection test result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConnectorTestResponse'
+              examples:
+                success:
+                  summary: Successful connection
+                  value:
+                    success: true
+                    tools:
+                      - name: send_message
+                        description: Send a message to a Slack channel
+                        inputSchema:
+                          type: object
+                          properties:
+                            channel:
+                              type: string
+                            message:
+                              type: string
+                          required: [channel, message]
+                      - name: list_channels
+                        description: List available Slack channels
+                        inputSchema:
+                          type: object
+                          properties: {}
+                invalidUrl:
+                  summary: Invalid URL format
+                  value:
+                    success: false
+                    error_code: INVALID_URL
+                    error_message: "Invalid URL format. Must be a valid HTTP/HTTPS URL."
+                timeout:
+                  summary: Connection timeout
+                  value:
+                    success: false
+                    error_code: TIMEOUT
+                    error_message: "Connection timed out after 10 seconds."
+                authFailed:
+                  summary: Authentication failed
+                  value:
+                    success: false
+                    error_code: AUTH_FAILED
+                    error_message: "Authentication failed. Please check your credentials."
+                notMcp:
+                  summary: Not an MCP server
+                  value:
+                    success: false
+                    error_code: INVALID_MCP_SERVER
+                    error_message: "This doesn't appear to be a valid MCP server."
+                noTools:
+                  summary: No tools found
+                  value:
+                    success: true
+                    error_message: "Connected but no tools found on this MCP server."
+                    tools: []
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          description: Invalid request body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationErrorResponse'
+
+  /connectors/{connectorId}:
+    get:
+      summary: Get connector details
+      description: Get details of a specific connector including discovered tools
+      operationId: getConnector
+      tags:
+        - Connectors
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ConnectorId'
+      responses:
+        '200':
+          description: Connector details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConnectorDetailResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    put:
+      summary: Update a connector
+      description: Update connector name or description. To update URL or auth, delete and recreate.
+      operationId: updateConnector
+      tags:
+        - Connectors
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ConnectorId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConnectorUpdateRequest'
+            example:
+              name: Updated Slack Bot
+              description: Updated description
+      responses:
+        '200':
+          description: Connector updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConnectorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          description: Invalid request body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationErrorResponse'
+
+    delete:
+      summary: Delete a connector
+      description: Permanently delete a connector and all associated data
+      operationId: deleteConnector
+      tags:
+        - Connectors
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ConnectorId'
+      responses:
+        '200':
+          description: Connector deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeleteResponse'
+              example:
+                success: true
+                message: Connector deleted successfully
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /connectors/{connectorId}/toggle:
+    post:
+      summary: Enable/disable a connector
+      description: Toggle the active status of a connector
+      operationId: toggleConnector
+      tags:
+        - Connectors
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ConnectorId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConnectorToggleRequest'
+            example:
+              is_active: false
+      responses:
+        '200':
+          description: Connector status updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConnectorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /connectors/{connectorId}/retest:
+    post:
+      summary: Re-test an existing connector
+      description: Re-validate connection and refresh discovered tools
+      operationId: retestConnector
+      tags:
+        - Connectors
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ConnectorId'
+      responses:
+        '200':
+          description: Retest result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConnectorTestResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    ConnectorId:
+      name: connectorId
+      in: path
+      required: true
+      description: Connector ID
+      schema:
+        type: integer
+        example: 5
+
+  schemas:
+    DiscoveredTool:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          description: Tool name
+          example: send_message
+        description:
+          type: string
+          nullable: true
+          description: Tool description
+          example: Send a message to a Slack channel
+        inputSchema:
+          type: object
+          nullable: true
+          description: JSON Schema for tool input
+          additionalProperties: true
+
+    ConnectorCreateRequest:
+      type: object
+      required:
+        - name
+        - server_url
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+          description: User-defined connector name
+          example: My Slack Bot
+        description:
+          type: string
+          maxLength: 1000
+          nullable: true
+          description: Optional description
+          example: Slack integration for notifications
+        server_url:
+          type: string
+          format: uri
+          description: MCP server URL (HTTP/HTTPS)
+          example: https://my-slack-mcp.example.com
+        auth_type:
+          type: string
+          enum: [none, oauth, api_key]
+          default: none
+          description: Authentication type
+          example: oauth
+        auth_config:
+          type: object
+          nullable: true
+          description: Authentication credentials (will be encrypted)
+          additionalProperties: true
+
+    ConnectorTestRequest:
+      type: object
+      required:
+        - server_url
+      properties:
+        server_url:
+          type: string
+          format: uri
+          description: MCP server URL to test
+          example: https://my-slack-mcp.example.com
+        auth_type:
+          type: string
+          enum: [none, oauth, api_key]
+          default: none
+          description: Authentication type
+          example: oauth
+        auth_config:
+          type: object
+          nullable: true
+          description: Authentication credentials
+          additionalProperties: true
+
+    ConnectorTestResponse:
+      type: object
+      required:
+        - success
+      properties:
+        success:
+          type: boolean
+          description: Whether connection test passed
+          example: true
+        error_code:
+          type: string
+          nullable: true
+          description: Error code if failed
+          enum:
+            - INVALID_URL
+            - CONNECTION_FAILED
+            - TIMEOUT
+            - AUTH_FAILED
+            - INVALID_MCP_SERVER
+            - NO_TOOLS
+          example: null
+        error_message:
+          type: string
+          nullable: true
+          description: Human-readable error message
+          example: null
+        tools:
+          type: array
+          nullable: true
+          items:
+            $ref: '#/components/schemas/DiscoveredTool'
+          description: List of discovered tools (on success)
+
+    ConnectorUpdateRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+          nullable: true
+          description: Updated connector name
+          example: Updated Slack Bot
+        description:
+          type: string
+          maxLength: 1000
+          nullable: true
+          description: Updated description
+          example: Updated description
+
+    ConnectorToggleRequest:
+      type: object
+      required:
+        - is_active
+      properties:
+        is_active:
+          type: boolean
+          description: New active status
+          example: false
+
+    ConnectorResponse:
+      type: object
+      required:
+        - id
+        - name
+        - server_url
+        - auth_type
+        - is_active
+        - is_verified
+        - tool_count
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: integer
+          description: Connector ID
+          example: 5
+        name:
+          type: string
+          description: Connector name
+          example: My Slack Bot
+        description:
+          type: string
+          nullable: true
+          description: Connector description
+          example: Slack integration for notifications
+        server_url:
+          type: string
+          description: MCP server URL
+          example: https://my-slack-mcp.example.com
+        auth_type:
+          type: string
+          enum: [none, oauth, api_key]
+          description: Authentication type
+          example: oauth
+        is_active:
+          type: boolean
+          description: Whether connector is enabled
+          example: true
+        is_verified:
+          type: boolean
+          description: Whether connection has been verified
+          example: true
+        tool_count:
+          type: integer
+          description: Number of discovered tools
+          example: 3
+        last_verified_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Last successful verification time
+          example: "2025-12-21T10:30:00Z"
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          example: "2025-12-20T09:00:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          example: "2025-12-21T10:30:00Z"
+
+    ConnectorDetailResponse:
+      allOf:
+        - $ref: '#/components/schemas/ConnectorResponse'
+        - type: object
+          properties:
+            discovered_tools:
+              type: array
+              nullable: true
+              items:
+                $ref: '#/components/schemas/DiscoveredTool'
+              description: List of discovered tools
+
+    ConnectorListResponse:
+      type: object
+      required:
+        - connectors
+        - total
+      properties:
+        connectors:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConnectorResponse'
+        total:
+          type: integer
+          description: Total number of connectors
+          example: 1
+
+    DeleteResponse:
+      type: object
+      required:
+        - success
+        - message
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: Connector deleted successfully
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+        - message
+      properties:
+        error:
+          type: string
+          description: Error code
+          example: CONNECTOR_NOT_FOUND
+        message:
+          type: string
+          description: Human-readable error message
+          example: Connector not found
+
+    ValidationErrorResponse:
+      type: object
+      required:
+        - detail
+      properties:
+        detail:
+          type: array
+          items:
+            type: object
+            properties:
+              loc:
+                type: array
+                items:
+                  oneOf:
+                    - type: string
+                    - type: integer
+                description: Location of error
+                example: [body, server_url]
+              msg:
+                type: string
+                description: Error message
+                example: invalid or missing URL scheme
+              type:
+                type: string
+                description: Error type
+                example: value_error.url.scheme
+
+  responses:
+    Unauthorized:
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: UNAUTHORIZED
+            message: Authentication required
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: CONNECTOR_NOT_FOUND
+            message: Connector not found
