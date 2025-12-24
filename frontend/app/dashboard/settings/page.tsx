@@ -1,31 +1,77 @@
 /**
  * Settings Page
  *
- * User can manage their connected tools and MCP connectors here.
+ * User can manage their connected tools and OAuth-based connectors here.
  * - System Tools: Gmail, Analytics, Export (connect/disconnect)
- * - MCP Connectors: User's custom MCP server connections (add/edit/delete)
+ * - Connectors: OAuth-based connectors like Notion (click to connect via OAuth)
  */
 
 'use client';
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Plus, Settings } from 'lucide-react';
-import { SystemToolsList, ConnectorsList, AddConnectorForm } from '@/components/connectors';
-import { Connector } from '@/lib/connectors-api';
+import { ArrowLeft, Settings } from 'lucide-react';
+import { SystemToolsList, ConnectorsList } from '@/components/connectors';
+import ConnectorDetailView from '@/components/connectors/ConnectorDetailView';
+import OAuthConfirmModal from '@/components/connectors/OAuthConfirmModal';
+import { initiateOAuth, connectNotion } from '@/lib/connectors-api';
+import { PredefinedConnector, PREDEFINED_CONNECTORS } from '@/lib/predefined-connectors';
 
-type View = 'main' | 'add-connector';
+type View = 'main' | 'connector-detail';
 
 export default function SettingsPage() {
   const [view, setView] = useState<View>('main');
+  const [selectedConnector, setSelectedConnector] = useState<PredefinedConnector | null>(null);
+  const [showOAuthConfirm, setShowOAuthConfirm] = useState(false);
+  const [isConnecting, setIsConnecting] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
 
-  function handleConnectorAdded(connector: Connector) {
-    console.log('Connector added:', connector);
+  function handlePredefinedConnectorClick(connector: PredefinedConnector) {
+    setSelectedConnector(connector);
+    setView('connector-detail');
+  }
+
+  function handleBack() {
     setView('main');
-    // Refresh the connectors list
+    setSelectedConnector(null);
+    // Refresh connectors list
     setRefreshKey(prev => prev + 1);
   }
+
+  function handleConnectClick() {
+    if (!selectedConnector) return;
+    setShowOAuthConfirm(true);
+  }
+
+  async function handleOAuthConfirm() {
+    if (!selectedConnector) return;
+
+    setIsConnecting(true);
+
+    try {
+      // Use the new Notion MCP OAuth endpoint (Zero-config, no developer credentials needed!)
+      if (selectedConnector.id === 'notion') {
+        // Use Notion MCP with Dynamic Client Registration
+        const response = await connectNotion();
+        console.log(`[OAuth] Using ${response.method} method for Notion`);
+
+        // Redirect user to Notion's OAuth page
+        window.location.href = response.authorization_url;
+      } else {
+        // For other connectors, use the old OAuth flow
+        const callbackUrl = `${window.location.origin}/connectors/callback`;
+        const response = await initiateOAuth(selectedConnector.id, callbackUrl);
+        window.location.href = response.authorization_url;
+      }
+    } catch (error) {
+      console.error('Failed to initiate OAuth:', error);
+      setIsConnecting(false);
+      setShowOAuthConfirm(false);
+    }
+  }
+
+  // Check if selected connector is already connected
+  const isConnectorConnected = false; // Will be updated by ConnectorsList component
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -67,32 +113,19 @@ export default function SettingsPage() {
               </div>
             </section>
 
-            {/* MCP Connectors Section */}
+            {/* Connectors Section */}
             <section className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
               <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h2 className="text-lg font-semibold text-gray-900">MCP Connectors</h2>
-                    <p className="text-sm text-gray-500 mt-1">
-                      Connect to external MCP servers for custom tools
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => setView('add-connector')}
-                    className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                  >
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add Connector
-                  </button>
+                <div>
+                  <h2 className="text-lg font-semibold text-gray-900">Connectors</h2>
+                  <p className="text-sm text-gray-500 mt-1">
+                    Connect to external services like Notion
+                  </p>
                 </div>
               </div>
               <div className="p-6" key={refreshKey}>
                 <ConnectorsList
-                  onAddConnector={() => setView('add-connector')}
-                  onEditConnector={(connector) => {
-                    console.log('Edit connector:', connector);
-                    // TODO: Open edit modal
-                  }}
+                  onConnectorClick={handlePredefinedConnectorClick}
                 />
               </div>
             </section>
@@ -105,8 +138,8 @@ export default function SettingsPage() {
                   <strong>System Tools:</strong> Built-in integrations like Gmail. Click "Connect" to enable.
                 </li>
                 <li>
-                  <strong>MCP Connectors:</strong> Connect to external MCP servers. The connection will be
-                  tested and verified before saving.
+                  <strong>Connectors:</strong> Click on a connector like Notion to connect via OAuth.
+                  Your Schema Agent will automatically have access to the connected tools.
                 </li>
                 <li>
                   <strong>Using in Chat:</strong> Once connected, use the Attach button in chat to select
@@ -115,15 +148,29 @@ export default function SettingsPage() {
               </ul>
             </section>
           </div>
-        ) : view === 'add-connector' ? (
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 max-w-2xl mx-auto">
-            <AddConnectorForm
-              onSuccess={handleConnectorAdded}
-              onCancel={() => setView('main')}
+        ) : view === 'connector-detail' && selectedConnector ? (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden max-w-2xl mx-auto">
+            <ConnectorDetailView
+              connector={selectedConnector}
+              onBack={handleBack}
+              onConnect={handleConnectClick}
+              isConnected={isConnectorConnected}
+              isConnecting={isConnecting}
             />
           </div>
         ) : null}
       </main>
+
+      {/* OAuth Confirmation Modal */}
+      {selectedConnector && (
+        <OAuthConfirmModal
+          isOpen={showOAuthConfirm}
+          onClose={() => setShowOAuthConfirm(false)}
+          onConfirm={handleOAuthConfirm}
+          connector={selectedConnector}
+          isLoading={isConnecting}
+        />
+      )}
     </div>
   );
 }

@@ -73,6 +73,16 @@ SYSTEM_TOOLS: Dict[str, SystemTool] = {
         is_enabled=False,  # Coming soon
         is_beta=True,
     ),
+    "google_search": SystemTool(
+        id="google_search",
+        name="Google Search",
+        description="Search the web for real-time information, documentation, news, and current events",
+        icon="search",
+        category="utilities",
+        auth_type="none",  # No user auth needed - uses server's GEMINI_API_KEY
+        is_enabled=True,
+        is_beta=False,
+    ),
 }
 
 

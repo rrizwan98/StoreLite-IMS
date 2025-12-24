@@ -55,6 +55,9 @@ dependencies = [
     "google-auth-oauthlib>=1.2.0",
     "google-api-python-client>=2.111.0",
     "cryptography>=41.0.0",
+
+    # Google Gen AI (Gemini Search Grounding)
+    "google-genai>=1.0.0",
 ]
 
 [project.optional-dependencies]

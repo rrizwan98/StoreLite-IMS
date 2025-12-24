@@ -361,3 +361,76 @@ T036 (AddConnectorForm) | T037 (ConnectionTester)
 - [USn] label maps task to specific user story
 - Commit after each task or logical group
 - Stop at any checkpoint to validate story independently
+
+---
+
+## Phase 10: OAuth Connector Integration (v2.0) - 2025-12-24
+
+**Purpose**: Add browser-based OAuth flow for predefined connectors (Notion)
+
+**Related Spec**: See `spec.md` Version 2.0 section for full details
+
+### 10.1 Backend OAuth Endpoints (TDD)
+
+- [x] T088 [RED] Write failing tests for POST /api/oauth/initiate in `backend/tests/unit/test_oauth_connectors.py`
+- [x] T089 [RED] Write failing tests for GET /api/oauth/callback/{connector_id}
+- [x] T090 [RED] Write failing tests for GET /api/oauth/status/{connector_id}
+- [x] T091 [RED] Write failing tests for DELETE /api/oauth/disconnect/{connector_id}
+- [x] T092 [GREEN] Implement OAuth router in `backend/app/routers/oauth_connectors.py`
+- [x] T093 [GREEN] Implement OAuthConnectorConfig with Notion credentials
+- [x] T094 [GREEN] Implement oauth_states management for CSRF protection
+- [x] T095 [GREEN] Implement token exchange with Notion API
+- [x] T096 [GREEN] Register oauth_connectors router in `backend/app/main.py`
+
+### 10.2 Frontend OAuth Components
+
+- [x] T097 Create predefined connectors registry in `frontend/lib/predefined-connectors.ts`
+- [x] T098 Create Notion logo SVG in `frontend/public/connectors/notion-logo.svg`
+- [x] T099 Create PredefinedConnectorsList component in `frontend/components/connectors/`
+- [x] T100 Create ConnectorDetailView component with info section
+- [x] T101 Create OAuthConfirmModal with permission points
+- [x] T102 Create OAuth callback page in `frontend/app/connectors/callback/page.tsx`
+- [x] T103 Add OAuth API functions to `frontend/lib/connectors-api.ts`
+
+### 10.3 ConnectorsModal Redesign
+
+- [ ] T104 Update ConnectorsList to show predefined connectors (no Add button)
+- [ ] T105 Update ConnectorsModal to use new OAuth flow
+- [ ] T106 Remove manual URL/API key entry option
+- [ ] T107 Add "Start Chat" navigation after successful connection
+
+### 10.4 Schema Agent Integration
+
+- [ ] T108 [RED] Write failing tests for agent loading user connector tools
+- [ ] T109 [GREEN] Update schema_query_agent.py to load verified MCP connectors
+- [ ] T110 [GREEN] Add user connector tools to agent's function_tools list
+- [ ] T111 Test end-to-end: Connect Notion → Ask query → Agent uses Notion tools
+
+### 10.5 Environment Configuration
+
+- [x] T112 Add NOTION_OAUTH_CLIENT_ID to `.env.example`
+- [x] T113 Add NOTION_OAUTH_CLIENT_SECRET to `.env.example`
+- [ ] T114 Document Notion Developer Portal setup steps
+
+**Status**: Phase 10.1 and 10.2 complete. Phase 10.3 and 10.4 in progress.
+
+---
+
+## Current Progress Summary (2025-12-24)
+
+### Completed Tasks
+- OAuth backend endpoints created (`/api/oauth/*`)
+- Frontend OAuth components created (PredefinedConnectorsList, ConnectorDetailView, OAuthConfirmModal)
+- OAuth callback page created
+- Notion logo added
+- Environment configuration updated
+
+### In Progress
+- ConnectorsList UI update (remove Add button, show predefined connectors)
+- Schema Agent integration with user connectors
+
+### Pending
+- End-to-end testing with real Notion OAuth
+- Documentation updates
+
+---

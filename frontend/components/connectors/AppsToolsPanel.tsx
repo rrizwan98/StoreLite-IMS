@@ -1,35 +1,34 @@
 /**
  * AppsToolsPanel Component
  *
- * Combined panel showing both system tools and user connectors.
- * Can be used in a modal or as a standalone page.
+ * Combined panel showing both system tools and predefined OAuth connectors.
+ * No "Add Connector" button - users click on predefined connectors (like Notion) to connect via OAuth.
  */
 
 'use client';
 
 import { useState } from 'react';
-import { Wrench, Server } from 'lucide-react';
+import { Wrench, Plug } from 'lucide-react';
 import SystemToolsList from './SystemToolsList';
 import ConnectorsList from './ConnectorsList';
 import { SystemTool } from '@/lib/tools-api';
 import { Connector } from '@/lib/connectors-api';
+import { PredefinedConnector } from '@/lib/predefined-connectors';
 
 type TabType = 'system' | 'connectors';
 
 interface AppsToolsPanelProps {
   defaultTab?: TabType;
   onSystemToolClick?: (tool: SystemTool) => void;
-  onConnectorClick?: (connector: Connector) => void;
-  onAddConnector?: () => void;
-  onEditConnector?: (connector: Connector) => void;
+  onPredefinedConnectorClick?: (connector: PredefinedConnector) => void;
+  onConnectedConnectorClick?: (connector: Connector) => void;
 }
 
 export default function AppsToolsPanel({
   defaultTab = 'system',
   onSystemToolClick,
-  onConnectorClick,
-  onAddConnector,
-  onEditConnector,
+  onPredefinedConnectorClick,
+  onConnectedConnectorClick,
 }: AppsToolsPanelProps) {
   const [activeTab, setActiveTab] = useState<TabType>(defaultTab);
 
@@ -60,8 +59,8 @@ export default function AppsToolsPanel({
             }
           `}
         >
-          <Server className="h-4 w-4 mr-2" />
-          My Connectors
+          <Plug className="h-4 w-4 mr-2" />
+          Connectors
         </button>
       </div>
 
@@ -71,9 +70,8 @@ export default function AppsToolsPanel({
           <SystemToolsList onToolClick={onSystemToolClick} />
         ) : (
           <ConnectorsList
-            onConnectorClick={onConnectorClick}
-            onAddConnector={onAddConnector}
-            onEditConnector={onEditConnector}
+            onConnectorClick={onPredefinedConnectorClick}
+            onConnectedConnectorClick={onConnectedConnectorClick}
           />
         )}
       </div>

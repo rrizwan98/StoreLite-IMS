@@ -2,8 +2,36 @@
 
 **Feature Branch**: `008-user-mcp-connectors`
 **Created**: 2025-12-21
-**Status**: Draft
+**Updated**: 2025-12-24
+**Version**: 2.0
+**Status**: In Progress
 **Input**: User-configurable MCP server connections with dynamic tool registration in ChatKit UI. Users can connect custom MCP servers, manage both system-provided tools and user-added connectors, with connection validation before saving.
+
+---
+
+## Version 2.0 Changes (2025-12-24)
+
+### New: Browser-Based OAuth Flow for Predefined Connectors
+
+**Summary**: Added support for OAuth-based connectors like Notion with browser-based authentication flow.
+
+**Key Changes**:
+1. **Predefined Connectors**: Show connectors like Notion with logos (no manual URL entry)
+2. **OAuth Flow**: Browser-based OAuth instead of API key entry
+3. **UI Redesign**: Connectors list shows predefined options, detail view, permission modal
+4. **Schema Agent Integration**: Connected MCP tools available to agent
+
+**New User Stories**:
+- US-007: View predefined connectors with logos
+- US-008: OAuth permission confirmation before redirect
+- US-009: Success/error callback handling with "Start Chat" button
+
+**New Technical Requirements**:
+- TR-005: Backend OAuth endpoints (`/api/oauth/*`)
+- TR-006: Server-side OAuth credentials storage
+- TR-007: OAuth state management for CSRF protection
+
+---
 
 ---
 
@@ -329,3 +357,211 @@ This separation ensures:
 - User connectors are fully dynamic and user-managed
 - Both integrate seamlessly in the ChatKit UI
 - Future tools can be added without database migrations
+
+---
+
+## Version 2.0: OAuth Connector User Stories
+
+### User Story 7 - View Predefined Connectors (Priority: P1)
+
+As a user, I want to see predefined connectors like Notion with their logos so that I can easily identify and connect services.
+
+**Acceptance Scenarios**:
+
+1. **Given** I am in the MCP Connectors tab, **When** I view the list, **Then** I see predefined connectors (Notion) with their official logos
+2. **Given** I view a connector, **When** it is already connected, **Then** I see a "Connected" badge
+3. **Given** I am viewing connectors, **When** I look for "Add Connector" button, **Then** there is NO manual add button - only predefined options
+
+---
+
+### User Story 8 - View Connector Details (Priority: P1)
+
+As a user, I want to see detailed information about a connector before connecting so that I understand what I'm connecting.
+
+**Acceptance Scenarios**:
+
+1. **Given** I click on a connector (Notion), **When** the detail view opens, **Then** I see: logo, name, description, category, capabilities
+2. **Given** I am in the detail view, **When** I look for links, **Then** I see "Website" and "Privacy Policy" links
+3. **Given** I am in the detail view, **When** I click "Connect", **Then** the OAuth permission modal opens
+
+---
+
+### User Story 9 - OAuth Permission Confirmation (Priority: P1)
+
+As a user, I want to see permission information before OAuth redirect so that I understand what access I'm granting.
+
+**Acceptance Scenarios**:
+
+1. **Given** I click "Connect", **When** the modal opens, **Then** I see IMS logo → Connector logo at the top
+2. **Given** the modal is open, **When** I read the content, **Then** I see:
+   - "Connect [Connector Name]"
+   - "Developed by [Developer]"
+   - "Permissions always respected" point
+   - "You're in control" point
+   - "Connectors may introduce risk" point
+3. **Given** the modal is open, **When** I click "Continue to [Connector]", **Then** I am redirected to the connector's OAuth page
+
+---
+
+### User Story 10 - OAuth Callback Handling (Priority: P1)
+
+As a user, I want to see clear success/error status after OAuth so that I know if the connection succeeded.
+
+**Acceptance Scenarios**:
+
+1. **Given** I complete OAuth successfully, **When** I am redirected back, **Then** I see a success page with:
+   - Green checkmark icon
+   - "Connected Successfully!" message
+   - "Start Chat" button
+   - "Go to Settings" button
+2. **Given** OAuth fails or I cancel, **When** I am redirected back, **Then** I see an error page with:
+   - Red X icon
+   - Clear error message
+   - "Try Again" button
+
+---
+
+### User Story 11 - Use Connected Tools in Chat (Priority: P1)
+
+As a user, I want Schema Agent to use my connected Notion tools so that I can search my Notion pages via chat.
+
+**Acceptance Scenarios**:
+
+1. **Given** I have connected Notion, **When** I ask Schema Agent about my Notion pages, **Then** the agent uses Notion tools to search and respond
+2. **Given** Notion is connected, **When** I start a new chat, **Then** Schema Agent has access to Notion tools
+3. **Given** I ask "Search my Notion for...", **When** the agent responds, **Then** the response includes results from my Notion workspace
+
+---
+
+## Version 2.0: Technical Requirements
+
+### TR-005: OAuth Backend Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/oauth/initiate` | POST | Start OAuth flow, return auth URL |
+| `/api/oauth/callback/{connector_id}` | GET | Handle OAuth callback from provider |
+| `/api/oauth/status/{connector_id}` | GET | Check if user has active connection |
+| `/api/oauth/disconnect/{connector_id}` | DELETE | Revoke connection |
+
+### TR-006: Server-Side OAuth Credentials
+
+- OAuth client_id and client_secret stored in `.env` file
+- Users NEVER see or enter OAuth credentials
+- Credentials loaded from environment at runtime
+
+### TR-007: OAuth State Management
+
+- Generate secure random state token for each OAuth flow
+- Store state with user_id and timestamp
+- Expire states after 10 minutes
+- Validate state on callback to prevent CSRF
+
+### TR-008: Predefined Connectors Registry
+
+```typescript
+interface PredefinedConnector {
+  id: string;           // 'notion'
+  name: string;         // 'Notion'
+  description: string;  // 'Search your Notion pages'
+  logo: string;         // '/connectors/notion-logo.svg'
+  category: string;     // 'Productivity'
+  capabilities: string[]; // ['Page Search', 'Sync']
+  developer: string;    // 'Notion'
+  website: string;      // 'https://notion.so'
+  privacyPolicy: string; // 'https://notion.so/privacy'
+  mcpServerUrl: string; // 'https://mcp.notion.com/mcp'
+}
+```
+
+---
+
+## Version 2.0: UI Components
+
+### New Frontend Components
+
+| Component | Location | Purpose |
+|-----------|----------|---------|
+| `PredefinedConnectorsList` | `components/connectors/` | Show available connectors with logos |
+| `ConnectorDetailView` | `components/connectors/` | Detail page with info and connect button |
+| `OAuthConfirmModal` | `components/connectors/` | Permission confirmation before redirect |
+| `callback/page.tsx` | `app/connectors/callback/` | OAuth callback handler page |
+
+### Updated Components
+
+| Component | Changes |
+|-----------|---------|
+| `ConnectorsModal` | Added predefined flow, OAuth modal integration |
+| `ConnectorsList` | Show predefined connectors, remove "Add" button |
+
+---
+
+## Version 2.0: Environment Configuration
+
+### Backend `.env`
+
+```env
+# Notion OAuth (required for Notion connector)
+NOTION_OAUTH_CLIENT_ID=<from-notion-developer-portal>
+NOTION_OAUTH_CLIENT_SECRET=<from-notion-developer-portal>
+```
+
+### Setup Instructions
+
+1. Go to https://www.notion.so/my-integrations
+2. Create a new PUBLIC integration
+3. Enable OAuth 2.0 in settings
+4. Add redirect URI: `http://localhost:8000/api/oauth/callback/notion`
+5. Copy Client ID and Secret to `.env`
+
+---
+
+## Version 2.0: Test Cases (TDD)
+
+### OAuth Flow Tests
+
+```python
+# RED Phase - Write before implementation
+
+def test_initiate_oauth_returns_authorization_url():
+    """Initiate should return valid OAuth authorization URL"""
+    response = client.post("/api/oauth/initiate", json={
+        "connector_id": "notion",
+        "redirect_uri": "http://localhost:8000/api/oauth/callback/notion"
+    })
+    assert response.status_code == 200
+    assert "authorization_url" in response.json()
+    assert "state" in response.json()
+
+def test_initiate_oauth_requires_authentication():
+    """Initiate should require user authentication"""
+    response = client.post("/api/oauth/initiate", json={...})
+    assert response.status_code == 401
+
+def test_oauth_callback_creates_connector():
+    """Successful callback should create UserMCPConnection"""
+    # Mock OAuth token exchange
+    response = client.get("/api/oauth/callback/notion?code=test&state=valid")
+    assert response.status_code == 302  # Redirect
+
+def test_oauth_callback_invalid_state():
+    """Invalid state should redirect to error page"""
+    response = client.get("/api/oauth/callback/notion?code=test&state=invalid")
+    assert "error=invalid_state" in response.headers["location"]
+```
+
+### Schema Agent Integration Tests
+
+```python
+def test_schema_agent_loads_user_connector_tools():
+    """Agent should load tools from user's verified connectors"""
+    # Given: User has connected Notion
+    # When: Agent is initialized
+    # Then: Notion tools are in agent's tool list
+
+def test_schema_agent_uses_connector_tool():
+    """Agent should use Notion tool when user asks about Notion"""
+    # Given: Notion is connected
+    # When: User asks "Search my Notion for project plans"
+    # Then: Agent invokes Notion search tool
+```

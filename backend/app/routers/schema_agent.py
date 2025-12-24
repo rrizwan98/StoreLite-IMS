@@ -65,7 +65,7 @@ from app.mcp_server.tools_schema_query import (
 )
 from app.agents.schema_query_agent import SchemaQueryAgent, create_schema_query_agent
 from app.services.chatkit_store_service import PostgreSQLChatKitStore, create_chatkit_store
-from app.connectors.agent_tools import load_connector_tools
+from app.connectors.agent_tools import load_connector_tools, get_user_connector_tools
 
 logger = logging.getLogger(__name__)
 
@@ -395,25 +395,31 @@ class SchemaChatKitServer(ChatKitServer):
             thread_id = thread.id if thread else None
             logger.info(f"[Schema ChatKit] Thread ID for session: {thread_id}")
 
-            # Check if a connector was selected
-            selected_connector_id = context.get("selected_connector_id")
-            selected_connector_url = context.get("selected_connector_url")
+            # Load ALL user's connector tools (not just selected ones)
+            # This ensures the agent always has access to all connected services
             connector_tools = []
+            db_session = context.get("db_session")
 
-            # Load connector tools if a connector is selected
-            if selected_connector_url:
+            if db_session:
                 try:
-                    logger.info(f"[Schema ChatKit] Loading tools from connector: {selected_connector_url}")
-                    connector_tools = await load_connector_tools(
-                        selected_connector_url,
-                        context.get("selected_connector_name", "MCP Connector")
+                    # Load ALL verified connectors for this user
+                    logger.info(f"[Schema ChatKit] Loading ALL connector tools for user {user_id}")
+                    connector_tools = await get_user_connector_tools(
+                        db_session,
+                        user_id,
+                        connector_id=None  # None = load ALL connectors
                     )
-                    logger.info(f"[Schema ChatKit] Loaded {len(connector_tools)} connector tools")
+                    if connector_tools:
+                        tool_names = [getattr(t, 'name', str(t)) for t in connector_tools]
+                        logger.info(f"[Schema ChatKit] Loaded {len(connector_tools)} connector tools: {tool_names[:5]}...")
+                    else:
+                        logger.info(f"[Schema ChatKit] No connector tools found for user {user_id}")
                 except Exception as e:
                     logger.warning(f"[Schema ChatKit] Failed to load connector tools: {e}")
 
-            # Create a cache key that includes connector selection
-            cache_key = f"{user_id}:{selected_connector_id or 'none'}"
+            # Create a cache key - include connector count to invalidate when connectors change
+            connector_count = len(connector_tools)
+            cache_key = f"{user_id}:connectors_{connector_count}"
 
             # Get or create agent for this user (with connector tools if selected)
             if cache_key not in _agent_cache:
@@ -442,8 +448,11 @@ class SchemaChatKitServer(ChatKitServer):
                 agent = _agent_cache[cache_key]
 
             # Run agent query with thread_id for session persistence
+            logger.info(f"[Schema ChatKit] Running agent query...")
             result = await agent.query(user_message, thread_id=thread_id)
+            logger.info(f"[Schema ChatKit] Agent query completed. Result keys: {list(result.keys()) if result else 'None'}")
             response_text = result.get("response", "I couldn't process your request.")
+            logger.info(f"[Schema ChatKit] Response text length: {len(response_text) if response_text else 0}")
 
             # Calculate total time
             total_time = time.time() - start_time
@@ -764,11 +773,16 @@ async def disconnect_database(
 ):
     """
     Disconnect from database and clear schema cache.
+    Also clears the agent cache so new connection gets fresh agent.
     """
     connection = await get_user_connection(user, db)
 
     if not connection:
         return {"status": "not_connected", "message": "No connection to disconnect"}
+
+    # Clear agent cache FIRST before clearing connection
+    cleared = await clear_agent_cache_async(user.id)
+    logger.info(f"[Schema Agent] Agent cache cleared on disconnect: {cleared}")
 
     # Clear connection data
     connection.mcp_server_status = "disconnected"
@@ -983,75 +997,99 @@ class ChatResponse(BaseModel):
     error: Optional[str] = None
 
 
-# Cache for agent instances (keyed by user_id)
-_agent_cache: Dict[int, SchemaQueryAgent] = {}
+# Cache for agent instances (keyed by "{user_id}:connectors_{count}" or "{user_id}")
+_agent_cache: Dict[str, SchemaQueryAgent] = {}
 
 
 async def clear_agent_cache_async(user_id: int) -> bool:
     """
-    Clear the cached agent for a specific user (async version).
+    Clear ALL cached agents for a specific user (async version).
     Properly closes the MCP connection before removing from cache.
 
     This should be called when:
     - User disconnects their database
     - User connects to a different database
+    - User connects/disconnects a connector
 
     Args:
-        user_id: The user ID whose agent should be cleared
+        user_id: The user ID whose agents should be cleared
 
     Returns:
-        True if agent was cleared, False if no agent was cached
+        True if any agent was cleared, False if no agent was cached
     """
-    if user_id in _agent_cache:
-        agent = _agent_cache[user_id]
-        try:
-            # Close MCP connection properly
-            await agent.close()
-            logger.info(f"[Schema Agent] Closed MCP connection for user {user_id}")
-        except Exception as e:
-            logger.error(f"[Schema Agent] Error closing MCP connection for user {user_id}: {e}")
-        finally:
-            del _agent_cache[user_id]
-            logger.info(f"[Schema Agent] Cleared cached agent for user {user_id}")
-        return True
-    return False
+    cleared = False
+    # Find all cache keys for this user (handles both old and new key formats)
+    keys_to_clear = [
+        key for key in list(_agent_cache.keys())
+        if key == str(user_id) or key.startswith(f"{user_id}:")
+    ]
+
+    for cache_key in keys_to_clear:
+        agent = _agent_cache.get(cache_key)
+        if agent:
+            try:
+                # Close MCP connection properly
+                await agent.close()
+                logger.info(f"[Schema Agent] Closed MCP connection for cache key {cache_key}")
+            except Exception as e:
+                logger.error(f"[Schema Agent] Error closing MCP connection for {cache_key}: {e}")
+            finally:
+                del _agent_cache[cache_key]
+                logger.info(f"[Schema Agent] Cleared cached agent: {cache_key}")
+                cleared = True
+
+    if cleared:
+        logger.info(f"[Schema Agent] Cleared {len(keys_to_clear)} cached agent(s) for user {user_id}")
+    return cleared
 
 
 def clear_agent_cache(user_id: int) -> bool:
     """
-    Clear the cached agent for a specific user (sync version).
+    Clear ALL cached agents for a specific user (sync version).
     Creates a new event loop if needed to close MCP connection.
 
     This should be called when:
     - User disconnects their database
     - User connects to a different database
+    - User connects/disconnects a connector
 
     Args:
-        user_id: The user ID whose agent should be cleared
+        user_id: The user ID whose agents should be cleared
 
     Returns:
-        True if agent was cleared, False if no agent was cached
+        True if any agent was cleared, False if no agent was cached
     """
-    if user_id in _agent_cache:
-        agent = _agent_cache[user_id]
-        try:
-            # Try to close MCP connection
-            import asyncio
+    cleared = False
+    # Find all cache keys for this user (handles both old and new key formats)
+    keys_to_clear = [
+        key for key in list(_agent_cache.keys())
+        if key == str(user_id) or key.startswith(f"{user_id}:")
+    ]
+
+    for cache_key in keys_to_clear:
+        agent = _agent_cache.get(cache_key)
+        if agent:
             try:
-                loop = asyncio.get_running_loop()
-                # We're in an async context, schedule the close
-                loop.create_task(agent.close())
-            except RuntimeError:
-                # No running loop, create one
-                asyncio.run(agent.close())
-            logger.info(f"[Schema Agent] Closed MCP connection for user {user_id}")
-        except Exception as e:
-            logger.error(f"[Schema Agent] Error closing MCP connection for user {user_id}: {e}")
-        finally:
-            del _agent_cache[user_id]
-            logger.info(f"[Schema Agent] Cleared cached agent for user {user_id}")
-        return True
-    return False
+                # Try to close MCP connection
+                import asyncio
+                try:
+                    loop = asyncio.get_running_loop()
+                    # We're in an async context, schedule the close
+                    loop.create_task(agent.close())
+                except RuntimeError:
+                    # No running loop, create one
+                    asyncio.run(agent.close())
+                logger.info(f"[Schema Agent] Closed MCP connection for cache key {cache_key}")
+            except Exception as e:
+                logger.error(f"[Schema Agent] Error closing MCP connection for {cache_key}: {e}")
+            finally:
+                del _agent_cache[cache_key]
+                logger.info(f"[Schema Agent] Cleared cached agent: {cache_key}")
+                cleared = True
+
+    if cleared:
+        logger.info(f"[Schema Agent] Cleared {len(keys_to_clear)} cached agent(s) for user {user_id}")
+    return cleared
 
 
 async def clear_all_agent_cache_async() -> int:
@@ -1329,6 +1367,7 @@ async def chatkit_endpoint(
                 "selected_connector_id": selected_connector_id,
                 "selected_connector_url": selected_connector_url,
                 "selected_connector_name": selected_connector_name,
+                "db_session": db,  # Pass DB session for connector tools loading
             }
 
             if selected_tool:

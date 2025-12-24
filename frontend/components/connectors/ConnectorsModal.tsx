@@ -1,7 +1,8 @@
 /**
  * ConnectorsModal Component
  *
- * Modal for managing MCP connectors - viewing list or adding new.
+ * Modal for managing MCP connectors - viewing list, adding new, or OAuth flow.
+ * Supports both predefined OAuth connectors (like Notion) and custom URL connectors.
  */
 
 'use client';
@@ -10,10 +11,13 @@ import { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import AppsToolsPanel from './AppsToolsPanel';
 import AddConnectorForm from './AddConnectorForm';
-import { Connector } from '@/lib/connectors-api';
+import ConnectorDetailView from './ConnectorDetailView';
+import OAuthConfirmModal from './OAuthConfirmModal';
+import { Connector, initiateOAuth, getOAuthStatus, connectNotion, getNotionStatus } from '@/lib/connectors-api';
 import { SystemTool } from '@/lib/tools-api';
+import { PredefinedConnector, PREDEFINED_CONNECTORS } from '@/lib/predefined-connectors';
 
-type ModalView = 'list' | 'add' | 'edit';
+type ModalView = 'list' | 'add' | 'edit' | 'connector-detail';
 
 interface ConnectorsModalProps {
   isOpen: boolean;
@@ -32,34 +36,101 @@ export default function ConnectorsModal({
 }: ConnectorsModalProps) {
   const [view, setView] = useState<ModalView>('list');
   const [editConnector, setEditConnector] = useState<Connector | null>(null);
+  const [selectedPredefined, setSelectedPredefined] = useState<PredefinedConnector | null>(null);
+  const [showOAuthConfirm, setShowOAuthConfirm] = useState(false);
+  const [isConnecting, setIsConnecting] = useState(false);
+  const [connectedPredefinedIds, setConnectedPredefinedIds] = useState<string[]>([]);
+  const [oauthError, setOAuthError] = useState<string | null>(null);
 
   // Reset view when modal opens
   useEffect(() => {
     if (isOpen) {
       setView('list');
       setEditConnector(null);
+      setSelectedPredefined(null);
+      setShowOAuthConfirm(false);
+      setOAuthError(null);
+      loadOAuthStatuses();
     }
   }, [isOpen]);
 
+  // Load OAuth connection statuses for predefined connectors
+  async function loadOAuthStatuses() {
+    try {
+      const connectedIds: string[] = [];
+
+      // Check Notion status using new endpoint
+      try {
+        const notionStatus = await getNotionStatus();
+        if (notionStatus.connected) {
+          connectedIds.push('notion');
+        }
+      } catch {
+        // Notion not connected or error
+      }
+
+      // Add other connectors here in future...
+
+      setConnectedPredefinedIds(connectedIds);
+    } catch (error) {
+      console.error('Failed to load OAuth statuses:', error);
+    }
+  }
+
   if (!isOpen) return null;
-
-  function handleAddConnector() {
-    setView('add');
-  }
-
-  function handleEditConnector(connector: Connector) {
-    setEditConnector(connector);
-    setView('edit');
-  }
 
   function handleConnectorSuccess() {
     setView('list');
     setEditConnector(null);
+    loadOAuthStatuses();
   }
 
   function handleCancel() {
     setView('list');
     setEditConnector(null);
+    setSelectedPredefined(null);
+  }
+
+  function handlePredefinedConnectorClick(connector: PredefinedConnector) {
+    setSelectedPredefined(connector);
+    setView('connector-detail');
+  }
+
+  function handleConnectClick() {
+    if (!selectedPredefined) return;
+    setShowOAuthConfirm(true);
+  }
+
+  async function handleOAuthConfirm() {
+    if (!selectedPredefined) return;
+
+    setIsConnecting(true);
+    setOAuthError(null);
+
+    try {
+      // Use the new Notion MCP OAuth endpoint (Zero-config, no developer credentials needed!)
+      if (selectedPredefined.id === 'notion') {
+        // Use Notion MCP with Dynamic Client Registration
+        const response = await connectNotion();
+        console.log(`[OAuth] Using ${response.method} method for Notion`);
+
+        // Redirect user to Notion's OAuth page
+        window.location.href = response.authorization_url;
+      } else {
+        // For other connectors, use the old OAuth flow
+        const callbackUrl = `${window.location.origin}/connectors/callback`;
+        const response = await initiateOAuth(selectedPredefined.id, callbackUrl);
+        window.location.href = response.authorization_url;
+      }
+    } catch (error) {
+      console.error('Failed to initiate OAuth:', error);
+      setIsConnecting(false);
+      setShowOAuthConfirm(false);
+
+      // Show user-friendly error message
+      const errorMessage = error instanceof Error ? error.message : 'Failed to connect';
+      setOAuthError(errorMessage);
+    }
   }
 
   return (
@@ -76,8 +147,9 @@ export default function ConnectorsModal({
         <div className="flex items-center justify-between px-6 py-4 border-b">
           <h2 className="text-lg font-semibold text-gray-900">
             {view === 'list' && 'Apps & Tools'}
-            {view === 'add' && 'Add Connector'}
+            {view === 'add' && 'Custom Connector'}
             {view === 'edit' && 'Edit Connector'}
+            {view === 'connector-detail' && selectedPredefined?.name}
           </h2>
           <button
             onClick={onClose}
@@ -93,10 +165,33 @@ export default function ConnectorsModal({
             <AppsToolsPanel
               defaultTab={defaultTab}
               onSystemToolClick={onToolSelect}
-              onConnectorClick={onConnectorSelect}
-              onAddConnector={handleAddConnector}
-              onEditConnector={handleEditConnector}
+              onPredefinedConnectorClick={handlePredefinedConnectorClick}
+              onConnectedConnectorClick={onConnectorSelect}
             />
+          )}
+
+          {view === 'connector-detail' && selectedPredefined && (
+            <div>
+              <ConnectorDetailView
+                connector={selectedPredefined}
+                onBack={handleCancel}
+                onConnect={handleConnectClick}
+                isConnected={connectedPredefinedIds.includes(selectedPredefined.id)}
+                isConnecting={isConnecting}
+              />
+              {/* Error message */}
+              {oauthError && (
+                <div className="mx-6 mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+                  <p className="text-sm text-red-700">{oauthError}</p>
+                  <button
+                    onClick={() => setOAuthError(null)}
+                    className="mt-2 text-xs text-red-600 underline hover:no-underline"
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              )}
+            </div>
           )}
 
           {view === 'add' && (
@@ -119,12 +214,23 @@ export default function ConnectorsModal({
           )}
         </div>
       </div>
+
+      {/* OAuth Confirmation Modal */}
+      {selectedPredefined && (
+        <OAuthConfirmModal
+          isOpen={showOAuthConfirm}
+          onClose={() => setShowOAuthConfirm(false)}
+          onConfirm={handleOAuthConfirm}
+          connector={selectedPredefined}
+          isLoading={isConnecting}
+        />
+      )}
     </>
   );
 }
 
 /**
- * Edit Connector View - Placeholder for editing existing connectors
+ * Edit Connector View - For editing existing connectors
  */
 interface EditConnectorViewProps {
   connector: Connector;
@@ -139,7 +245,6 @@ function EditConnectorView({ connector, onSuccess, onCancel }: EditConnectorView
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    // TODO: Implement update logic
     setSaving(true);
     try {
       const { updateConnector } = await import('@/lib/connectors-api');

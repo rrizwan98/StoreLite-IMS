@@ -261,3 +261,142 @@ export function parseNamespacedToolName(
     toolName: match[2].trim(),
   };
 }
+
+
+// ============================================================================
+// OAuth Connector Functions
+// ============================================================================
+
+/**
+ * OAuth configuration status
+ */
+export interface OAuthConfigStatus {
+  configured: boolean;
+  connector_name?: string;
+  error?: string;
+}
+
+/**
+ * Check if OAuth is configured for a connector
+ * This is a public endpoint (no auth required)
+ *
+ * @param connectorId - Predefined connector ID (e.g., 'notion')
+ */
+export async function checkOAuthConfig(connectorId: string): Promise<OAuthConfigStatus> {
+  const response = await fetch(`${API_BASE_URL}/api/oauth/config/${connectorId}`);
+  return response.json();
+}
+
+// ============================================================================
+// Notion MCP OAuth (Zero-Config - No Developer Credentials Needed!)
+// ============================================================================
+
+/**
+ * Response from Notion MCP connect
+ */
+export interface NotionConnectResponse {
+  authorization_url: string;
+  state: string;
+  method: 'dcr' | 'fallback';
+}
+
+/**
+ * Start Notion MCP OAuth flow
+ * Uses Dynamic Client Registration - no developer credentials needed!
+ */
+export async function connectNotion(): Promise<NotionConnectResponse> {
+  return connectorsFetch<NotionConnectResponse>('/api/notion-mcp/connect', {
+    method: 'POST',
+  });
+}
+
+/**
+ * Exchange OAuth code for token (called by callback page)
+ */
+export async function exchangeNotionCode(
+  code: string,
+  state: string
+): Promise<{ success: boolean; connector_id?: number; connector_name?: string; message?: string }> {
+  return connectorsFetch(`/api/notion-mcp/callback?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}`, {
+    method: 'POST',
+  });
+}
+
+/**
+ * Check Notion connection status
+ */
+export async function getNotionStatus(): Promise<{
+  connected: boolean;
+  connector_id?: number;
+  connector_name?: string;
+}> {
+  return connectorsFetch('/api/notion-mcp/status');
+}
+
+/**
+ * Disconnect Notion
+ */
+export async function disconnectNotion(): Promise<{ success: boolean; message: string }> {
+  return connectorsFetch('/api/notion-mcp/disconnect', {
+    method: 'DELETE',
+  });
+}
+
+/**
+ * Response from OAuth initiation
+ */
+export interface InitiateOAuthResponse {
+  authorization_url: string;
+  state: string;
+}
+
+/**
+ * OAuth connection status
+ */
+export interface OAuthStatus {
+  connected: boolean;
+  connector_id?: number;
+  connector_name?: string;
+  verified?: boolean;
+  last_verified_at?: string;
+}
+
+/**
+ * Initiate OAuth flow for a predefined connector
+ *
+ * @param connectorId - Predefined connector ID (e.g., 'notion')
+ * @param redirectUri - OAuth callback URI
+ */
+export async function initiateOAuth(
+  connectorId: string,
+  redirectUri: string
+): Promise<InitiateOAuthResponse> {
+  return connectorsFetch<InitiateOAuthResponse>('/api/oauth/initiate', {
+    method: 'POST',
+    body: JSON.stringify({
+      connector_id: connectorId,
+      redirect_uri: redirectUri,
+    }),
+  });
+}
+
+/**
+ * Check OAuth connection status for a connector
+ *
+ * @param connectorId - Predefined connector ID (e.g., 'notion')
+ */
+export async function getOAuthStatus(connectorId: string): Promise<OAuthStatus> {
+  return connectorsFetch<OAuthStatus>(`/api/oauth/status/${connectorId}`);
+}
+
+/**
+ * Disconnect an OAuth connector
+ *
+ * @param connectorId - Predefined connector ID (e.g., 'notion')
+ */
+export async function disconnectOAuth(connectorId: string): Promise<{ success: boolean; message: string }> {
+  return connectorsFetch<{ success: boolean; message: string }>(
+    `/api/oauth/disconnect/${connectorId}`,
+    { method: 'DELETE' }
+  );
+}
