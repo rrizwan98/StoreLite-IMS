@@ -40,15 +40,13 @@ from chatkit.server import (
     ThreadStreamEvent,
 )
 from chatkit.types import (
-    AssistantMessageContentPartTextDelta,
-    AssistantMessageContentPartDone,
     ThreadItemDoneEvent,
     ThreadItemAddedEvent,
     AssistantMessageItem,
     AssistantMessageContent,
-    ThoughtTask,
-    WorkflowTaskAdded,
-    WorkflowTaskUpdated,
+    ProgressUpdateEvent,
+    ErrorEvent,
+    ErrorCode,
     Page,
 )
 
@@ -717,102 +715,38 @@ class InventoryChatKitServer(ChatKitServer):
             session_id = context.get("session_id", "")
 
             if not session_id:
-                error_text = "No session ID provided. Please connect to a database first."
-                yield AssistantMessageContentPartTextDelta(
-                    type="assistant_message.content_part.text_delta",
-                    content_index=0,
-                    delta=error_text
+                yield ErrorEvent(
+                    type="error",
+                    code=ErrorCode.INVALID_REQUEST,
+                    message="No session ID provided. Please connect to a database first.",
+                    allow_retry=False
                 )
                 return
 
             # Check if session exists
             session_info = _mcp_manager.get_session_info(session_id)
             if not session_info:
-                error_text = "Session not found. Please connect to a PostgreSQL database first."
-                yield AssistantMessageContentPartTextDelta(
-                    type="assistant_message.content_part.text_delta",
-                    content_index=0,
-                    delta=error_text
+                yield ErrorEvent(
+                    type="error",
+                    code=ErrorCode.INVALID_REQUEST,
+                    message="Session not found. Please connect to a PostgreSQL database first.",
+                    allow_retry=True
                 )
                 return
 
             logger.info(f"[MCP ChatKit] Processing message for session {session_id}: {user_message[:50]}...")
 
-            # Track timing
-            start_time = time.time()
-
-            # Show thinking indicator
-            thinking_steps = self._generate_thinking_steps(user_message)
-            initial_thought = ThoughtTask(
-                type="thought",
-                status_indicator="loading",
-                title=thinking_steps[0] if thinking_steps else "Connecting to MCP server...",
-                content=""
+            # Show progress indicator
+            yield ProgressUpdateEvent(
+                type="progress_update",
+                text="Processing your query via MCP..."
             )
-            yield WorkflowTaskAdded(
-                type="workflow.task.added",
-                task_index=0,
-                task=initial_thought
-            )
-
-            # Update thinking progressively
-            accumulated_reasoning = ""
-            for step in thinking_steps:
-                accumulated_reasoning += f"• {step}\n"
-                updated_thought = ThoughtTask(
-                    type="thought",
-                    status_indicator="loading",
-                    title=step,
-                    content=accumulated_reasoning
-                )
-                yield WorkflowTaskUpdated(
-                    type="workflow.task.updated",
-                    task_index=0,
-                    task=updated_thought
-                )
-                await asyncio.sleep(0.1)
 
             # Run agent with MCP tools
             response_text = await _mcp_manager.run_agent(session_id, user_message)
 
-            # Calculate total time
-            total_time = time.time() - start_time
-
-            # Add MCP info to reasoning
-            mcp_tools = session_info.get("mcp_tools", [])
-            accumulated_reasoning += f"\nMCP Tools Available: {', '.join(mcp_tools)}\n"
-
-            # Final thought update
-            final_thought = ThoughtTask(
-                type="thought",
-                status_indicator="complete",
-                title=f"Processed via MCP in {total_time:.1f}s",
-                content=accumulated_reasoning
-            )
-            yield WorkflowTaskUpdated(
-                type="workflow.task.updated",
-                task_index=0,
-                task=final_thought
-            )
-
-            # Stream the response
+            # Create assistant message with the response
             msg_id = f"msg-{uuid.uuid4().hex[:12]}"
-
-            yield AssistantMessageContentPartTextDelta(
-                type="assistant_message.content_part.text_delta",
-                content_index=0,
-                delta=response_text
-            )
-
-            yield AssistantMessageContentPartDone(
-                type="assistant_message.content_part.done",
-                content_index=0,
-                content=AssistantMessageContent(
-                    type="output_text",
-                    text=response_text,
-                    annotations=[]
-                )
-            )
 
             assistant_msg = AssistantMessageItem(
                 id=msg_id,
@@ -830,38 +764,12 @@ class InventoryChatKitServer(ChatKitServer):
 
         except Exception as e:
             logger.error(f"[MCP ChatKit] Error: {e}", exc_info=True)
-            error_text = f"Error: {str(e)}"
-            yield AssistantMessageContentPartTextDelta(
-                type="assistant_message.content_part.text_delta",
-                content_index=0,
-                delta=error_text
+            yield ErrorEvent(
+                type="error",
+                code=ErrorCode.STREAM_ERROR,
+                message=f"Error: {str(e)}",
+                allow_retry=True
             )
-
-    def _generate_thinking_steps(self, user_message: str) -> list[str]:
-        """Generate thinking steps based on the user's message."""
-        steps = []
-        message_lower = user_message.lower()
-
-        steps.append("Connecting to postgres-mcp server...")
-
-        if any(word in message_lower for word in ['add', 'insert', 'new product', 'create']):
-            steps.append("Preparing INSERT via MCP execute_sql...")
-        elif any(word in message_lower for word in ['update', 'edit', 'change']):
-            steps.append("Preparing UPDATE via MCP execute_sql...")
-        elif any(word in message_lower for word in ['delete', 'remove']):
-            steps.append("Preparing DELETE via MCP execute_sql...")
-        elif any(word in message_lower for word in ['show', 'list', 'all', 'view', 'get']):
-            steps.append("Querying via MCP execute_sql...")
-        elif any(word in message_lower for word in ['table', 'schema', 'structure']):
-            steps.append("Using MCP list_objects tool...")
-        elif any(word in message_lower for word in ['bill', 'invoice']):
-            steps.append("Processing billing via MCP...")
-        else:
-            steps.append("Processing request via MCP...")
-
-        steps.append("Executing MCP tool call...")
-
-        return steps
 
 
 # Global instances
