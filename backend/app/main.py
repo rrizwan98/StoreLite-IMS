@@ -157,7 +157,7 @@ async def root():
 
 # ============ Include Routers ============
 
-from app.routers import inventory, billing, agent, chatkit_server, analytics, db_connect, inventory_agent, auth, schema_agent, gmail
+from app.routers import inventory, billing, agent, chatkit_server, analytics, db_connect, inventory_agent, auth, schema_agent, gmail, tools, connectors, oauth_connectors, notion_mcp_oauth
 
 # Authentication router (must be first for auth to work)
 app.include_router(auth.router)
@@ -176,6 +176,14 @@ app.include_router(schema_agent.router)
 
 # Gmail OAuth2 Integration router (Phase 10)
 app.include_router(gmail.router)
+
+# User MCP Connectors routers (Feature 008)
+app.include_router(tools.router)
+app.include_router(connectors.router)
+app.include_router(oauth_connectors.router)
+
+# Notion MCP OAuth (Zero-config OAuth with Dynamic Client Registration)
+app.include_router(notion_mcp_oauth.router)
 
 logger.info("FastAPI application initialized")
 

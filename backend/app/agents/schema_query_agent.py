@@ -31,8 +31,8 @@ from app.services.agent_session_service import create_user_session, AgentSession
 logger = logging.getLogger(__name__)
 
 # Version marker for debugging
-SCHEMA_AGENT_VERSION = "2.2.0-mcp-gmail-session"
-logger.info(f"[Schema Agent] Module loaded - Version {SCHEMA_AGENT_VERSION} (MCP-enabled with Gmail + PostgreSQL Sessions)")
+SCHEMA_AGENT_VERSION = "2.3.0-mcp-gmail-connectors"
+logger.info(f"[Schema Agent] Module loaded - Version {SCHEMA_AGENT_VERSION} (MCP + Gmail + User Connectors)")
 
 
 # ============================================================================
@@ -41,7 +41,7 @@ logger.info(f"[Schema Agent] Module loaded - Version {SCHEMA_AGENT_VERSION} (MCP
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 # Use Gemini 2.0 Flash which supports function calling well
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini/gemini-2.5-flash")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini/gemini-2.5-flash-lite")
 
 
 def get_llm_model():
@@ -83,9 +83,16 @@ def generate_schema_agent_prompt(schema_metadata: dict) -> str:
 ############################################
 URGENT: CHECK FOR TOOL PREFIX FIRST
 ############################################
-BEFORE doing anything else, check if the user's message starts with [TOOL:GMAIL].
-If YES: You MUST call the send_email tool after getting query results. This is NON-NEGOTIABLE.
-If the message contains [TOOL:GMAIL], failure to call send_email is a critical error.
+BEFORE doing anything else, check if the user's message starts with a tool prefix:
+
+1. [TOOL:GMAIL] - User wants to send results via email
+   If YES: You MUST call the send_email tool after getting query results. This is NON-NEGOTIABLE.
+
+2. [TOOL:GOOGLE_SEARCH] - User wants to search the web
+   If YES: You MUST call the google_search tool. This is NON-NEGOTIABLE.
+   The response MUST include Sources section with clickable links.
+
+Failure to use the selected tool is a critical error.
 
 ############################################
 CORE MISSION
@@ -112,6 +119,24 @@ AVAILABLE FUNCTION TOOLS
 ############################################
 - `send_email`: Send query results or any content via user's connected Gmail
 - `check_email_status`: Check if user's Gmail is connected and ready
+- `google_search`: Search the web for real-time information, documentation, news, and current events
+
+############################################
+MCP CONNECTOR TOOLS (EXTERNAL INTEGRATIONS)
+############################################
+When the user selects an MCP Connector (external tool integration), you will have access to additional tools from that connector.
+
+<connector_tool_rules>
+1. Connector tools are loaded dynamically when user selects them
+2. Analyze the user's query and AUTOMATICALLY select the appropriate connector tool
+3. Do NOT ask user which tool to use - decide based on query context
+4. Common connector use cases:
+   - Documentation lookup: Use tools like "resolve-library-id", "get-library-docs"
+   - API integrations: Use relevant API tools from the connector
+   - External data: Fetch data from connected services
+5. Always check available tools and match to user intent
+6. If connector has multiple tools, chain them as needed (e.g., resolve ID first, then fetch docs)
+</connector_tool_rules>
 
 <tool_usage_rules>
 - Prefer tools for all data queries - never guess or fabricate results
@@ -166,6 +191,43 @@ IMS Inventory System
 
 CRITICAL: When [TOOL:GMAIL] is present, sending email is NOT optional - always send!
 </gmail_tool_rules>
+
+############################################
+GOOGLE SEARCH TOOL (WEB GROUNDING)
+############################################
+<google_search_rules>
+You have access to Google Search for real-time web information.
+
+WHEN TO USE GOOGLE SEARCH (MANDATORY):
+1. Message starts with [TOOL:GOOGLE_SEARCH] - ALWAYS use google_search tool
+2. User explicitly asks to "search the web" or "Google this"
+
+WHEN TO AUTONOMOUSLY USE GOOGLE SEARCH:
+The agent MAY decide to use google_search without user selecting the tool for:
+- Current events, news, or today's information
+- Latest versions, updates, or recent releases of software/libraries
+- External documentation, tutorials, or how-to guides
+- Weather, stocks, or real-time data
+- Information about topics NOT in the database
+
+WHEN NOT TO USE GOOGLE SEARCH:
+- Query is about user's database inventory or sales data
+- Query asks about counts, totals, or aggregations from database
+- Query can be answered using execute_sql or other database tools
+- Query is about internal business data stored in the database
+
+RESPONSE FORMAT WITH SOURCES:
+When using google_search, ALWAYS include sources at the end:
+
+[Your response with information from web search]
+
+Sources:
+- [Source Title 1](https://example.com/1)
+- [Source Title 2](https://example.com/2)
+- [Source Title 3](https://example.com/3)
+
+CRITICAL: When [TOOL:GOOGLE_SEARCH] prefix is present, using google_search is MANDATORY!
+</google_search_rules>
 
 ############################################
 EXECUTION BEHAVIOR (NON-NEGOTIABLE)
@@ -298,6 +360,7 @@ class SchemaQueryAgent:
         user_id: Optional[int] = None,
         enable_gmail: bool = True,
         thread_id: Optional[str] = None,
+        connector_tools: Optional[List[Any]] = None,
     ):
         """
         Initialize Schema Query Agent.
@@ -309,6 +372,7 @@ class SchemaQueryAgent:
             user_id: User ID for tool context (needed for Gmail integration)
             enable_gmail: Whether to enable Gmail tools (default: True)
             thread_id: Thread ID for ChatKit session (for persistent conversation)
+            connector_tools: Optional list of tools from user's MCP connectors
         """
         self.database_uri = database_uri
         self.schema_metadata = schema_metadata
@@ -316,6 +380,7 @@ class SchemaQueryAgent:
         self.user_id = user_id
         self.enable_gmail = enable_gmail
         self.thread_id = thread_id
+        self.connector_tools = connector_tools or []
 
         # MCP server and agent instances
         self._mcp_server: Optional[MCPServerStdio] = None
@@ -332,16 +397,23 @@ class SchemaQueryAgent:
         self._session_id = f"schema-{datetime.now().strftime('%Y%m%d%H%M%S')}"
         self._mcp_tools: List[str] = []
         self._function_tools: List[str] = []
+        self._connector_tool_names: List[str] = []
         self._is_initialized = False
 
         # Initialize session manager if user_id is provided
         if user_id:
             self._session_manager = AgentSessionManager(user_id)
 
+        # Track connector tool names
+        if connector_tools:
+            self._connector_tool_names = [
+                getattr(t, 'name', str(t)) for t in connector_tools
+            ]
+
         logger.info(
             f"[Schema Agent] Created agent instance "
             f"(read_only={read_only}, user_id={user_id}, gmail={enable_gmail}, "
-            f"thread={thread_id}, session={self._session_id})"
+            f"thread={thread_id}, connectors={len(self.connector_tools)}, session={self._session_id})"
         )
 
     async def initialize(self) -> Dict[str, Any]:
@@ -507,16 +579,57 @@ class SchemaQueryAgent:
             # Generate system prompt with schema context
             system_prompt = generate_schema_agent_prompt(self.schema_metadata)
 
+            # Add connector tools info to system prompt if available
+            if self.connector_tools and self._connector_tool_names:
+                connector_tools_section = f"""
+
+############################################
+CONNECTED EXTERNAL SERVICES (MCP CONNECTORS)
+############################################
+You have access to the following connector tools from external services:
+
+AVAILABLE CONNECTOR TOOLS:
+{chr(10).join(f'- `{name}`: Use for operations with the connected service' for name in self._connector_tool_names)}
+
+IMPORTANT CONNECTOR TOOL RULES:
+1. Use the EXACT tool names listed above (e.g., `notion-create-database`, NOT `create_database`)
+2. These tools connect to the user's external accounts (Notion, etc.)
+3. When user asks to create, update, or fetch data from external services, use these tools
+4. Chain tools if needed (e.g., search first, then create)
+5. For Notion specifically:
+   - `notion-search`: Search pages and databases
+   - `notion-create-pages`: Create new pages
+   - `notion-create-database`: Create new databases
+   - `notion-update-page`: Update existing pages
+   - `notion-fetch`: Fetch page content
+"""
+                system_prompt = system_prompt + connector_tools_section
+                logger.info(f"[Schema Agent] Added {len(self._connector_tool_names)} connector tools to system prompt")
+
             # Prepare function tools list (Gmail tools if enabled)
             function_tools = []
             if self.enable_gmail and self.user_id:
                 try:
                     from app.mcp_server.tools_gmail import GMAIL_TOOLS
-                    function_tools = GMAIL_TOOLS
+                    function_tools = list(GMAIL_TOOLS)
                     self._function_tools = ["send_email", "check_email_status"]
                     logger.info(f"[Schema Agent] Gmail tools enabled for user {self.user_id}")
                 except ImportError as e:
                     logger.warning(f"[Schema Agent] Gmail tools not available: {e}")
+
+            # Add Google Search tool (always available as System Tool)
+            try:
+                from app.mcp_server.tools_google_search import GOOGLE_SEARCH_TOOLS
+                function_tools.extend(GOOGLE_SEARCH_TOOLS)
+                self._function_tools.append("google_search") if hasattr(self, '_function_tools') else None
+                logger.info(f"[Schema Agent] Google Search tool enabled")
+            except ImportError as e:
+                logger.warning(f"[Schema Agent] Google Search tool not available: {e}")
+
+            # Add connector tools if available
+            if self.connector_tools:
+                function_tools.extend(self.connector_tools)
+                logger.info(f"[Schema Agent] Connector tools added: {self._connector_tool_names}")
 
             # Create agent with fresh MCP server and function tools
             agent = Agent(
@@ -691,6 +804,7 @@ async def create_schema_query_agent(
     user_id: Optional[int] = None,
     enable_gmail: bool = True,
     thread_id: Optional[str] = None,
+    connector_tools: Optional[List[Any]] = None,
 ) -> SchemaQueryAgent:
     """
     Factory function to create and initialize a Schema Query Agent.
@@ -703,6 +817,7 @@ async def create_schema_query_agent(
         user_id: User ID for tool context (needed for Gmail integration)
         enable_gmail: Whether to enable Gmail tools (default: True)
         thread_id: Thread ID for ChatKit session (for persistent conversation)
+        connector_tools: Optional list of tools from user's MCP connectors
 
     Returns:
         Initialized SchemaQueryAgent instance with PostgreSQL session support
@@ -714,6 +829,7 @@ async def create_schema_query_agent(
         user_id=user_id,
         enable_gmail=enable_gmail,
         thread_id=thread_id,
+        connector_tools=connector_tools,
     )
 
     if auto_initialize:

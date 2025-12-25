@@ -343,17 +343,29 @@ class PostgreSQLChatKitStore(Store):
     def _serialize_item(self, item: ThreadItem) -> str:
         """Serialize a ThreadItem to JSON string."""
         try:
+            # Custom JSON encoder for datetime objects
+            def json_serializer(obj):
+                if isinstance(obj, datetime):
+                    return obj.isoformat()
+                raise TypeError(f"Object of type {type(obj)} is not JSON serializable")
+
             if hasattr(item, 'model_dump'):
-                return json.dumps(item.model_dump())
+                data = item.model_dump()
+                return json.dumps(data, default=json_serializer)
             elif hasattr(item, 'dict'):
-                return json.dumps(item.dict())
+                data = item.dict()
+                return json.dumps(data, default=json_serializer)
             else:
                 # Fallback: serialize known attributes
+                created_at = getattr(item, 'created_at', None)
+                if isinstance(created_at, datetime):
+                    created_at = created_at.isoformat()
+
                 data = {
                     'id': getattr(item, 'id', None),
                     'type': getattr(item, 'type', None),
                     'thread_id': getattr(item, 'thread_id', None),
-                    'created_at': getattr(item, 'created_at', None),
+                    'created_at': created_at,
                 }
                 if hasattr(item, 'content'):
                     content = item.content
@@ -364,7 +376,7 @@ class PostgreSQLChatKitStore(Store):
                         ]
                     else:
                         data['content'] = str(content)
-                return json.dumps(data)
+                return json.dumps(data, default=json_serializer)
         except Exception as e:
             logger.error(f"[ChatKitStore] Error serializing item: {e}")
             return json.dumps({'error': str(e)})
@@ -378,8 +390,14 @@ class PostgreSQLChatKitStore(Store):
             # Return the raw data as a dict - ChatKit will handle it
             # We need to return proper ChatKit types
             if item_type == 'user_message':
-                from chatkit.types import UserMessageItem as UMI, UserMessageContent
+                from chatkit.types import UserMessageItem as UMI, UserMessageContent, InferenceOptions
                 content_list = data.get('content', [])
+
+                # Get or create inference_options (required field)
+                inference_opts = data.get('inference_options', {})
+                if not inference_opts:
+                    inference_opts = {}
+
                 return UMI(
                     id=data.get('id', db_item.id),
                     thread_id=data.get('thread_id', db_item.thread_id),
@@ -388,7 +406,8 @@ class PostgreSQLChatKitStore(Store):
                     content=[
                         UserMessageContent(type=c.get('type', 'input_text'), text=c.get('text', ''))
                         for c in content_list
-                    ] if content_list else []
+                    ] if content_list else [],
+                    inference_options=InferenceOptions(**inference_opts),
                 )
             elif item_type == 'assistant_message':
                 from chatkit.types import AssistantMessageItem as AMI, AssistantMessageContent

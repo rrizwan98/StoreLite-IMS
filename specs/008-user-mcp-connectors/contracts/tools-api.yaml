@@ -1,0 +1,324 @@
+openapi: 3.0.3
+info:
+  title: System Tools API
+  description: |
+    API for managing system-provided tools (Gmail, Analytics, Export, etc.)
+    These are developer-managed tools that users can connect/disconnect.
+  version: 1.0.0
+  contact:
+    name: IMS Development Team
+
+servers:
+  - url: /api
+    description: API base path
+
+tags:
+  - name: Tools
+    description: System tools management
+
+paths:
+  /tools:
+    get:
+      summary: List all system tools
+      description: |
+        Get all available system tools with the current user's connection status.
+        Requires authentication.
+      operationId: listSystemTools
+      tags:
+        - Tools
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: List of system tools
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SystemToolsListResponse'
+              example:
+                tools:
+                  - id: gmail
+                    name: Gmail
+                    description: Send emails via Gmail
+                    icon: mail
+                    category: communication
+                    auth_type: oauth
+                    is_enabled: true
+                    is_beta: false
+                    is_connected: true
+                    config:
+                      default_recipient: reports@company.com
+                  - id: analytics
+                    name: Analytics
+                    description: View sales and inventory analytics
+                    icon: chart
+                    category: insights
+                    auth_type: none
+                    is_enabled: true
+                    is_beta: false
+                    is_connected: true
+                    config: null
+                  - id: export
+                    name: Export
+                    description: Export data to various formats
+                    icon: download
+                    category: utilities
+                    auth_type: none
+                    is_enabled: false
+                    is_beta: true
+                    is_connected: false
+                    config: null
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /tools/{toolId}/connect:
+    post:
+      summary: Connect to a system tool
+      description: |
+        Connect the current user to a system tool.
+        For OAuth tools (like Gmail), returns an authorization URL.
+        For non-OAuth tools, connects immediately.
+      operationId: connectSystemTool
+      tags:
+        - Tools
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ToolId'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ToolConnectRequest'
+      responses:
+        '200':
+          description: Connection successful or OAuth URL returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ToolConnectResponse'
+              examples:
+                directConnect:
+                  summary: Direct connection (non-OAuth)
+                  value:
+                    success: true
+                    message: Connected to Analytics successfully
+                    requires_oauth: false
+                oauthRequired:
+                  summary: OAuth required
+                  value:
+                    success: true
+                    message: Please authorize with Gmail
+                    requires_oauth: true
+                    oauth_url: https://accounts.google.com/o/oauth2/auth?...
+        '400':
+          description: Tool is not enabled or already connected
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Tool not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /tools/{toolId}/disconnect:
+    post:
+      summary: Disconnect from a system tool
+      description: |
+        Disconnect the current user from a system tool.
+        For OAuth tools, revokes authorization.
+      operationId: disconnectSystemTool
+      tags:
+        - Tools
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ToolId'
+      responses:
+        '200':
+          description: Disconnection successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ToolDisconnectResponse'
+              example:
+                success: true
+                message: Disconnected from Gmail
+        '400':
+          description: Tool is not connected
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Tool not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    ToolId:
+      name: toolId
+      in: path
+      required: true
+      description: System tool identifier (e.g., 'gmail', 'analytics')
+      schema:
+        type: string
+        example: gmail
+
+  schemas:
+    SystemTool:
+      type: object
+      required:
+        - id
+        - name
+        - description
+        - icon
+        - category
+        - auth_type
+        - is_enabled
+        - is_beta
+        - is_connected
+      properties:
+        id:
+          type: string
+          description: Unique tool identifier
+          example: gmail
+        name:
+          type: string
+          description: Display name
+          example: Gmail
+        description:
+          type: string
+          description: What the tool does
+          example: Send emails via Gmail
+        icon:
+          type: string
+          description: Icon identifier for UI
+          example: mail
+        category:
+          type: string
+          description: Tool category
+          enum: [communication, insights, utilities]
+          example: communication
+        auth_type:
+          type: string
+          description: Authentication type required
+          enum: [none, oauth]
+          example: oauth
+        is_enabled:
+          type: boolean
+          description: Whether the tool is available for use
+          example: true
+        is_beta:
+          type: boolean
+          description: Whether the tool is in beta/coming soon
+          example: false
+        is_connected:
+          type: boolean
+          description: Whether current user has connected this tool
+          example: true
+        config:
+          type: object
+          nullable: true
+          description: User's tool-specific configuration
+          additionalProperties: true
+          example:
+            default_recipient: reports@company.com
+
+    SystemToolsListResponse:
+      type: object
+      required:
+        - tools
+      properties:
+        tools:
+          type: array
+          items:
+            $ref: '#/components/schemas/SystemTool'
+
+    ToolConnectRequest:
+      type: object
+      properties:
+        config:
+          type: object
+          nullable: true
+          description: Optional tool-specific configuration
+          additionalProperties: true
+
+    ToolConnectResponse:
+      type: object
+      required:
+        - success
+        - message
+        - requires_oauth
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: Connected to Analytics successfully
+        requires_oauth:
+          type: boolean
+          description: Whether OAuth authorization is required
+          example: false
+        oauth_url:
+          type: string
+          format: uri
+          nullable: true
+          description: OAuth authorization URL (only if requires_oauth is true)
+          example: https://accounts.google.com/o/oauth2/auth?...
+
+    ToolDisconnectResponse:
+      type: object
+      required:
+        - success
+        - message
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: Disconnected from Gmail
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+        - message
+      properties:
+        error:
+          type: string
+          description: Error code
+          example: TOOL_NOT_FOUND
+        message:
+          type: string
+          description: Human-readable error message
+          example: Tool 'unknown' not found
+
+  responses:
+    Unauthorized:
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: UNAUTHORIZED
+            message: Authentication required
