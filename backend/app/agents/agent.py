@@ -75,7 +75,7 @@ class OpenAIAgent:
             raise ValueError("GEMINI_API_KEY must be provided or set in environment")
 
         # Model configuration (Gemini 2.0 Flash - latest December 2025)
-        self.model_name = os.getenv("GEMINI_MODEL", "gemini/gemini-robotics-er-1.5-preview")
+        self.model_name = os.getenv("GEMINI_MODEL", "gemini/gemini-2.5-flash-lite")
         self.temperature = temperature
         self.max_tokens = max_tokens
 

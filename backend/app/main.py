@@ -119,6 +119,15 @@ async def startup_event():
 async def shutdown_event():
     """Cleanup on app shutdown"""
     logger.info("Shutting down FastAPI application")
+
+    # Cleanup agent session engine
+    try:
+        from app.services.agent_session_service import cleanup_session_engine
+        await cleanup_session_engine()
+        logger.info("Agent session engine cleaned up")
+    except Exception as e:
+        logger.warning(f"Agent session cleanup warning: {e}")
+
     await cleanup()
     logger.info("Cleanup complete")
 

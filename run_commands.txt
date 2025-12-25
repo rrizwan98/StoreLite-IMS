@@ -1,0 +1,11 @@
+#Frontend Localhost
+TERMINAL 1: 
+cd Frontend && npm run dev
+
+#Backend MCP servers (Local host)
+TERMINAL 2: 
+python -m app.mcp_server.main
+
+#Backend Fastapi Uvicorn server (Local host)
+TERMINAL 3: 
+cd Backend && uvicorn app.main:app --reload

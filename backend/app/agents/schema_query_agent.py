@@ -22,15 +22,17 @@ from datetime import datetime
 from agents import Agent, Runner
 from agents.mcp import MCPServerStdio
 from agents.extensions.models.litellm_model import LitellmModel
+from agents.extensions.memory import SQLAlchemySession
 from agents.model_settings import ModelSettings
 
 from app.services.schema_discovery import format_schema_for_prompt
+from app.services.agent_session_service import create_user_session, AgentSessionManager
 
 logger = logging.getLogger(__name__)
 
 # Version marker for debugging
-SCHEMA_AGENT_VERSION = "2.1.0-mcp-gmail"
-logger.info(f"[Schema Agent] Module loaded - Version {SCHEMA_AGENT_VERSION} (MCP-enabled with Gmail)")
+SCHEMA_AGENT_VERSION = "2.2.0-mcp-gmail-session"
+logger.info(f"[Schema Agent] Module loaded - Version {SCHEMA_AGENT_VERSION} (MCP-enabled with Gmail + PostgreSQL Sessions)")
 
 
 # ============================================================================
@@ -39,7 +41,7 @@ logger.info(f"[Schema Agent] Module loaded - Version {SCHEMA_AGENT_VERSION} (MCP
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 # Use Gemini 2.0 Flash which supports function calling well
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini/gemini-robotics-er-1.5-preview")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini/gemini-2.5-flash")
 
 
 def get_llm_model():
@@ -295,6 +297,7 @@ class SchemaQueryAgent:
         read_only: bool = True,
         user_id: Optional[int] = None,
         enable_gmail: bool = True,
+        thread_id: Optional[str] = None,
     ):
         """
         Initialize Schema Query Agent.
@@ -305,18 +308,24 @@ class SchemaQueryAgent:
             read_only: Whether to use read-only mode (default: True)
             user_id: User ID for tool context (needed for Gmail integration)
             enable_gmail: Whether to enable Gmail tools (default: True)
+            thread_id: Thread ID for ChatKit session (for persistent conversation)
         """
         self.database_uri = database_uri
         self.schema_metadata = schema_metadata
         self.read_only = read_only
         self.user_id = user_id
         self.enable_gmail = enable_gmail
+        self.thread_id = thread_id
 
         # MCP server and agent instances
         self._mcp_server: Optional[MCPServerStdio] = None
         self._agent: Optional[Agent] = None
 
-        # Conversation history for context
+        # Session manager for PostgreSQL-backed conversation history
+        self._session_manager: Optional[AgentSessionManager] = None
+        self._persistent_session: Optional[SQLAlchemySession] = None
+
+        # Fallback in-memory history (used if session fails)
         self._conversation_history: List[Dict[str, str]] = []
 
         # Session info
@@ -325,9 +334,14 @@ class SchemaQueryAgent:
         self._function_tools: List[str] = []
         self._is_initialized = False
 
+        # Initialize session manager if user_id is provided
+        if user_id:
+            self._session_manager = AgentSessionManager(user_id)
+
         logger.info(
             f"[Schema Agent] Created agent instance "
-            f"(read_only={read_only}, user_id={user_id}, gmail={enable_gmail}, session={self._session_id})"
+            f"(read_only={read_only}, user_id={user_id}, gmail={enable_gmail}, "
+            f"thread={thread_id}, session={self._session_id})"
         )
 
     async def initialize(self) -> Dict[str, Any]:
@@ -433,14 +447,17 @@ class SchemaQueryAgent:
     async def query(
         self,
         natural_query: str,
+        thread_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Process a natural language query using the MCP-connected agent.
 
         Creates a fresh MCP connection for each query to avoid stale connection issues.
+        Uses PostgreSQL-backed session for persistent conversation history.
 
         Args:
             natural_query: User's question in natural language
+            thread_id: Optional thread ID for ChatKit (for persistent conversation)
 
         Returns:
             dict with response, and optional visualization hint
@@ -449,6 +466,19 @@ class SchemaQueryAgent:
 
         try:
             logger.info(f"[Schema Agent] Processing query: {natural_query[:50]}...")
+
+            # Use provided thread_id or instance thread_id
+            effective_thread_id = thread_id or self.thread_id
+
+            # Get or create persistent session for conversation history
+            session = None
+            if self._session_manager:
+                try:
+                    session = self._session_manager.get_session(effective_thread_id)  # Sync call
+                    logger.info(f"[Schema Agent] Using PostgreSQL session for user {self.user_id}, thread {effective_thread_id}")
+                except Exception as e:
+                    logger.warning(f"[Schema Agent] Failed to get session, using fallback: {e}")
+                    session = None
 
             # Determine access mode
             access_mode = "restricted" if self.read_only else "unrestricted"
@@ -504,13 +534,15 @@ class SchemaQueryAgent:
             # Log final query being sent to agent
             logger.info(f"[Schema Agent] Sending query to agent: {natural_query[:150]}...")
             logger.info(f"[Schema Agent] Function tools available: {[t.name if hasattr(t, 'name') else str(t) for t in function_tools]}")
+            logger.info(f"[Schema Agent] Session persistence: {'PostgreSQL' if session else 'In-memory'}")
 
-            # Run the agent - it will use MCP tools automatically
+            # Run the agent with session for persistent conversation history
             result = await Runner.run(
                 agent,
                 input=natural_query,
                 max_turns=10,  # Limit iterations
                 context=run_context,
+                session=session,  # Use PostgreSQL-backed session for conversation memory
             )
 
             # Log detailed result info
@@ -526,7 +558,7 @@ class SchemaQueryAgent:
             response_text = str(result.final_output) if result.final_output else ""
             logger.info(f"[Schema Agent] Final output (first 200 chars): {response_text[:200]}...")
 
-            # Add to conversation history
+            # Also add to in-memory history as fallback
             self._conversation_history.append({
                 "role": "user",
                 "content": natural_query
@@ -539,12 +571,13 @@ class SchemaQueryAgent:
             # Detect if response contains data suitable for visualization
             visualization_hint = self._detect_visualization(response_text, natural_query)
 
-            logger.info(f"[Schema Agent] Query completed successfully")
+            logger.info(f"[Schema Agent] Query completed successfully (session: {'persistent' if session else 'memory'})")
 
             return {
                 "success": True,
                 "response": response_text,
-                "visualization_hint": visualization_hint
+                "visualization_hint": visualization_hint,
+                "session_type": "postgresql" if session else "memory",
             }
 
         except Exception as e:
@@ -602,19 +635,37 @@ class SchemaQueryAgent:
         Close the agent and reset state.
 
         Note: MCP connections are created per-query and cleaned up automatically.
-        This method just resets the agent state.
+        This method resets the agent state and clears session manager.
         """
         logger.info(f"[Schema Agent] Closing agent for session {self._session_id}")
         self._is_initialized = False
         self._mcp_tools = []
         self._conversation_history = []
 
+        # Clear session manager
+        if self._session_manager:
+            await self._session_manager.clear_session()
+            self._session_manager = None
+
     def clear_history(self) -> None:
-        """Clear conversation history."""
+        """Clear conversation history (in-memory only)."""
         self._conversation_history = []
 
+    async def clear_persistent_history(self) -> None:
+        """Clear PostgreSQL-backed conversation history."""
+        if self._session_manager:
+            await self._session_manager.clear_session()
+        self._conversation_history = []
+        logger.info(f"[Schema Agent] Cleared persistent history for user {self.user_id}")
+
     def get_history(self) -> List[Dict[str, str]]:
-        """Get conversation history."""
+        """Get in-memory conversation history."""
+        return self._conversation_history.copy()
+
+    async def get_persistent_history(self, limit: int = 50) -> list:
+        """Get PostgreSQL-backed conversation history."""
+        if self._session_manager:
+            return await self._session_manager.get_history(limit)
         return self._conversation_history.copy()
 
     @property
@@ -639,6 +690,7 @@ async def create_schema_query_agent(
     read_only: bool = True,
     user_id: Optional[int] = None,
     enable_gmail: bool = True,
+    thread_id: Optional[str] = None,
 ) -> SchemaQueryAgent:
     """
     Factory function to create and initialize a Schema Query Agent.
@@ -650,9 +702,10 @@ async def create_schema_query_agent(
         read_only: Whether to use read-only mode
         user_id: User ID for tool context (needed for Gmail integration)
         enable_gmail: Whether to enable Gmail tools (default: True)
+        thread_id: Thread ID for ChatKit session (for persistent conversation)
 
     Returns:
-        Initialized SchemaQueryAgent instance
+        Initialized SchemaQueryAgent instance with PostgreSQL session support
     """
     agent = SchemaQueryAgent(
         database_uri=database_uri,
@@ -660,6 +713,7 @@ async def create_schema_query_agent(
         read_only=read_only,
         user_id=user_id,
         enable_gmail=enable_gmail,
+        thread_id=thread_id,
     )
 
     if auto_initialize:

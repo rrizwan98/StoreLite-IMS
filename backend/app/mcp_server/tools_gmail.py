@@ -14,6 +14,7 @@ from sqlalchemy.pool import NullPool
 from app.services.gmail_service import (
     get_gmail_service,
     GmailSendError,
+    format_email_html,
 )
 from app.services.gmail_oauth_service import (
     GmailNotConnectedError,
@@ -176,13 +177,17 @@ async def send_email(
                 async with session_maker() as db:
                     gmail_service = get_gmail_service()
 
-                    logger.info("send_email: Calling gmail_service.send_email...")
+                    logger.info("send_email: Converting body to HTML format...")
+                    html_body = format_email_html(body, subject)
+
+                    logger.info("send_email: Calling gmail_service.send_email with HTML...")
                     result = await gmail_service.send_email(
                         db=db,
                         user_id=user_id,
                         subject=subject,
-                        body=body,
+                        body=html_body,
                         to_email=to_email,
+                        content_type="text/html",
                     )
 
                     if result.success:

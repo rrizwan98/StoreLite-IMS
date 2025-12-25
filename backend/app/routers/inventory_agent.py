@@ -68,7 +68,7 @@ DATABASE_URL = os.getenv("DATABASE_URL", "")
 
 # LiteLLM model configuration for Gemini
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini/gemini-robotics-er-1.5-preview")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini/gemini-2.5-flash-lite")
 
 
 def get_llm_model():
