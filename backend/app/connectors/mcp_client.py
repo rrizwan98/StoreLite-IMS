@@ -58,7 +58,7 @@ class UserMCPClient:
     def __init__(
         self,
         server_url: str,
-        timeout: float = 10.0,
+        timeout: float = 30.0,
         auth_type: str = "none",
         auth_config: Optional[Dict[str, Any]] = None
     ):
@@ -67,7 +67,7 @@ class UserMCPClient:
 
         Args:
             server_url: MCP server endpoint URL
-            timeout: Request timeout in seconds (default 10.0, per FR-012)
+            timeout: Request timeout in seconds (default 30.0 for reliable operations)
             auth_type: Authentication type ('none' or 'oauth')
             auth_config: Authentication configuration with token for OAuth
         """
@@ -362,7 +362,7 @@ class UserMCPClient:
 
     async def validate_connection(self) -> ValidationResult:
         """
-        Validate connection to MCP server with 10-second timeout.
+        Validate connection to MCP server.
 
         Attempts to connect and discover tools. Returns ValidationResult
         with appropriate error codes:
@@ -373,6 +373,7 @@ class UserMCPClient:
         Returns:
             ValidationResult with success status and discovered tools or error info
         """
+        logger.info(f"[MCP Client] Validating connection to {self.server_url} (timeout={self.timeout}s, auth_type={self.auth_type})")
         try:
             tools = await self.discover_tools()
 

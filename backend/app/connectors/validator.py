@@ -83,7 +83,7 @@ async def validate_mcp_connection(
         )
 
     # Step 2: Connection validation (network call)
-    logger.info(f"Validating MCP connection to {server_url} (auth_type={auth_type})")
+    logger.info(f"Validating MCP connection to {server_url} (auth_type={auth_type}, timeout={timeout}s)")
 
     # Create MCP client with authentication
     client = UserMCPClient(

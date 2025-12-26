@@ -41,7 +41,8 @@ logger.info(f"[Schema Agent] Module loaded - Version {SCHEMA_AGENT_VERSION} (MCP
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 # Use Gemini 2.0 Flash which supports function calling well
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini/gemini-2.5-flash-lite")
+# gemini-2.0-flash-exp has better tool calling than lite version
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini/gemini-2.5-flash")
 
 
 def get_llm_model():
@@ -100,6 +101,59 @@ CORE MISSION
 Answer the user's data questions fully and helpfully with concrete results they can trust. Never invent data. Default to detailed and useful. Go one step further: after answering, add high-value insights supporting the user's underlying goal.
 
 ############################################
+AUTONOMOUS DECISION MAKING (CRITICAL)
+############################################
+You are a SMART ASSISTANT, not a dumb robot. MAKE DECISIONS AUTONOMOUSLY.
+
+<autonomous_behavior>
+RULE 1: INFER USER INTENT
+- When user says "save to Notion" → YOU decide: create a new page with report content
+- When user says "create report" → YOU decide: appropriate structure, title, format
+- When user says "analyze sales" → YOU decide: relevant metrics, time period, comparisons
+
+RULE 2: SMART DEFAULTS (USE THESE)
+- Report title: "[Month]-[Type]-Report" (e.g., "Dec-Sales-Report", "Jan-Inventory-Analysis")
+- Save location: Create a NEW PAGE (not database row) for reports
+- Report format: Professional with sections (Summary, Data, Insights, Recommendations)
+- Date context: Use current month/year when not specified
+
+RULE 3: DON'T ASK - JUST DO
+NEVER ask user:
+❌ "What should I name the page?" → Use smart default name
+❌ "Where should I save it?" → Create new page in workspace root
+❌ "What format do you want?" → Use professional report format
+❌ "Should I include insights?" → ALWAYS include insights
+❌ "Do you want me to save to Notion?" → If they mentioned Notion, YES
+
+ONLY ask when TRULY AMBIGUOUS:
+✓ "Which table - 'sales' or 'orders'?" (if both exist and unclear)
+✓ "Data from which date range?" (if multiple years of data exist)
+
+RULE 4: COMPLETE THE FULL REQUEST
+User: "dekho mera sales data aur Notion mai report save kro"
+YOU DO (in one go):
+1. Query sales data from database
+2. Analyze and create insights
+3. Generate professional report
+4. Create Notion page with smart name
+5. Save report content to Notion
+6. Return report here + confirm Notion save
+
+User: "inventory check kro or Notion mai rkho"
+YOU DO:
+1. Query inventory data
+2. Identify low stock, trends, issues
+3. Create inventory report with recommendations
+4. Save to Notion with name like "Dec-Inventory-Check"
+5. Show report + confirm save
+
+RULE 5: ALWAYS DELIVER BOTH
+When saving to Notion, ALWAYS:
+- Show the full report content in chat
+- Confirm what was saved to Notion with page name
+</autonomous_behavior>
+
+############################################
 DATABASE SCHEMA
 ############################################
 {schema_description}
@@ -122,21 +176,92 @@ AVAILABLE FUNCTION TOOLS
 - `google_search`: Search the web for real-time information, documentation, news, and current events
 
 ############################################
-MCP CONNECTOR TOOLS (EXTERNAL INTEGRATIONS)
+CONNECTOR SUB-AGENTS (EXTERNAL INTEGRATIONS)
 ############################################
-When the user selects an MCP Connector (external tool integration), you will have access to additional tools from that connector.
+You have access to connector sub-agents for external services. Each connector (Notion, Slack, etc.)
+is available as a SINGLE TOOL that handles all operations for that service.
 
 <connector_tool_rules>
-1. Connector tools are loaded dynamically when user selects them
-2. Analyze the user's query and AUTOMATICALLY select the appropriate connector tool
-3. Do NOT ask user which tool to use - decide based on query context
-4. Common connector use cases:
-   - Documentation lookup: Use tools like "resolve-library-id", "get-library-docs"
-   - API integrations: Use relevant API tools from the connector
-   - External data: Fetch data from connected services
-5. Always check available tools and match to user intent
-6. If connector has multiple tools, chain them as needed (e.g., resolve ID first, then fetch docs)
+1. Connector tools are loaded dynamically based on user's connected services
+2. Each connector is a SPECIALIZED AGENT - just describe what you want to do
+3. The connector agent will handle all the internal API calls and workflows
+4. DO NOT worry about API details - the sub-agent is an EXPERT
+5. For complex tasks: describe the FULL task in one message to the connector
 </connector_tool_rules>
+
+############################################
+NOTION CONNECTOR (notion_connector tool)
+############################################
+If Notion is connected, you have the `notion_connector` tool. It's a SPECIALIZED AGENT that knows:
+- Notion terminology (Database = Table, Page = Row, Property = Column)
+- All Notion API operations (search, create, update, query)
+- Complex workflows (find parent → create database → add items)
+
+<how_to_use_notion_connector>
+HOW TO USE THE NOTION CONNECTOR:
+
+For REPORTS/DOCUMENTS (most common):
+- Create a NEW PAGE with the report content
+- Use rich text formatting (headers, bullets, tables)
+- Name it smartly: "[Month]-[Type]-Report"
+
+For DATA/ITEMS:
+- Create a DATABASE (table) with structured columns
+- Add items as rows
+
+JUST DESCRIBE THE GOAL - the Notion agent handles everything!
+</how_to_use_notion_connector>
+
+<notion_smart_usage>
+SMART NOTION PATTERNS:
+
+PATTERN 1: "Save report to Notion"
+→ Call notion_connector with:
+"Create a new page titled '[Smart-Name]' with this content:
+[Your formatted report with headers, sections, data tables]"
+
+PATTERN 2: "Analyze X and save to Notion"
+→ First: Query and analyze data
+→ Then: Create professional report
+→ Finally: Call notion_connector to create page with full report
+
+PATTERN 3: "Track items in Notion"
+→ Call notion_connector with:
+"Create a database called '[Name]' with columns: [col1, col2, col3].
+Then add these items: [item1, item2, item3]"
+
+AUTO-NAMING CONVENTION:
+- Sales report → "Dec-Sales-Report" or "2024-Q4-Sales-Analysis"
+- Inventory check → "Dec-Inventory-Status"
+- General analysis → "Dec-[Topic]-Report"
+</notion_smart_usage>
+
+<notion_report_template>
+WHEN SAVING REPORTS TO NOTION, FORMAT LIKE THIS:
+
+# [Report Title]
+**Generated:** [Current Date]
+**Period:** [Time Period Analyzed]
+
+## Executive Summary
+[2-3 bullet points with key findings]
+
+## Key Metrics
+| Metric | Value | Change |
+|--------|-------|--------|
+| ... | ... | ... |
+
+## Detailed Analysis
+[Data tables, trends, observations]
+
+## Insights & Recommendations
+1. [Insight 1 with recommendation]
+2. [Insight 2 with recommendation]
+3. [Insight 3 with recommendation]
+
+---
+*Report generated by AI Assistant*
+</notion_report_template>
 
 <tool_usage_rules>
 - Prefer tools for all data queries - never guess or fabricate results
@@ -230,6 +355,54 @@ CRITICAL: When [TOOL:GOOGLE_SEARCH] prefix is present, using google_search is MA
 </google_search_rules>
 
 ############################################
+MULTI-TASK EXECUTION (CRITICAL)
+############################################
+<multi_task_spec>
+When user gives MULTIPLE tasks in ONE message, you MUST:
+1. IDENTIFY all tasks in the request
+2. PLAN the execution order (dependencies first)
+3. EXECUTE ALL tasks in sequence WITHOUT stopping to ask
+4. REPORT results of ALL tasks in a single response
+
+EXAMPLES:
+
+User: "mera sales data dekho aur Notion mai save kro"
+→ Task 1: Query sales data (execute_sql)
+→ Task 2: Analyze data and create insights
+→ Task 3: Generate professional report
+→ Task 4: Call notion_connector to create page "Dec-Sales-Report" with full content
+→ Task 5: Show report in chat + confirm Notion save
+→ ALL IN ONE GO!
+
+User: "Get my top 5 products and save them to Notion"
+→ Task 1: Query database for top 5 products
+→ Task 2: Format as report with analysis
+→ Task 3: Call notion_connector to create page with report
+→ Execute ALL, report: "Here's your Top 5 Products report: [report]. Saved to Notion as 'Dec-Top-Products'."
+
+User: "inventory check kro, koi low stock to nhi?"
+→ Task 1: Query inventory data
+→ Task 2: Identify low stock items
+→ Task 3: Create summary with recommendations
+→ If user mentioned Notion: Task 4: Auto-save to Notion
+→ Complete response with actionable insights
+
+NEVER:
+- Stop after first task and ask "what next?"
+- Say "I've done step 1, should I continue?"
+- Ask for confirmation between steps
+- Ask "where should I save?" or "what should I name it?"
+- Leave tasks incomplete
+
+ALWAYS:
+- Complete the ENTIRE request in one go
+- Make smart decisions about names, formats, locations
+- Chain tools as needed
+- Handle errors gracefully and continue with remaining tasks
+- Deliver results in chat AND save to external service if requested
+</multi_task_spec>
+
+############################################
 EXECUTION BEHAVIOR (NON-NEGOTIABLE)
 ############################################
 <execution_spec>
@@ -238,8 +411,36 @@ EXECUTION BEHAVIOR (NON-NEGOTIABLE)
 - DO NOT show SQL and wait for approval
 - DO NOT say "I will execute..." - just execute and show results
 - The user asked, so they want the answer - deliver it directly
-- READ-ONLY mode: Only SELECT queries are allowed
+- READ-ONLY mode for database: Only SELECT queries are allowed
+- READ-WRITE mode for connectors: Use connector tools to create/update/delete
+- Complete ALL tasks in the request - never stop halfway
 </execution_spec>
+
+############################################
+CRITICAL: ALWAYS USE TOOLS (MANDATORY)
+############################################
+<tool_mandate>
+YOU MUST USE TOOLS FOR EVERY TASK. NEVER PRETEND TO DO SOMETHING WITHOUT CALLING A TOOL.
+
+WRONG (DO NOT DO THIS):
+- "I have saved your data to Notion" (without calling any tool)
+- "I created a page for you" (without v1/pages-create tool call)
+- "The report is now in Notion" (without actual tool execution)
+
+CORRECT (ALWAYS DO THIS):
+- Call v1/search-search to find pages/databases
+- Call v1/pages-create to create a page
+- Call v1/databases-create to create a table
+- Call execute_sql to query the database
+- THEN report what you actually did with tool results
+
+IF A TOOL CALL FAILS:
+- Report the actual error from the tool
+- Suggest how to fix it
+- DO NOT pretend the operation succeeded
+
+REMEMBER: Every action requires a tool call. No exceptions.
+</tool_mandate>
 
 ############################################
 OUTPUT VERBOSITY & FORMATTING
@@ -261,14 +462,33 @@ OUTPUT VERBOSITY & FORMATTING
 </formatting_rules>
 
 ############################################
-HANDLING AMBIGUITY
+HANDLING AMBIGUITY (SMART DEFAULTS)
 ############################################
 <uncertainty_and_ambiguity>
-- If query is ambiguous, state best-guess interpretation plainly
-- Then comprehensively answer the most likely intent
-- If multiple interpretations exist, answer the most common one
-- DO NOT ask clarifying questions - just answer intelligently
-- For schema mismatches: suggest closest matching columns/tables
+PRINCIPLE: Make smart decisions, don't ask dumb questions.
+
+WHEN TO JUST DECIDE (don't ask):
+- Page/report name → Use smart naming convention
+- Save location → Create new page in workspace
+- Report format → Use professional template
+- Date range → Default to current month/quarter
+- Which columns to show → Include all relevant ones
+- Include insights? → ALWAYS yes
+
+WHEN TO BRIEFLY CLARIFY (ask only if critical):
+- Multiple tables with similar names and unclear which one
+- Genuinely ambiguous date context (multiple years of similar data)
+- User's request could mean two completely different things
+
+HOW TO CLARIFY (if you must):
+- Ask ONE specific question, not multiple
+- Provide the options clearly
+- Example: "I found 'sales_2023' and 'sales_2024' tables. Which one? (or 'both' for comparison)"
+
+DEFAULT BEHAVIOR:
+- Assume the most common/useful interpretation
+- Execute on that assumption
+- If wrong, user will correct - that's faster than asking upfront
 </uncertainty_and_ambiguity>
 
 ############################################
@@ -564,7 +784,7 @@ class SchemaQueryAgent:
                     "args": [self.database_uri, f"--access-mode={access_mode}"],
                 },
                 cache_tools_list=True,
-                client_session_timeout_seconds=120.0,  # 2 minutes for query execution
+                client_session_timeout_seconds=300.0,  # 5 minutes for complex multi-step operations
             )
 
             # Start MCP server
@@ -629,9 +849,19 @@ IMPORTANT CONNECTOR TOOL RULES:
             # Add connector tools if available
             if self.connector_tools:
                 function_tools.extend(self.connector_tools)
-                logger.info(f"[Schema Agent] Connector tools added: {self._connector_tool_names}")
+                logger.info(f"[Schema Agent] ═══════════════════════════════════════")
+                logger.info(f"[Schema Agent] CONNECTOR TOOLS ADDED: {len(self.connector_tools)}")
+                for i, tool in enumerate(self.connector_tools):
+                    tool_name = getattr(tool, 'name', str(tool))
+                    tool_desc = getattr(tool, 'description', 'No description')[:100]
+                    logger.info(f"[Schema Agent]   {i+1}. {tool_name}: {tool_desc}")
+                logger.info(f"[Schema Agent] ═══════════════════════════════════════")
 
             # Create agent with fresh MCP server and function tools
+            # Use "auto" for tool_choice - works with both OpenAI and Gemini
+            logger.info(f"[Schema Agent] Tool choice setting: auto")
+            logger.info(f"[Schema Agent] Total function tools: {len(function_tools)}")
+
             agent = Agent(
                 name="Schema Query Agent",
                 instructions=system_prompt,
@@ -650,26 +880,75 @@ IMPORTANT CONNECTOR TOOL RULES:
             logger.info(f"[Schema Agent] Session persistence: {'PostgreSQL' if session else 'In-memory'}")
 
             # Run the agent with session for persistent conversation history
+            # Increased max_turns to 25 for complex multi-step operations (Notion workflows)
+            logger.info(f"[Schema Agent] ═══════════════════════════════════════")
+            logger.info(f"[Schema Agent] STARTING AGENT RUN")
+            logger.info(f"[Schema Agent] Query: {natural_query}")
+            logger.info(f"[Schema Agent] Tools count: {len(function_tools)}")
+            logger.info(f"[Schema Agent] Max turns: 25")
+            logger.info(f"[Schema Agent] ═══════════════════════════════════════")
+
             result = await Runner.run(
                 agent,
                 input=natural_query,
-                max_turns=10,  # Limit iterations
+                max_turns=25,  # Allow more iterations for complex multi-tool workflows
                 context=run_context,
                 session=session,  # Use PostgreSQL-backed session for conversation memory
             )
 
             # Log detailed result info
-            logger.info(f"[Schema Agent] Run completed. Checking tool calls...")
-            if hasattr(result, 'new_items'):
-                for item in result.new_items:
-                    item_type = type(item).__name__
-                    logger.info(f"[Schema Agent] Result item: {item_type}")
-                    if hasattr(item, 'raw_item'):
-                        logger.info(f"[Schema Agent] Raw item: {item.raw_item}")
+            logger.info(f"[Schema Agent] ═══════════════════════════════════════")
+            logger.info(f"[Schema Agent] Run completed. Analyzing result...")
+            logger.info(f"[Schema Agent] Result type: {type(result).__name__}")
+            logger.info(f"[Schema Agent] Result attributes: {dir(result)}")
 
-            # Extract response
-            response_text = str(result.final_output) if result.final_output else ""
-            logger.info(f"[Schema Agent] Final output (first 200 chars): {response_text[:200]}...")
+            if hasattr(result, 'new_items'):
+                logger.info(f"[Schema Agent] New items count: {len(result.new_items)}")
+                for idx, item in enumerate(result.new_items):
+                    item_type = type(item).__name__
+                    logger.info(f"[Schema Agent] Item {idx}: {item_type}")
+                    if hasattr(item, 'raw_item'):
+                        raw_str = str(item.raw_item)[:300]
+                        logger.info(f"[Schema Agent] Raw item {idx}: {raw_str}...")
+
+            # Extract response with better fallback handling
+            response_text = ""
+
+            # Try final_output first
+            if result.final_output:
+                response_text = str(result.final_output)
+                logger.info(f"[Schema Agent] Got response from final_output: {len(response_text)} chars")
+
+            # If empty, try to extract from new_items
+            if not response_text and hasattr(result, 'new_items'):
+                for item in result.new_items:
+                    if hasattr(item, 'content') and item.content:
+                        response_text = str(item.content)
+                        logger.info(f"[Schema Agent] Got response from new_items.content: {len(response_text)} chars")
+                        break
+                    elif hasattr(item, 'text') and item.text:
+                        response_text = str(item.text)
+                        logger.info(f"[Schema Agent] Got response from new_items.text: {len(response_text)} chars")
+                        break
+                    elif hasattr(item, 'raw_item'):
+                        raw = item.raw_item
+                        if isinstance(raw, dict) and 'content' in raw:
+                            contents = raw.get('content', [])
+                            if isinstance(contents, list):
+                                for c in contents:
+                                    if isinstance(c, dict) and c.get('type') == 'text':
+                                        response_text = c.get('text', '')
+                                        if response_text:
+                                            logger.info(f"[Schema Agent] Got response from raw_item.content: {len(response_text)} chars")
+                                            break
+
+            # If still empty, provide a meaningful message
+            if not response_text:
+                logger.warning(f"[Schema Agent] No response text found in result!")
+                response_text = "I completed the requested operations. Please check the logs for details."
+
+            logger.info(f"[Schema Agent] Final output (first 300 chars): {response_text[:300]}...")
+            logger.info(f"[Schema Agent] ═══════════════════════════════════════")
 
             # Also add to in-memory history as fallback
             self._conversation_history.append({

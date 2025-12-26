@@ -215,6 +215,19 @@ export interface VerifyResult {
 }
 
 /**
+ * Health check result for connector
+ */
+export interface HealthCheckResult {
+  is_healthy: boolean;
+  connector_id: number;
+  connector_name: string;
+  tool_count?: number;
+  error_code?: string;
+  error_message?: string;
+  message: string;
+}
+
+/**
  * Verify or re-verify a connector
  *
  * Connects to the MCP server and discovers tools.
@@ -238,6 +251,18 @@ export async function refreshConnectorTools(connectorId: number): Promise<Connec
     return result.connector;
   }
   throw new Error(result.message || 'Failed to refresh connector');
+}
+
+/**
+ * Perform real-time health check on a connector
+ *
+ * Tests actual connection to the MCP server without modifying database.
+ * Use this to check if OAuth tokens are still valid.
+ *
+ * @param connectorId - Connector ID to check
+ */
+export async function checkConnectorHealth(connectorId: number): Promise<HealthCheckResult> {
+  return connectorsFetch<HealthCheckResult>(`/api/connectors/${connectorId}/health`);
 }
 
 /**

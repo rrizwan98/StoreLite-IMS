@@ -17,6 +17,8 @@ import {
   Trash2,
   Power,
   PowerOff,
+  AlertTriangle,
+  RefreshCw,
 } from 'lucide-react';
 import {
   Connector,
@@ -25,6 +27,9 @@ import {
   toggleConnector,
   getNotionStatus,
   OAuthStatus,
+  checkConnectorHealth,
+  HealthCheckResult,
+  verifyConnector,
 } from '@/lib/connectors-api';
 import {
   PREDEFINED_CONNECTORS,
@@ -45,6 +50,8 @@ export default function ConnectorsList({
   const [error, setError] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<number | null>(null);
   const [oauthStatuses, setOauthStatuses] = useState<Record<string, OAuthStatus>>({});
+  const [healthStatuses, setHealthStatuses] = useState<Record<number, HealthCheckResult>>({});
+  const [healthCheckLoading, setHealthCheckLoading] = useState<Record<number, boolean>>({});
 
   useEffect(() => {
     loadData();
@@ -63,10 +70,63 @@ export default function ConnectorsList({
 
       setConnectors(connectorsData);
       setOauthStatuses(statuses);
+
+      // Perform health checks on active connectors in background
+      checkConnectorHealthStatuses(connectorsData);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load connectors');
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function checkConnectorHealthStatuses(connectorsList: Connector[]) {
+    // Check health of all active connectors
+    const activeConnectors = connectorsList.filter(c => c.is_active && c.is_verified);
+
+    for (const connector of activeConnectors) {
+      setHealthCheckLoading(prev => ({ ...prev, [connector.id]: true }));
+      try {
+        const health = await checkConnectorHealth(connector.id);
+        setHealthStatuses(prev => ({ ...prev, [connector.id]: health }));
+      } catch {
+        // If health check fails, mark as unhealthy
+        setHealthStatuses(prev => ({
+          ...prev,
+          [connector.id]: {
+            is_healthy: false,
+            connector_id: connector.id,
+            connector_name: connector.name,
+            error_code: 'check_failed',
+            error_message: 'Health check failed',
+            message: 'Unable to verify connection',
+          },
+        }));
+      } finally {
+        setHealthCheckLoading(prev => ({ ...prev, [connector.id]: false }));
+      }
+    }
+  }
+
+  async function handleReconnect(connector: Connector, e: React.MouseEvent) {
+    e.stopPropagation();
+    try {
+      setActionLoading(connector.id);
+      const result = await verifyConnector(connector.id);
+      if (result.success && result.connector) {
+        setConnectors(prev =>
+          prev.map(c => (c.id === connector.id ? result.connector! : c))
+        );
+        // Re-check health after reconnect
+        const health = await checkConnectorHealth(connector.id);
+        setHealthStatuses(prev => ({ ...prev, [connector.id]: health }));
+      } else {
+        setError(result.message || 'Failed to reconnect');
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to reconnect');
+    } finally {
+      setActionLoading(null);
     }
   }
 
@@ -166,6 +226,18 @@ export default function ConnectorsList({
           {PREDEFINED_CONNECTORS.map((predefined) => {
             const connectedConnector = getConnectedConnector(predefined);
             const isConnected = !!connectedConnector;
+            const healthStatus = connectedConnector ? healthStatuses[connectedConnector.id] : undefined;
+            const isCheckingHealth = connectedConnector ? healthCheckLoading[connectedConnector.id] : false;
+            const isHealthy = healthStatus?.is_healthy ?? true; // Default to true while checking
+
+            // Determine connection status: healthy, unhealthy, or checking
+            const getStatusInfo = () => {
+              if (!isConnected) return null;
+              if (isCheckingHealth) return { type: 'checking', label: 'Checking...', bgClass: 'bg-gray-100', textClass: 'text-gray-600' };
+              if (healthStatus && !isHealthy) return { type: 'unhealthy', label: 'Disconnected', bgClass: 'bg-red-100', textClass: 'text-red-700' };
+              return { type: 'healthy', label: 'Connected', bgClass: 'bg-green-100', textClass: 'text-green-700' };
+            };
+            const statusInfo = getStatusInfo();
 
             return (
               <button
@@ -179,8 +251,10 @@ export default function ConnectorsList({
                 }}
                 className={`
                   w-full flex items-center p-4 rounded-xl border transition-all text-left
-                  ${isConnected
+                  ${isConnected && isHealthy
                     ? 'bg-green-50 border-green-200 hover:border-green-300'
+                    : isConnected && !isHealthy
+                    ? 'bg-red-50 border-red-200 hover:border-red-300'
                     : 'bg-white border-gray-200 hover:border-blue-300 hover:shadow-sm'
                   }
                 `}
@@ -198,17 +272,22 @@ export default function ConnectorsList({
 
                 {/* Info */}
                 <div className="flex-1 ml-4 min-w-0">
-                  <div className="flex items-center">
+                  <div className="flex items-center flex-wrap gap-2">
                     <h4 className="font-medium text-gray-900">{predefined.name}</h4>
-                    {isConnected && (
-                      <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">
-                        <Check className="h-3 w-3 mr-1" />
-                        Connected
+                    {statusInfo && (
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${statusInfo.bgClass} ${statusInfo.textClass}`}>
+                        {statusInfo.type === 'checking' && <Loader2 className="h-3 w-3 mr-1 animate-spin" />}
+                        {statusInfo.type === 'healthy' && <Check className="h-3 w-3 mr-1" />}
+                        {statusInfo.type === 'unhealthy' && <AlertTriangle className="h-3 w-3 mr-1" />}
+                        {statusInfo.label}
                       </span>
                     )}
                   </div>
                   <p className="text-sm text-gray-500 mt-0.5 truncate">
-                    {predefined.description}
+                    {healthStatus && !isHealthy
+                      ? healthStatus.error_message || 'Connection failed - click Reconnect'
+                      : predefined.description
+                    }
                   </p>
                 </div>
 
@@ -219,6 +298,16 @@ export default function ConnectorsList({
                       <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
                     ) : (
                       <>
+                        {/* Show Reconnect button if unhealthy */}
+                        {!isHealthy && (
+                          <button
+                            onClick={(e) => handleReconnect(connectedConnector, e)}
+                            className="p-1.5 rounded-lg hover:bg-blue-50 text-blue-500 hover:text-blue-700"
+                            title="Reconnect"
+                          >
+                            <RefreshCw className="h-4 w-4" />
+                          </button>
+                        )}
                         <button
                           onClick={(e) => handleToggle(connectedConnector, e)}
                           className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600"

@@ -63,7 +63,7 @@ from app.mcp_server.tools_schema_query import (
 )
 from app.agents.schema_query_agent import SchemaQueryAgent, create_schema_query_agent
 from app.services.chatkit_store_service import PostgreSQLChatKitStore, create_chatkit_store
-from app.connectors.agent_tools import load_connector_tools, get_user_connector_tools
+from app.connector_agents import get_connector_agent_tools
 
 logger = logging.getLogger(__name__)
 
@@ -370,27 +370,26 @@ class SchemaChatKitServer(ChatKitServer):
             thread_id = thread.id if thread else None
             logger.info(f"[Schema ChatKit] Thread ID for session: {thread_id}")
 
-            # Load ALL user's connector tools (not just selected ones)
-            # This ensures the agent always has access to all connected services
+            # Load ALL user's connector sub-agents as tools
+            # Each connector (Notion, Slack, etc.) becomes a single tool that handles all operations
             connector_tools = []
             db_session = context.get("db_session")
 
             if db_session:
                 try:
-                    # Load ALL verified connectors for this user
-                    logger.info(f"[Schema ChatKit] Loading ALL connector tools for user {user_id}")
-                    connector_tools = await get_user_connector_tools(
+                    # Load connector sub-agents for this user
+                    logger.info(f"[Schema ChatKit] Loading connector sub-agents for user {user_id}")
+                    connector_tools = await get_connector_agent_tools(
                         db_session,
                         user_id,
-                        connector_id=None  # None = load ALL connectors
                     )
                     if connector_tools:
                         tool_names = [getattr(t, 'name', str(t)) for t in connector_tools]
-                        logger.info(f"[Schema ChatKit] Loaded {len(connector_tools)} connector tools: {tool_names[:5]}...")
+                        logger.info(f"[Schema ChatKit] Loaded {len(connector_tools)} connector sub-agent tools: {tool_names}")
                     else:
-                        logger.info(f"[Schema ChatKit] No connector tools found for user {user_id}")
+                        logger.info(f"[Schema ChatKit] No connector sub-agents found for user {user_id}")
                 except Exception as e:
-                    logger.warning(f"[Schema ChatKit] Failed to load connector tools: {e}")
+                    logger.warning(f"[Schema ChatKit] Failed to load connector sub-agents: {e}")
 
             # Create a cache key - include connector count to invalidate when connectors change
             connector_count = len(connector_tools)
@@ -434,10 +433,19 @@ class SchemaChatKitServer(ChatKitServer):
 
             # Run agent query with thread_id for session persistence
             logger.info(f"[Schema ChatKit] Running agent query...")
+            logger.info(f"[Schema ChatKit] User message: {user_message[:200]}...")
             result = await agent.query(user_message, thread_id=thread_id)
-            logger.info(f"[Schema ChatKit] Agent query completed. Result keys: {list(result.keys()) if result else 'None'}")
-            response_text = result.get("response", "I couldn't process your request.")
-            logger.info(f"[Schema ChatKit] Response text length: {len(response_text) if response_text else 0}")
+            logger.info(f"[Schema ChatKit] Agent query completed.")
+            logger.info(f"[Schema ChatKit] Result: {result}")
+            logger.info(f"[Schema ChatKit] Result keys: {list(result.keys()) if result else 'None'}")
+
+            # Get response with better fallback
+            response_text = result.get("response", "") if result else ""
+            if not response_text:
+                logger.warning(f"[Schema ChatKit] Empty response from agent! Result: {result}")
+                response_text = "I processed your request but couldn't generate a response. Please check the backend logs for details."
+
+            logger.info(f"[Schema ChatKit] Response text length: {len(response_text)}")
 
             # Calculate total time
             total_time = time.time() - start_time
