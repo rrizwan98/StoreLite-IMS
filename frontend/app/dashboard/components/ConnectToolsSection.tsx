@@ -9,9 +9,9 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
-import { Settings, Check, Mail, BarChart3, Download, Server, ChevronRight } from 'lucide-react';
+import { Settings, Check, Mail, BarChart3, Download, Server, ChevronRight, AlertTriangle, Loader2 } from 'lucide-react';
 import { getAllTools, SystemTool } from '@/lib/tools-api';
-import { getConnectors, Connector } from '@/lib/connectors-api';
+import { getConnectors, Connector, checkConnectorHealth, HealthCheckResult } from '@/lib/connectors-api';
 
 interface ConnectToolsSectionProps {
   className?: string;
@@ -27,6 +27,33 @@ export default function ConnectToolsSection({ className = '' }: ConnectToolsSect
   const [systemTools, setSystemTools] = useState<SystemTool[]>([]);
   const [connectors, setConnectors] = useState<Connector[]>([]);
   const [loading, setLoading] = useState(true);
+  const [healthStatuses, setHealthStatuses] = useState<Record<number, HealthCheckResult>>({});
+  const [healthCheckLoading, setHealthCheckLoading] = useState<Record<number, boolean>>({});
+
+  // Check health of connectors
+  const checkConnectorHealthStatuses = useCallback(async (connectorsList: Connector[]) => {
+    for (const connector of connectorsList) {
+      setHealthCheckLoading(prev => ({ ...prev, [connector.id]: true }));
+      try {
+        const health = await checkConnectorHealth(connector.id);
+        setHealthStatuses(prev => ({ ...prev, [connector.id]: health }));
+      } catch {
+        setHealthStatuses(prev => ({
+          ...prev,
+          [connector.id]: {
+            is_healthy: false,
+            connector_id: connector.id,
+            connector_name: connector.name,
+            error_code: 'check_failed',
+            error_message: 'Health check failed',
+            message: 'Unable to verify connection',
+          },
+        }));
+      } finally {
+        setHealthCheckLoading(prev => ({ ...prev, [connector.id]: false }));
+      }
+    }
+  }, []);
 
   // Load tools and connectors
   const loadData = useCallback(async () => {
@@ -40,13 +67,17 @@ export default function ConnectToolsSection({ className = '' }: ConnectToolsSect
       // Only show connected/available system tools
       setSystemTools(tools.filter(t => (t.is_connected || t.auth_type === 'none') && t.is_enabled && !t.is_beta));
       // Only show verified connectors
-      setConnectors(conns.filter(c => c.is_verified && c.is_active));
+      const activeConnectors = conns.filter(c => c.is_verified && c.is_active);
+      setConnectors(activeConnectors);
+
+      // Check health of connectors in background
+      checkConnectorHealthStatuses(activeConnectors);
     } catch (err) {
       console.error('Failed to load tools:', err);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [checkConnectorHealthStatuses]);
 
   useEffect(() => {
     loadData();
@@ -129,22 +160,48 @@ export default function ConnectToolsSection({ className = '' }: ConnectToolsSect
             <div>
               <p className="text-xs font-medium text-gray-500 uppercase mb-2">MCP Connectors</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {connectors.map((connector) => (
-                  <div
-                    key={connector.id}
-                    className="flex items-center p-3 bg-gray-50 rounded-lg border border-gray-100"
-                  >
-                    <div className="w-10 h-10 rounded-lg bg-purple-100 text-purple-600 flex items-center justify-center mr-3">
-                      <Server className="h-5 w-5" />
+                {connectors.map((connector) => {
+                  const healthStatus = healthStatuses[connector.id];
+                  const isCheckingHealth = healthCheckLoading[connector.id];
+                  const isHealthy = healthStatus?.is_healthy ?? true;
+
+                  return (
+                    <div
+                      key={connector.id}
+                      className={`flex items-center p-3 rounded-lg border ${
+                        isHealthy
+                          ? 'bg-gray-50 border-gray-100'
+                          : 'bg-red-50 border-red-200'
+                      }`}
+                    >
+                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center mr-3 ${
+                        isHealthy
+                          ? 'bg-purple-100 text-purple-600'
+                          : 'bg-red-100 text-red-600'
+                      }`}>
+                        <Server className="h-5 w-5" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-gray-900">{connector.name}</p>
+                        {isCheckingHealth ? (
+                          <p className="text-xs text-gray-500 flex items-center">
+                            <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                            Checking...
+                          </p>
+                        ) : isHealthy ? (
+                          <p className="text-xs text-purple-600">
+                            {connector.tool_count} tool{connector.tool_count !== 1 ? 's' : ''}
+                          </p>
+                        ) : (
+                          <p className="text-xs text-red-600 flex items-center">
+                            <AlertTriangle className="w-3 h-3 mr-1" />
+                            Disconnected
+                          </p>
+                        )}
+                      </div>
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-gray-900">{connector.name}</p>
-                      <p className="text-xs text-purple-600">
-                        {connector.tool_count} tool{connector.tool_count !== 1 ? 's' : ''}
-                      </p>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}

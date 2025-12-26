@@ -33,15 +33,13 @@ from chatkit.server import (
     ThreadStreamEvent,
 )
 from chatkit.types import (
-    AssistantMessageContentPartTextDelta,
-    AssistantMessageContentPartDone,
     ThreadItemDoneEvent,
     ThreadItemAddedEvent,
     AssistantMessageItem,
     AssistantMessageContent,
-    ThoughtTask,
-    WorkflowTaskAdded,
-    WorkflowTaskUpdated,
+    ProgressUpdateEvent,
+    ErrorEvent,
+    ErrorCode,
     Page,
 )
 
@@ -65,7 +63,7 @@ from app.mcp_server.tools_schema_query import (
 )
 from app.agents.schema_query_agent import SchemaQueryAgent, create_schema_query_agent
 from app.services.chatkit_store_service import PostgreSQLChatKitStore, create_chatkit_store
-from app.connectors.agent_tools import load_connector_tools, get_user_connector_tools
+from app.connector_agents import get_connector_agent_tools
 
 logger = logging.getLogger(__name__)
 
@@ -338,20 +336,22 @@ class SchemaChatKitServer(ChatKitServer):
             schema_metadata = context.get("schema_metadata")
 
             if not user_id or not database_uri:
-                error_text = "No database connection found. Please connect your database first."
-                yield AssistantMessageContentPartTextDelta(
-                    type="assistant_message.content_part.text_delta",
-                    content_index=0,
-                    delta=error_text
+                error_msg = "No database connection found. Please connect your database first."
+                yield ErrorEvent(
+                    type="error",
+                    code=ErrorCode.INVALID_REQUEST,
+                    message=error_msg,
+                    allow_retry=False
                 )
                 return
 
             if not schema_metadata:
-                error_text = "Schema not discovered yet. Please wait while I analyze your database structure."
-                yield AssistantMessageContentPartTextDelta(
-                    type="assistant_message.content_part.text_delta",
-                    content_index=0,
-                    delta=error_text
+                error_msg = "Schema not discovered yet. Please wait while I analyze your database structure."
+                yield ErrorEvent(
+                    type="error",
+                    code=ErrorCode.INVALID_REQUEST,
+                    message=error_msg,
+                    allow_retry=True
                 )
                 return
 
@@ -360,62 +360,36 @@ class SchemaChatKitServer(ChatKitServer):
             # Track timing
             start_time = time.time()
 
-            # Show thinking indicator
-            thinking_steps = self._generate_thinking_steps(user_message)
-            initial_thought = ThoughtTask(
-                type="thought",
-                status_indicator="loading",
-                title=thinking_steps[0] if thinking_steps else "Analyzing your question...",
-                content=""
+            # Show progress indicator using ProgressUpdateEvent (valid ThreadStreamEvent)
+            yield ProgressUpdateEvent(
+                type="progress_update",
+                text="Analyzing your question..."
             )
-            yield WorkflowTaskAdded(
-                type="workflow.task.added",
-                task_index=0,
-                task=initial_thought
-            )
-
-            # Update thinking progressively
-            accumulated_reasoning = ""
-            for step in thinking_steps:
-                accumulated_reasoning += f"• {step}\n"
-                updated_thought = ThoughtTask(
-                    type="thought",
-                    status_indicator="loading",
-                    title=step,
-                    content=accumulated_reasoning
-                )
-                yield WorkflowTaskUpdated(
-                    type="workflow.task.updated",
-                    task_index=0,
-                    task=updated_thought
-                )
-                await asyncio.sleep(0.1)
 
             # Get thread_id from ChatKit thread for session persistence
             thread_id = thread.id if thread else None
             logger.info(f"[Schema ChatKit] Thread ID for session: {thread_id}")
 
-            # Load ALL user's connector tools (not just selected ones)
-            # This ensures the agent always has access to all connected services
+            # Load ALL user's connector sub-agents as tools
+            # Each connector (Notion, Slack, etc.) becomes a single tool that handles all operations
             connector_tools = []
             db_session = context.get("db_session")
 
             if db_session:
                 try:
-                    # Load ALL verified connectors for this user
-                    logger.info(f"[Schema ChatKit] Loading ALL connector tools for user {user_id}")
-                    connector_tools = await get_user_connector_tools(
+                    # Load connector sub-agents for this user
+                    logger.info(f"[Schema ChatKit] Loading connector sub-agents for user {user_id}")
+                    connector_tools = await get_connector_agent_tools(
                         db_session,
                         user_id,
-                        connector_id=None  # None = load ALL connectors
                     )
                     if connector_tools:
                         tool_names = [getattr(t, 'name', str(t)) for t in connector_tools]
-                        logger.info(f"[Schema ChatKit] Loaded {len(connector_tools)} connector tools: {tool_names[:5]}...")
+                        logger.info(f"[Schema ChatKit] Loaded {len(connector_tools)} connector sub-agent tools: {tool_names}")
                     else:
-                        logger.info(f"[Schema ChatKit] No connector tools found for user {user_id}")
+                        logger.info(f"[Schema ChatKit] No connector sub-agents found for user {user_id}")
                 except Exception as e:
-                    logger.warning(f"[Schema ChatKit] Failed to load connector tools: {e}")
+                    logger.warning(f"[Schema ChatKit] Failed to load connector sub-agents: {e}")
 
             # Create a cache key - include connector count to invalidate when connectors change
             connector_count = len(connector_tools)
@@ -424,6 +398,10 @@ class SchemaChatKitServer(ChatKitServer):
             # Get or create agent for this user (with connector tools if selected)
             if cache_key not in _agent_cache:
                 try:
+                    yield ProgressUpdateEvent(
+                        type="progress_update",
+                        text="Initializing AI agent..."
+                    )
                     agent = await create_schema_query_agent(
                         database_uri=database_uri,
                         schema_metadata=schema_metadata,
@@ -437,57 +415,44 @@ class SchemaChatKitServer(ChatKitServer):
                     logger.info(f"Created new Schema Query Agent for user {user_id} with Gmail + {len(connector_tools)} connector tools")
                 except Exception as e:
                     logger.error(f"Failed to create agent for user {user_id}: {e}")
-                    error_text = f"Failed to initialize agent: {str(e)}"
-                    yield AssistantMessageContentPartTextDelta(
-                        type="assistant_message.content_part.text_delta",
-                        content_index=0,
-                        delta=error_text
+                    yield ErrorEvent(
+                        type="error",
+                        code=ErrorCode.STREAM_ERROR,
+                        message=f"Failed to initialize agent: {str(e)}",
+                        allow_retry=True
                     )
                     return
             else:
                 agent = _agent_cache[cache_key]
 
+            # Show query progress
+            yield ProgressUpdateEvent(
+                type="progress_update",
+                text="Processing your query..."
+            )
+
             # Run agent query with thread_id for session persistence
             logger.info(f"[Schema ChatKit] Running agent query...")
+            logger.info(f"[Schema ChatKit] User message: {user_message[:200]}...")
             result = await agent.query(user_message, thread_id=thread_id)
-            logger.info(f"[Schema ChatKit] Agent query completed. Result keys: {list(result.keys()) if result else 'None'}")
-            response_text = result.get("response", "I couldn't process your request.")
-            logger.info(f"[Schema ChatKit] Response text length: {len(response_text) if response_text else 0}")
+            logger.info(f"[Schema ChatKit] Agent query completed.")
+            logger.info(f"[Schema ChatKit] Result: {result}")
+            logger.info(f"[Schema ChatKit] Result keys: {list(result.keys()) if result else 'None'}")
+
+            # Get response with better fallback
+            response_text = result.get("response", "") if result else ""
+            if not response_text:
+                logger.warning(f"[Schema ChatKit] Empty response from agent! Result: {result}")
+                response_text = "I processed your request but couldn't generate a response. Please check the backend logs for details."
+
+            logger.info(f"[Schema ChatKit] Response text length: {len(response_text)}")
 
             # Calculate total time
             total_time = time.time() - start_time
+            logger.info(f"[Schema ChatKit] Query processed in {total_time:.1f}s")
 
-            # Final thought update
-            final_thought = ThoughtTask(
-                type="thought",
-                status_indicator="complete",
-                title=f"Processed in {total_time:.1f}s",
-                content=accumulated_reasoning + f"\nQuery completed successfully."
-            )
-            yield WorkflowTaskUpdated(
-                type="workflow.task.updated",
-                task_index=0,
-                task=final_thought
-            )
-
-            # Stream the response
+            # Create the assistant message with the response
             msg_id = f"msg-{uuid.uuid4().hex[:12]}"
-
-            yield AssistantMessageContentPartTextDelta(
-                type="assistant_message.content_part.text_delta",
-                content_index=0,
-                delta=response_text
-            )
-
-            yield AssistantMessageContentPartDone(
-                type="assistant_message.content_part.done",
-                content_index=0,
-                content=AssistantMessageContent(
-                    type="output_text",
-                    text=response_text,
-                    annotations=[]
-                )
-            )
 
             assistant_msg = AssistantMessageItem(
                 id=msg_id,
@@ -500,45 +465,19 @@ class SchemaChatKitServer(ChatKitServer):
                     annotations=[]
                 )]
             )
+
+            # Yield the proper ThreadStreamEvent types
             yield ThreadItemAddedEvent(type="thread.item.added", item=assistant_msg)
             yield ThreadItemDoneEvent(type="thread.item.done", item=assistant_msg)
 
         except Exception as e:
             logger.error(f"[Schema ChatKit] Error: {e}", exc_info=True)
-            error_text = f"Error: {str(e)}"
-            yield AssistantMessageContentPartTextDelta(
-                type="assistant_message.content_part.text_delta",
-                content_index=0,
-                delta=error_text
+            yield ErrorEvent(
+                type="error",
+                code=ErrorCode.STREAM_ERROR,
+                message=f"Error: {str(e)}",
+                allow_retry=True
             )
-
-    def _generate_thinking_steps(self, user_message: str) -> list[str]:
-        """Generate thinking steps based on the user's message."""
-        steps = []
-        message_lower = user_message.lower()
-
-        steps.append("Understanding your question...")
-
-        if any(word in message_lower for word in ['table', 'tables', 'schema', 'structure']):
-            steps.append("Checking database schema...")
-        elif any(word in message_lower for word in ['count', 'how many', 'total']):
-            steps.append("Preparing count query...")
-        elif any(word in message_lower for word in ['top', 'best', 'most', 'highest', 'largest']):
-            steps.append("Preparing ranking query...")
-        elif any(word in message_lower for word in ['average', 'avg', 'mean', 'sum']):
-            steps.append("Preparing aggregation query...")
-        elif any(word in message_lower for word in ['show', 'list', 'get', 'find', 'display']):
-            steps.append("Preparing SELECT query...")
-        elif any(word in message_lower for word in ['compare', 'versus', 'vs', 'difference']):
-            steps.append("Preparing comparison query...")
-        else:
-            steps.append("Analyzing data requirements...")
-
-        steps.append("Executing safe read-only query...")
-        steps.append("Formatting results...")
-
-        return steps
-
 
 # Global ChatKit instances - fallback in-memory store for backward compatibility
 _fallback_store = SchemaAgentStore()

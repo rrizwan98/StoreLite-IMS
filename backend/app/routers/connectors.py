@@ -555,6 +555,96 @@ async def toggle_connector(
 
 
 # ============================================================================
+# GET /api/connectors/{connector_id}/health - Health check (real-time status)
+# ============================================================================
+
+@router.get("/{connector_id}/health")
+async def health_check_connector(
+    connector_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+) -> Dict[str, Any]:
+    """
+    Perform a real-time health check on a connector.
+
+    Tests actual connection to the MCP server WITHOUT modifying database.
+    Use this to get current connection status (e.g., OAuth token validity).
+
+    Args:
+        connector_id: Connector ID to check
+
+    Returns:
+        Health status with is_healthy, error details if unhealthy
+
+    Raises:
+        HTTPException 404: If connector not found
+    """
+    logger.info(f"Health check for connector {connector_id} by user {current_user.id}")
+
+    result = await db.execute(
+        select(UserMCPConnection).where(
+            UserMCPConnection.id == connector_id,
+            UserMCPConnection.user_id == current_user.id
+        )
+    )
+    connector = result.scalar_one_or_none()
+
+    if connector is None:
+        raise HTTPException(status_code=404, detail="Connector not found")
+
+    # Decrypt auth config if present
+    auth_config = {}
+    if connector.auth_config:
+        from app.connectors.encryption import decrypt_credentials
+        auth_config = decrypt_credentials(connector.auth_config)
+        logger.info(f"[Health Check] Decrypted auth config for {connector.name}, keys: {list(auth_config.keys())}")
+
+    # Use longer timeout for OAuth connectors (Notion MCP needs 30s)
+    timeout = 30.0 if connector.auth_type == "oauth" else 15.0
+    logger.info(f"[Health Check] Testing {connector.name} with timeout={timeout}s, auth_type={connector.auth_type}")
+
+    # Test connection
+    try:
+        validation_result = await validate_mcp_connection(
+            server_url=connector.server_url,
+            auth_type=connector.auth_type,
+            auth_config=auth_config,
+            timeout=timeout
+        )
+
+        if validation_result.success:
+            tool_count = len(validation_result.tools) if validation_result.tools else 0
+            logger.info(f"Connector {connector_id} health check: HEALTHY ({tool_count} tools)")
+            return {
+                "is_healthy": True,
+                "connector_id": connector.id,
+                "connector_name": connector.name,
+                "tool_count": tool_count,
+                "message": f"Connected successfully with {tool_count} tools"
+            }
+        else:
+            logger.warning(f"Connector {connector_id} health check: UNHEALTHY - {validation_result.error_message}")
+            return {
+                "is_healthy": False,
+                "connector_id": connector.id,
+                "connector_name": connector.name,
+                "error_code": validation_result.error_code or "connection_failed",
+                "error_message": validation_result.error_message or "Connection failed",
+                "message": validation_result.error_message or "Connection failed"
+            }
+    except Exception as e:
+        logger.error(f"Connector {connector_id} health check exception: {e}")
+        return {
+            "is_healthy": False,
+            "connector_id": connector.id,
+            "connector_name": connector.name,
+            "error_code": "exception",
+            "error_message": str(e),
+            "message": f"Health check failed: {str(e)}"
+        }
+
+
+# ============================================================================
 # POST /api/connectors/{connector_id}/refresh - Refresh tools from server
 # ============================================================================
 

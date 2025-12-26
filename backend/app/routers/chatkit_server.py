@@ -27,16 +27,13 @@ from chatkit.server import (
     ThreadStreamEvent,
 )
 from chatkit.types import (
-    AssistantMessageContentPartTextDelta,
-    AssistantMessageContentPartDone,
     ThreadItemDoneEvent,
     ThreadItemAddedEvent,
     AssistantMessageItem,
     AssistantMessageContent,
-    # Native thinking/reasoning types
-    ThoughtTask,
-    WorkflowTaskAdded,
-    WorkflowTaskUpdated,
+    ProgressUpdateEvent,
+    ErrorEvent,
+    ErrorCode,
 )
 
 from app.agents import OpenAIAgent, MCPClient, ConfirmationFlow
@@ -241,28 +238,27 @@ class IMSChatKitServer(ChatKitServer):
     ) -> AsyncIterator[ThreadStreamEvent]:
         """
         Process user message and yield streaming response events.
-        
-        Uses native ChatKit thinking UI (WorkflowTaskAdded/Updated with ThoughtTask)
-        to show the "Thinking..." lightbulb indicator with collapsible reasoning.
+
+        Uses ProgressUpdateEvent for progress feedback and ThreadItemDoneEvent for final response.
         """
         import uuid
         import time
         import asyncio
-        
+
         try:
             # If no user message, just return
             if input_user_message is None:
                 return
-            
+
             agent = await self._get_agent()
-            
+
             # Extract user message text
             user_message = ""
             if hasattr(input_user_message, 'content'):
                 for content in input_user_message.content:
                     if hasattr(content, 'text'):
                         user_message += content.text
-            
+
             # Get session ID from thread
             session_id = thread.id if hasattr(thread, 'id') else str(id(thread))
 
@@ -271,37 +267,14 @@ class IMSChatKitServer(ChatKitServer):
             is_allowed, rate_limit_details = rate_limiter.consume(session_id)
 
             if not is_allowed:
-                # Rate limit exceeded - return error message via ChatKit
+                # Rate limit exceeded - return error via ErrorEvent
                 retry_after = rate_limit_details.get("retry_after", 60)
-                reset_at = rate_limit_details.get("reset_at", "soon")
-
-                rate_limit_message = (
-                    f"**Rate Limit Exceeded**\n\n"
-                    f"You've reached the maximum of {rate_limit_details['limit']} queries per hour.\n\n"
-                    f"• Try again in: {retry_after} seconds\n"
-                    f"• Limit resets at: {reset_at}\n\n"
-                    f"_This limit helps ensure fair access for all users._"
+                yield ErrorEvent(
+                    type="error",
+                    code=ErrorCode.RATE_LIMITED,
+                    message=f"Rate limit exceeded. Try again in {retry_after} seconds.",
+                    allow_retry=True
                 )
-
-                # Create error response using ChatKit streaming
-                error_item_id = f"msg-error-{uuid.uuid4().hex[:12]}"
-                error_message_item = AssistantMessageItem(
-                    id=error_item_id,
-                    type="message",
-                    role="assistant",
-                    status="completed",
-                    content=[AssistantMessageContent(type="text", text=rate_limit_message)]
-                )
-
-                yield ThreadItemAddedEvent(
-                    type="thread.item.added",
-                    item=error_message_item
-                )
-                yield ThreadItemDoneEvent(
-                    type="thread.item.done",
-                    item=error_message_item
-                )
-
                 logger.warning(f"Rate limit exceeded for session {session_id}: retry after {retry_after}s")
                 return
 
@@ -335,104 +308,27 @@ class IMSChatKitServer(ChatKitServer):
                     user_message = f"[SYSTEM CONTEXT: Current logged-in user_id={self._current_user_id}. You MUST include user_id={self._current_user_id} in ALL tool calls for data isolation.]\n\nUser query: {user_message}"
                 else:
                     logger.warning(f"No user_id available for session {session_id} - data will not be user-scoped!")
-                # Track timing for thinking display
-                start_time = time.time()
-                
-                # Generate thinking steps based on message
-                thinking_steps = self._generate_thinking_steps(user_message)
-                
-                # === NATIVE CHATKIT THINKING UI ===
-                # Step 1: Add thinking task with LOADING status (shows animated lightbulb)
-                initial_thought = ThoughtTask(
-                    type="thought",
-                    status_indicator="loading",  # Shows animated thinking indicator!
-                    title=thinking_steps[0] if thinking_steps else "Analyzing request...",
-                    content=""
+
+                # Show progress indicator using ProgressUpdateEvent (valid ThreadStreamEvent)
+                yield ProgressUpdateEvent(
+                    type="progress_update",
+                    text="Processing your request..."
                 )
-                yield WorkflowTaskAdded(
-                    type="workflow.task.added",
-                    task_index=0,
-                    task=initial_thought
-                )
-                
-                # Step 2: Update thinking content progressively (keep loading status)
-                accumulated_reasoning = ""
-                for i, step in enumerate(thinking_steps):
-                    step_time = time.time() - start_time
-                    accumulated_reasoning += f"• {step}\n"
-                    
-                    # Update the thought task with accumulated reasoning
-                    updated_thought = ThoughtTask(
-                        type="thought",
-                        status_indicator="loading",  # Keep showing thinking animation
-                        title=step,
-                        content=accumulated_reasoning
-                    )
-                    yield WorkflowTaskUpdated(
-                        type="workflow.task.updated",
-                        task_index=0,
-                        task=updated_thought
-                    )
-                    
-                    # Small delay to show streaming effect
-                    await asyncio.sleep(0.15)
-                
+
                 # Process message with agent - pass user_id for auto-injection into tool calls
                 result = await agent.process_message(
                     session_id=session_id,
                     user_message=user_message,
                     user_id=self._current_user_id,  # For data isolation
                 )
-                
-                # Calculate total thinking time
-                total_time = time.time() - start_time
-                
-                # Extract response and tool calls
+
+                # Extract response
                 response_text = result.get("response", "I'm sorry, I couldn't process that request.")
-                tool_calls = result.get("tool_calls", [])
-                
-                # Add tool usage to reasoning
-                if tool_calls:
-                    accumulated_reasoning += "\nTools used:\n"
-                    for tc in tool_calls:
-                        tool_name = tc.get("tool", "unknown")
-                        accumulated_reasoning += f"  → {tool_name}\n"
-                
-                # Final thought update with COMPLETE status and timing
-                final_thought = ThoughtTask(
-                    type="thought",
-                    status_indicator="complete",  # Shows completed indicator
-                    title=f"Thought for {total_time:.0f}s",
-                    content=accumulated_reasoning
-                )
-                yield WorkflowTaskUpdated(
-                    type="workflow.task.updated",
-                    task_index=0,
-                    task=final_thought
-                )
-            
+
             # Generate message ID
             msg_id = f"msg-{uuid.uuid4().hex[:12]}"
-            
-            # Stream the actual response
-            yield AssistantMessageContentPartTextDelta(
-                type="assistant_message.content_part.text_delta",
-                content_index=0,
-                delta=response_text
-            )
-            
-            # Signal content part is done
-            yield AssistantMessageContentPartDone(
-                type="assistant_message.content_part.done",
-                content_index=0,
-                content=AssistantMessageContent(
-                    type="output_text",
-                    text=response_text,
-                    annotations=[]
-                )
-            )
-            
-            # Yield thread.item.added event
+
+            # Create and yield assistant message with proper ThreadStreamEvent types
             assistant_msg = AssistantMessageItem(
                 id=msg_id,
                 thread_id=thread.id,
@@ -445,64 +341,16 @@ class IMSChatKitServer(ChatKitServer):
                 )]
             )
             yield ThreadItemAddedEvent(type="thread.item.added", item=assistant_msg)
-            
-            # Finally, yield thread.item.done event
             yield ThreadItemDoneEvent(type="thread.item.done", item=assistant_msg)
-                
+
         except Exception as e:
             logger.error(f"Error in ChatKit respond: {e}", exc_info=True)
-            # Yield error response
-            error_text = f"I'm sorry, an error occurred: {str(e)}"
-            yield AssistantMessageContentPartTextDelta(
-                type="assistant_message.content_part.text_delta",
-                content_index=0,
-                delta=error_text
+            yield ErrorEvent(
+                type="error",
+                code=ErrorCode.STREAM_ERROR,
+                message=f"An error occurred: {str(e)}",
+                allow_retry=True
             )
-    
-    def _generate_thinking_steps(self, user_message: str) -> list[str]:
-        """
-        Generate thinking steps based on the user's message.
-        
-        These steps show the reasoning process in the UI.
-        """
-        steps = []
-        message_lower = user_message.lower()
-        
-        # Analyze message intent
-        steps.append("📝 Analyzing your request...")
-        
-        # Check for inventory-related keywords
-        if any(word in message_lower for word in ['inventory', 'stock', 'item', 'product', 'add', 'update', 'delete']):
-            steps.append("📦 Detecting inventory operation...")
-            if 'add' in message_lower:
-                steps.append("➕ Preparing to add new item...")
-            elif 'update' in message_lower or 'edit' in message_lower:
-                steps.append("✏️ Preparing to update item...")
-            elif 'delete' in message_lower or 'remove' in message_lower:
-                steps.append("🗑️ Preparing to remove item...")
-            elif 'show' in message_lower or 'list' in message_lower or 'check' in message_lower:
-                steps.append("🔍 Fetching inventory data...")
-        
-        # Check for billing-related keywords
-        elif any(word in message_lower for word in ['bill', 'invoice', 'payment', 'create bill', 'generate']):
-            steps.append("🧾 Detecting billing operation...")
-            if 'create' in message_lower or 'generate' in message_lower:
-                steps.append("📝 Preparing new bill...")
-            elif 'show' in message_lower or 'list' in message_lower:
-                steps.append("🔍 Fetching billing records...")
-        
-        # Check for help/general
-        elif any(word in message_lower for word in ['help', 'what can', 'how to', 'guide']):
-            steps.append("ℹ️ Preparing help information...")
-        
-        # Default reasoning
-        else:
-            steps.append("🧠 Processing your request...")
-        
-        # Final step
-        steps.append("⚡ Executing with AI agent...")
-        
-        return steps
 
 
 # Global instances

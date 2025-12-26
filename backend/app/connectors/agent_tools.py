@@ -68,17 +68,25 @@ def create_mcp_tool_function(
         try:
             # Parse arguments from JSON string
             kwargs = json.loads(args) if args else {}
-            logger.info(f"[MCP Tool] Calling {tool_name} on {connector_name} with args: {list(kwargs.keys())}")
+            logger.info(f"[MCP Tool] ═══════════════════════════════════════")
+            logger.info(f"[MCP Tool] Calling: {tool_name}")
+            logger.info(f"[MCP Tool] Connector: {connector_name}")
+            logger.info(f"[MCP Tool] Args keys: {list(kwargs.keys())}")
+            logger.info(f"[MCP Tool] Args (truncated): {str(kwargs)[:500]}...")
 
             client = UserMCPClient(
                 connector_url,
-                timeout=30.0,
+                timeout=60.0,  # Increased to 60s for complex operations
                 auth_type=auth_type,
                 auth_config=auth_config
             )
             result = await client.call_tool(tool_name, kwargs)
 
             # Format result for agent
+            logger.info(f"[MCP Tool] Result received from {tool_name}")
+            logger.info(f"[MCP Tool] Result type: {type(result).__name__}")
+            logger.info(f"[MCP Tool] Result (truncated): {str(result)[:500]}...")
+
             if isinstance(result, dict):
                 # Check for content array (MCP response format)
                 if "content" in result:
@@ -89,9 +97,14 @@ def create_mcp_tool_function(
                             if isinstance(c, dict) and c.get("type") == "text":
                                 texts.append(c.get("text", ""))
                         if texts:
-                            return "\n".join(texts)
+                            formatted = "\n".join(texts)
+                            logger.info(f"[MCP Tool] ✓ {tool_name} completed successfully")
+                            return formatted
                 # Return as JSON string
-                return json.dumps(result, indent=2)
+                formatted = json.dumps(result, indent=2)
+                logger.info(f"[MCP Tool] ✓ {tool_name} completed successfully")
+                return formatted
+            logger.info(f"[MCP Tool] ✓ {tool_name} completed successfully")
             return str(result)
 
         except json.JSONDecodeError as e:
