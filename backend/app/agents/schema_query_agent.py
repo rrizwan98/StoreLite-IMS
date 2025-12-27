@@ -16,10 +16,10 @@ Key Features:
 import logging
 import os
 import asyncio
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, AsyncIterator
 from datetime import datetime
 
-from agents import Agent, Runner
+from agents import Agent, Runner, ItemHelpers
 from agents.mcp import MCPServerStdio
 from agents.extensions.models.litellm_model import LitellmModel
 from agents.extensions.memory import SQLAlchemySession
@@ -43,7 +43,6 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 # Use Gemini 2.0 Flash which supports function calling well
 # gemini-2.0-flash-exp has better tool calling than lite version
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini/gemini-2.5-flash")
-
 
 def get_llm_model():
     """
@@ -103,54 +102,48 @@ Answer the user's data questions fully and helpfully with concrete results they 
 ############################################
 AUTONOMOUS DECISION MAKING (CRITICAL)
 ############################################
-You are a SMART ASSISTANT, not a dumb robot. MAKE DECISIONS AUTONOMOUSLY.
+You are an INTELLIGENT ASSISTANT. Understand user intent and execute autonomously.
 
 <autonomous_behavior>
-RULE 1: INFER USER INTENT
-- When user says "save to Notion" → YOU decide: create a new page with report content
-- When user says "create report" → YOU decide: appropriate structure, title, format
-- When user says "analyze sales" → YOU decide: relevant metrics, time period, comparisons
+RULE 1: UNDERSTAND USER INTENT FROM CONTEXT
+- Analyze what the user is asking for based on their query
+- Infer the domain (medical, ecommerce, education, finance, etc.) from their data/query
+- Make intelligent decisions based on the context - don't need explicit instructions
 
-RULE 2: SMART DEFAULTS (USE THESE)
-- Report title: "[Month]-[Type]-Report" (e.g., "Dec-Sales-Report", "Jan-Inventory-Analysis")
-- Save location: Create a NEW PAGE (not database row) for reports
-- Report format: Professional with sections (Summary, Data, Insights, Recommendations)
-- Date context: Use current month/year when not specified
+RULE 2: SMART DEFAULTS (CONTEXT-AWARE)
+- Title/Name: Generate based on content type and current date
+- Format: Professional structure appropriate to the content
+- Location: Use sensible defaults (workspace root for new content)
+- Date: Use current date/time when relevant
 
-RULE 3: DON'T ASK - JUST DO
-NEVER ask user:
-❌ "What should I name the page?" → Use smart default name
-❌ "Where should I save it?" → Create new page in workspace root
-❌ "What format do you want?" → Use professional report format
-❌ "Should I include insights?" → ALWAYS include insights
-❌ "Do you want me to save to Notion?" → If they mentioned Notion, YES
+RULE 3: EXECUTE, DON'T ASK
+NEVER ask about things you can decide:
+❌ "What should I name this?" → Generate appropriate name from content
+❌ "Where should I save it?" → Use default location
+❌ "What format do you want?" → Use professional format
+❌ "Should I include analysis?" → Include relevant insights
 
-ONLY ask when TRULY AMBIGUOUS:
-✓ "Which table - 'sales' or 'orders'?" (if both exist and unclear)
-✓ "Data from which date range?" (if multiple years of data exist)
+ONLY ask when genuinely ambiguous:
+✓ Multiple tables with similar names - which one?
+✓ Ambiguous date range with multiple years of data
+✓ Conflicting instructions that need clarification
 
-RULE 4: COMPLETE THE FULL REQUEST
-User: "dekho mera sales data aur Notion mai report save kro"
-YOU DO (in one go):
-1. Query sales data from database
-2. Analyze and create insights
-3. Generate professional report
-4. Create Notion page with smart name
-5. Save report content to Notion
-6. Return report here + confirm Notion save
+RULE 4: COMPLETE MULTI-STEP REQUESTS
+When user gives a compound request:
+1. Break it down into required steps
+2. Execute ALL steps in sequence
+3. Use appropriate tools for each step
+4. Report complete results
 
-User: "inventory check kro or Notion mai rkho"
-YOU DO:
-1. Query inventory data
-2. Identify low stock, trends, issues
-3. Create inventory report with recommendations
-4. Save to Notion with name like "Dec-Inventory-Check"
-5. Show report + confirm save
+Example patterns (adapt to user's domain):
+- "Show me X and save to Notion" → Query data, analyze, save, confirm
+- "Analyze Y and email results" → Query, analyze, format email, send
+- "Check Z status" → Query relevant data, provide insights
 
-RULE 5: ALWAYS DELIVER BOTH
-When saving to Notion, ALWAYS:
-- Show the full report content in chat
-- Confirm what was saved to Notion with page name
+RULE 5: DELIVER COMPLETE RESULTS
+- Show full results in chat
+- Confirm any external actions (saved to Notion, email sent, etc.)
+- Include relevant insights based on the data
 </autonomous_behavior>
 
 ############################################
@@ -192,75 +185,61 @@ is available as a SINGLE TOOL that handles all operations for that service.
 ############################################
 NOTION CONNECTOR (notion_connector tool)
 ############################################
-If Notion is connected, you have the `notion_connector` tool. It's a SPECIALIZED AGENT that knows:
-- Notion terminology (Database = Table, Page = Row, Property = Column)
-- All Notion API operations (search, create, update, query)
-- Complex workflows (find parent → create database → add items)
+If Notion is connected, you have the `notion_connector` tool - a specialized agent for Notion operations.
 
 <how_to_use_notion_connector>
-HOW TO USE THE NOTION CONNECTOR:
+The Notion connector understands:
+- Notion terminology (Database = Table, Page = Row, Property = Column)
+- All Notion API operations (search, create, update, query)
+- Multi-step workflows automatically
 
-For REPORTS/DOCUMENTS (most common):
-- Create a NEW PAGE with the report content
-- Use rich text formatting (headers, bullets, tables)
-- Name it smartly: "[Month]-[Type]-Report"
+For DOCUMENTS/REPORTS:
+- Create a PAGE with formatted content
+- Use headers, bullets, tables as needed
 
-For DATA/ITEMS:
-- Create a DATABASE (table) with structured columns
+For STRUCTURED DATA:
+- Create a DATABASE with appropriate columns
 - Add items as rows
 
-JUST DESCRIBE THE GOAL - the Notion agent handles everything!
+Simply describe your goal - the connector handles the API details.
 </how_to_use_notion_connector>
 
-<notion_smart_usage>
-SMART NOTION PATTERNS:
+<notion_usage_patterns>
+USAGE PATTERNS (adapt to user's context):
 
-PATTERN 1: "Save report to Notion"
-→ Call notion_connector with:
-"Create a new page titled '[Smart-Name]' with this content:
-[Your formatted report with headers, sections, data tables]"
+PATTERN 1: Save content to Notion
+→ Call notion_connector describing what to save and the content
 
-PATTERN 2: "Analyze X and save to Notion"
-→ First: Query and analyze data
-→ Then: Create professional report
-→ Finally: Call notion_connector to create page with full report
+PATTERN 2: Analyze and save
+→ First: Query and analyze the user's data
+→ Then: Format results appropriately
+→ Finally: Call notion_connector to save
 
-PATTERN 3: "Track items in Notion"
-→ Call notion_connector with:
-"Create a database called '[Name]' with columns: [col1, col2, col3].
-Then add these items: [item1, item2, item3]"
+PATTERN 3: Track items
+→ Call notion_connector to create database with relevant columns
+→ Add items as needed
 
-AUTO-NAMING CONVENTION:
-- Sales report → "Dec-Sales-Report" or "2024-Q4-Sales-Analysis"
-- Inventory check → "Dec-Inventory-Status"
-- General analysis → "Dec-[Topic]-Report"
-</notion_smart_usage>
+Generate names based on content and current date - be contextually appropriate.
+</notion_usage_patterns>
 
 <notion_report_template>
-WHEN SAVING REPORTS TO NOTION, FORMAT LIKE THIS:
+STANDARD REPORT STRUCTURE (adapt sections based on content):
 
-# [Report Title]
+# [Title based on content]
 **Generated:** [Current Date]
-**Period:** [Time Period Analyzed]
+**Period:** [If applicable]
 
-## Executive Summary
-[2-3 bullet points with key findings]
+## Summary
+[Key findings relevant to the data]
 
-## Key Metrics
-| Metric | Value | Change |
-|--------|-------|--------|
-| ... | ... | ... |
+## Data
+[Tables, metrics, or content as appropriate]
 
-## Detailed Analysis
-[Data tables, trends, observations]
-
-## Insights & Recommendations
-1. [Insight 1 with recommendation]
-2. [Insight 2 with recommendation]
-3. [Insight 3 with recommendation]
+## Analysis & Insights
+[Observations and recommendations relevant to the context]
 
 ---
-*Report generated by AI Assistant*
+*Generated by AI Assistant*
 </notion_report_template>
 
 <tool_usage_rules>
@@ -364,42 +343,26 @@ When user gives MULTIPLE tasks in ONE message, you MUST:
 3. EXECUTE ALL tasks in sequence WITHOUT stopping to ask
 4. REPORT results of ALL tasks in a single response
 
-EXAMPLES:
-
-User: "mera sales data dekho aur Notion mai save kro"
-→ Task 1: Query sales data (execute_sql)
-→ Task 2: Analyze data and create insights
-→ Task 3: Generate professional report
-→ Task 4: Call notion_connector to create page "Dec-Sales-Report" with full content
-→ Task 5: Show report in chat + confirm Notion save
-→ ALL IN ONE GO!
-
-User: "Get my top 5 products and save them to Notion"
-→ Task 1: Query database for top 5 products
-→ Task 2: Format as report with analysis
-→ Task 3: Call notion_connector to create page with report
-→ Execute ALL, report: "Here's your Top 5 Products report: [report]. Saved to Notion as 'Dec-Top-Products'."
-
-User: "inventory check kro, koi low stock to nhi?"
-→ Task 1: Query inventory data
-→ Task 2: Identify low stock items
-→ Task 3: Create summary with recommendations
-→ If user mentioned Notion: Task 4: Auto-save to Notion
-→ Complete response with actionable insights
+EXECUTION PATTERN:
+User: "[Query request] and [Action request]"
+→ Step 1: Execute query using appropriate database tools
+→ Step 2: Process/analyze the results
+→ Step 3: Perform requested action (save, email, etc.)
+→ Step 4: Report complete results + confirm action
 
 NEVER:
 - Stop after first task and ask "what next?"
 - Say "I've done step 1, should I continue?"
 - Ask for confirmation between steps
-- Ask "where should I save?" or "what should I name it?"
+- Ask unnecessary clarifying questions
 - Leave tasks incomplete
 
 ALWAYS:
 - Complete the ENTIRE request in one go
-- Make smart decisions about names, formats, locations
+- Make intelligent decisions based on context
 - Chain tools as needed
 - Handle errors gracefully and continue with remaining tasks
-- Deliver results in chat AND save to external service if requested
+- Deliver results AND confirm any external actions
 </multi_task_spec>
 
 ############################################
@@ -997,6 +960,301 @@ IMPORTANT CONNECTOR TOOL RULES:
                     logger.info(f"[Schema Agent] MCP server closed")
                 except Exception as e:
                     logger.warning(f"[Schema Agent] Error closing MCP server: {e}")
+
+    async def query_streamed(
+        self,
+        natural_query: str,
+        thread_id: Optional[str] = None,
+    ) -> AsyncIterator[Dict[str, Any]]:
+        """
+        Process a natural language query with streaming progress updates.
+
+        Yields progress events for each step (tool calls, outputs, thoughts, etc.)
+        for real-time UI feedback in ChatKit.
+
+        Args:
+            natural_query: User's question in natural language
+            thread_id: Optional thread ID for ChatKit
+
+        Yields:
+            Dict with type and details for each streaming event
+        """
+        mcp_server = None
+
+        try:
+            logger.info(f"[Schema Agent] Processing streamed query: {natural_query[:50]}...")
+
+            yield {"type": "progress", "text": "Analyzing your question..."}
+
+            effective_thread_id = thread_id or self.thread_id
+
+            # Get session
+            session = None
+            if self._session_manager:
+                try:
+                    session = self._session_manager.get_session(effective_thread_id)
+                    logger.info(f"[Schema Agent] Using PostgreSQL session")
+                except Exception as e:
+                    logger.warning(f"[Schema Agent] Session fallback: {e}")
+
+            access_mode = "restricted" if self.read_only else "unrestricted"
+
+            yield {"type": "progress", "text": "Connecting to database..."}
+
+            # Create fresh MCP server
+            mcp_server = MCPServerStdio(
+                name=f"postgres-mcp-stream-{datetime.now().strftime('%H%M%S%f')}",
+                params={
+                    "command": "postgres-mcp",
+                    "args": [self.database_uri, f"--access-mode={access_mode}"],
+                },
+                cache_tools_list=True,
+                client_session_timeout_seconds=300.0,
+            )
+
+            await mcp_server.__aenter__()
+
+            tools = await mcp_server.list_tools()
+            tool_names = [t.name for t in tools]
+            logger.info(f"[Schema Agent] MCP connected with tools: {tool_names}")
+
+            yield {"type": "progress", "text": f"Database connected. {len(tool_names)} tools available."}
+
+            # Generate system prompt
+            system_prompt = generate_schema_agent_prompt(self.schema_metadata)
+
+            # Add connector tools info
+            if self.connector_tools and self._connector_tool_names:
+                connector_tools_section = f"""
+
+############################################
+CONNECTED EXTERNAL SERVICES (MCP CONNECTORS)
+############################################
+AVAILABLE CONNECTOR TOOLS:
+{chr(10).join(f'- `{name}`' for name in self._connector_tool_names)}
+"""
+                system_prompt = system_prompt + connector_tools_section
+
+            # Prepare function tools
+            function_tools = []
+            if self.enable_gmail and self.user_id:
+                try:
+                    from app.mcp_server.tools_gmail import GMAIL_TOOLS
+                    function_tools = list(GMAIL_TOOLS)
+                except ImportError:
+                    pass
+
+            try:
+                from app.mcp_server.tools_google_search import GOOGLE_SEARCH_TOOLS
+                function_tools.extend(GOOGLE_SEARCH_TOOLS)
+            except ImportError:
+                pass
+
+            if self.connector_tools:
+                function_tools.extend(self.connector_tools)
+                yield {"type": "progress", "text": f"Loaded {len(self.connector_tools)} connector tools."}
+
+            yield {"type": "progress", "text": "Initializing AI agent..."}
+
+            # Create agent
+            agent = Agent(
+                name="Schema Query Agent",
+                instructions=system_prompt,
+                model=get_llm_model(),
+                mcp_servers=[mcp_server],
+                tools=function_tools if function_tools else None,
+                model_settings=ModelSettings(tool_choice="auto"),
+            )
+
+            run_context = {"user_id": self.user_id} if self.user_id else {}
+
+            yield {"type": "progress", "text": "Processing your query..."}
+
+            # Run with streaming
+            result = Runner.run_streamed(
+                agent,
+                input=natural_query,
+                max_turns=25,
+                context=run_context,
+                session=session,
+            )
+
+            response_text = ""
+            tool_calls_made = []
+
+            # Track last tool name for output matching
+            last_tool_name = ""
+
+            # Stream events from agent execution
+            async for event in result.stream_events():
+                event_type = getattr(event, 'type', 'unknown')
+                logger.info(f"[Schema Agent Stream] Event type: {event_type}")
+
+                # Handle run_item_stream_event - contains tool calls, outputs, messages
+                if event_type == "run_item_stream_event":
+                    item = event.item
+                    item_type = getattr(item, 'type', 'unknown')
+
+                    # Tool call started
+                    if item_type == "tool_call_item":
+                        # Try multiple ways to get tool name
+                        tool_name = None
+
+                        # Method 1: Direct 'name' attribute
+                        if hasattr(item, 'name') and item.name:
+                            tool_name = item.name
+
+                        # Method 2: Check raw_item for function call details
+                        if not tool_name and hasattr(item, 'raw_item'):
+                            raw = item.raw_item
+                            if isinstance(raw, dict):
+                                # Check for function name in various locations
+                                if 'name' in raw:
+                                    tool_name = raw['name']
+                                elif 'function' in raw and isinstance(raw['function'], dict):
+                                    tool_name = raw['function'].get('name')
+                                elif 'tool_call' in raw and isinstance(raw['tool_call'], dict):
+                                    tool_name = raw['tool_call'].get('name')
+                            elif hasattr(raw, 'name'):
+                                tool_name = raw.name
+                            elif hasattr(raw, 'function') and hasattr(raw.function, 'name'):
+                                tool_name = raw.function.name
+
+                        # Method 3: Check call_id pattern for MCP tools
+                        if not tool_name and hasattr(item, 'call_id'):
+                            call_id = item.call_id
+                            if call_id and '_' in str(call_id):
+                                # Sometimes call_id contains tool name
+                                tool_name = str(call_id).split('_')[0]
+
+                        # Fallback
+                        if not tool_name:
+                            tool_name = "database_tool"
+
+                        last_tool_name = tool_name
+                        tool_calls_made.append(tool_name)
+
+                        # Get arguments
+                        tool_args = getattr(item, 'arguments', '')
+                        if not tool_args and hasattr(item, 'raw_item'):
+                            raw = item.raw_item
+                            if isinstance(raw, dict):
+                                tool_args = raw.get('arguments', raw.get('input', ''))
+
+                        # Format tool call info
+                        args_preview = str(tool_args)[:100] + "..." if len(str(tool_args)) > 100 else str(tool_args)
+
+                        logger.info(f"[Schema Agent Stream] Tool call: {tool_name}, args: {args_preview}")
+
+                        yield {
+                            "type": "tool_call",
+                            "text": f"Calling tool: {tool_name}",
+                            "tool_name": tool_name,
+                            "arguments": args_preview,
+                        }
+
+                    # Tool call output received
+                    elif item_type == "tool_call_output_item":
+                        output = getattr(item, 'output', '')
+                        output_preview = str(output)[:200] + "..." if len(str(output)) > 200 else str(output)
+
+                        # Use last tool name if available
+                        tool_name = last_tool_name or "tool"
+
+                        yield {
+                            "type": "tool_output",
+                            "text": f"Response from: {tool_name}",
+                            "tool_name": tool_name,
+                            "output_preview": output_preview,
+                        }
+
+                    # Message output (assistant's text response)
+                    elif item_type == "message_output_item":
+                        # Use ItemHelpers to extract text
+                        text = ItemHelpers.text_message_output(item)
+                        if text:
+                            response_text = text
+
+                    # Reasoning/thinking item
+                    elif item_type == "reasoning_item":
+                        reasoning = getattr(item, 'content', '')
+                        if reasoning:
+                            yield {
+                                "type": "thinking",
+                                "text": f"Agent thinking: {str(reasoning)[:150]}...",
+                            }
+
+                # Handle agent updated event
+                elif event_type == "agent_updated_stream_event":
+                    new_agent = getattr(event, 'new_agent', None)
+                    if new_agent:
+                        agent_name = getattr(new_agent, 'name', 'Agent')
+                        yield {
+                            "type": "progress",
+                            "text": f"Switched to: {agent_name}",
+                        }
+
+                # Handle raw response streaming (for real-time token output)
+                elif event_type == "raw_response_event":
+                    # Check for text delta events for streaming text
+                    data = getattr(event, 'data', None)
+                    if data and hasattr(data, 'delta'):
+                        delta = data.delta
+                        if delta:
+                            yield {"type": "content_delta", "text": str(delta)}
+
+            # After streaming completes, access final_output directly (it's a property, not a method)
+            # Extract final response if not captured during streaming
+            if not response_text and result.final_output:
+                response_text = str(result.final_output)
+
+            # Fallback extraction from new_items
+            if not response_text and hasattr(result, 'new_items'):
+                for item in result.new_items:
+                    if hasattr(item, 'content') and item.content:
+                        response_text = str(item.content)
+                        break
+                    elif hasattr(item, 'raw_item'):
+                        raw = item.raw_item
+                        if isinstance(raw, dict) and 'content' in raw:
+                            contents = raw.get('content', [])
+                            if isinstance(contents, list):
+                                for c in contents:
+                                    if isinstance(c, dict) and c.get('type') == 'text':
+                                        response_text = c.get('text', '')
+                                        if response_text:
+                                            break
+
+            if not response_text:
+                response_text = "I completed the requested operations."
+
+            # Add to history
+            self._conversation_history.append({"role": "user", "content": natural_query})
+            self._conversation_history.append({"role": "assistant", "content": response_text})
+
+            # Yield final response
+            visualization_hint = self._detect_visualization(response_text, natural_query)
+
+            yield {
+                "type": "complete",
+                "response": response_text,
+                "tools_used": tool_calls_made,
+                "visualization_hint": visualization_hint,
+            }
+
+        except Exception as e:
+            logger.error(f"[Schema Agent] Streamed query failed: {e}", exc_info=True)
+            yield {
+                "type": "error",
+                "text": f"Error: {str(e)}",
+                "response": f"I encountered an error: {str(e)}",
+            }
+        finally:
+            if mcp_server:
+                try:
+                    await mcp_server.__aexit__(None, None, None)
+                except Exception:
+                    pass
 
     def _detect_visualization(self, response: str, query: str) -> Optional[Dict[str, str]]:
         """

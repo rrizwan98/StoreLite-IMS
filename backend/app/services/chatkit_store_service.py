@@ -5,10 +5,12 @@ Enables persistent conversation history across server restarts and page reloads.
 Users can continue conversations from where they left off.
 """
 
+from __future__ import annotations
+
 import logging
 import json
 from datetime import datetime
-from typing import Optional, Any, List
+from typing import Optional, Any, List, Union
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete, update
@@ -100,7 +102,7 @@ class PostgreSQLChatKitStore(Store):
             await self.db.rollback()
             raise
 
-    async def load_thread(self, thread_id: str, context: Any) -> ThreadMetadata | None:
+    async def load_thread(self, thread_id: str, context: Any) -> Optional[ThreadMetadata]:
         """Load a thread from the database, creating if it doesn't exist."""
         try:
             result = await self.db.execute(
@@ -159,7 +161,7 @@ class PostgreSQLChatKitStore(Store):
             logger.error(f"[ChatKitStore] Error deleting thread {thread_id}: {e}")
             await self.db.rollback()
 
-    async def load_threads(self, limit: int, after: str | None, order: str, context: Any) -> Any:
+    async def load_threads(self, limit: int, after: Optional[str], order: str, context: Any) -> Any:
         """Load all threads for the current user."""
         try:
             logger.info(f"[ChatKitStore] load_threads called: user_id={self.user_id}, limit={limit}, order={order}")
@@ -230,7 +232,7 @@ class PostgreSQLChatKitStore(Store):
     async def load_thread_items(
         self,
         thread_id: str,
-        after: str | None,
+        after: Optional[str],
         limit: int,
         order: str,
         context: Any
@@ -262,7 +264,7 @@ class PostgreSQLChatKitStore(Store):
             logger.error(f"[ChatKitStore] Error loading items from thread {thread_id}: {e}")
             return Page(data=[], has_more=False)
 
-    async def load_item(self, thread_id: str, item_id: str, context: Any) -> ThreadItem | None:
+    async def load_item(self, thread_id: str, item_id: str, context: Any) -> Optional[ThreadItem]:
         """Load a specific item from a thread."""
         try:
             result = await self.db.execute(
@@ -381,7 +383,7 @@ class PostgreSQLChatKitStore(Store):
             logger.error(f"[ChatKitStore] Error serializing item: {e}")
             return json.dumps({'error': str(e)})
 
-    def _deserialize_item(self, db_item: ChatKitThreadItem) -> ThreadItem | None:
+    def _deserialize_item(self, db_item: ChatKitThreadItem) -> Optional[ThreadItem]:
         """Deserialize a database item to ThreadItem."""
         try:
             data = json.loads(db_item.content)

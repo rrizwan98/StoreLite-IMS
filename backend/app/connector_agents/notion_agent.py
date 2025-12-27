@@ -45,103 +45,98 @@ class NotionConnectorAgent(BaseConnectorAgent):
 
     def get_system_prompt(self) -> str:
         """Get Notion-specific system prompt."""
-        return """You are a Notion Expert Agent. Your ONLY job is to execute Notion operations using the available tools.
+        return """You are a Notion Expert Agent. Your job is to execute Notion operations using the available tools.
 
-## AUTONOMOUS EXECUTION (CRITICAL)
-You are an EXPERT. Make decisions, don't ask questions.
-- Given a task → EXECUTE IT IMMEDIATELY
-- Need a page name? → CREATE A SMART ONE (e.g., "Dec-Sales-Report")
+## AUTONOMOUS EXECUTION
+Execute tasks immediately. Make intelligent decisions based on the content and context.
+- Need a name? → Generate from content + current date
 - Need a location? → Use workspace root or first available page
-- Need format? → Use professional structure
+- Need format? → Use professional structure appropriate to content
 
-NEVER ASK:
-❌ "What should I name this?"
-❌ "Where should I save it?"
-❌ "What format do you want?"
-
-JUST DO IT with smart defaults!
+Execute, don't ask unnecessary questions.
 
 ## YOUR CAPABILITIES
-You can perform ANY Notion operation:
 - Search for pages and databases
-- Create new pages (for REPORTS/DOCUMENTS)
-- Create new databases (for STRUCTURED DATA/TABLES)
+- Create new pages (for documents, reports, notes)
+- Create new databases (for structured/tabular data)
 - Update existing pages
 - Query database contents
 
-## CRITICAL: PAGE vs DATABASE
+## PAGE vs DATABASE
 
-USE PAGE (v1/pages-create with page parent) FOR:
-- Reports, documents, notes
+USE PAGE FOR:
+- Documents, reports, notes
 - Rich text content with formatting
-- Analysis summaries
-- Any "save report" request
+- Any "save content" request
 
-USE DATABASE (v1/databases-create) FOR:
+USE DATABASE FOR:
 - Structured data with columns
-- Item tracking, inventory lists
 - Data that needs filtering/sorting
+- Tabular information
 
-## TERMINOLOGY MAPPING
+## TERMINOLOGY
 - "Table" = Database in Notion
 - "Row" or "Item" = Page in Database
-- "Column" = Property in Notion
-- "Report" or "Document" = Page (NOT database row)
-- "Save to Notion" = Usually means create a new Page
+- "Column" = Property
+- "Report" or "Document" = Page
 
-## AVAILABLE TOOLS
-- `v1/search-search` - Search for pages/databases
-- `v1/databases-create` - Create a new database (table)
-- `v1/pages-create` - Create a new page OR add row to database
-- `v1/pages-update` - Update page properties
-- `v1/databases-query` - Query rows from a database
+## AVAILABLE TOOLS (from Notion MCP)
+The actual tool names from Notion MCP server:
+- `notion-search` - Search for pages/databases (query MUST be non-empty, at least 1 character)
+- `notion-create-page` - Create a new page
+- `notion-update-page` - Update page properties
+- `notion-get-page` - Get page details
+- `notion-list-databases` - List available databases
+- `notion-query-database` - Query rows from a database
+- `notion-create-database` - Create a new database
+
+## CRITICAL: SEARCH TOOL REQUIREMENTS
+The `notion-search` tool REQUIRES a non-empty query string (minimum 1 character).
+- ✅ CORRECT: {"query": "page", "page_size": 10}
+- ✅ CORRECT: {"query": "report", "page_size": 5}
+- ❌ WRONG: {"query": "", "page_size": 1} - This will FAIL!
+
+If you need to find any page, search for common terms like "page", "home", or a word from the content you want to save.
 
 ## EXECUTION RULES
 
 1. ALWAYS USE TOOLS - Never pretend without calling a tool
-2. SEARCH FIRST - Find parent pages or existing databases
-3. SMART NAMING - Use "[Month]-[Type]-Report" format
+2. NON-EMPTY SEARCH - Always use a search term (never empty query)
+3. SMART NAMING - Generate contextually appropriate names
 4. CHAIN OPERATIONS - Complete multi-step tasks automatically
-5. NO QUESTIONS - Make decisions, execute, report results
+5. REPORT RESULTS - Confirm what was done
 
-## WORKFLOW: SAVE REPORT TO NOTION
+## WORKFLOW: SAVE CONTENT TO NOTION
 
-This is the MOST COMMON task. Here's exactly how to do it:
-
-Step 1: Search for a parent page (any page in workspace)
+Step 1: Search for a parent page (use a keyword, never empty)
 ```
-v1/search-search with {"query": "", "page_size": 1}
+notion-search with {"query": "page", "page_size": 5}
 ```
+Or search for something related to the content topic.
 
-Step 2: Create new page with report content
+Step 2: Create new page with content
 ```
-v1/pages-create with:
-{
-  "parent": {"type": "page_id", "page_id": "[found_page_id]"},
-  "properties": {
-    "title": {"title": [{"text": {"content": "Dec-Sales-Report"}}]}
-  },
-  "children": [
-    {"object": "block", "type": "heading_1", "heading_1": {"rich_text": [{"text": {"content": "Report Title"}}]}},
-    {"object": "block", "type": "paragraph", "paragraph": {"rich_text": [{"text": {"content": "Report content here..."}}]}}
-  ]
-}
+notion-create-page with parent, title, and content
 ```
 
-## WORKFLOW: CREATE TABLE WITH DATA
+## WORKFLOW: CREATE DATABASE
 
-Step 1: Search for parent page
-Step 2: Create database with v1/databases-create
-Step 3: Add items with v1/pages-create (for each item)
+Step 1: Search for parent page (with a keyword)
+Step 2: Create database with notion-create-database
+Step 3: Add items with notion-create-page (for each item)
+
+## ERROR HANDLING
+If search returns no results:
+- Try a different search term
+- Or create the page at workspace root level
 
 ## RESPONSE FORMAT
 After completing operations, provide:
 - ✅ What was done
-- 📄 Page/database name and ID
-- 🔗 Any relevant details
+- 📄 Page/database name
 - ❌ Errors if any occurred
 
-Remember: You are an EXPERT. Execute tasks confidently and completely. NO QUESTIONS!"""
+Execute tasks completely using tools."""
 
     async def load_tools(self) -> List[FunctionTool]:
         """Load Notion MCP tools."""
@@ -229,14 +224,22 @@ Remember: You are an EXPERT. Execute tasks confidently and completely. NO QUESTI
         """
         server_url = self.server_url
         auth_config = self.auth_config
+        connector_name = self.connector_name  # "Notion"
 
         async def mcp_tool_caller(ctx, args: str) -> str:
             """Call Notion MCP tool with given arguments."""
             try:
                 kwargs = json.loads(args) if args else {}
+
+                # Log with clear connector context for streaming visibility
                 logger.info(f"[NotionAgent] ═══════════════════════════════════════")
-                logger.info(f"[NotionAgent] Calling tool: {tool_name}")
-                logger.info(f"[NotionAgent] Args: {str(kwargs)[:500]}...")
+                logger.info(f"[NotionAgent] 🔧 TOOL CALL: {tool_name}")
+                logger.info(f"[NotionAgent] 📝 Args: {str(kwargs)[:500]}...")
+
+                # Create formatted progress message that main agent can capture
+                # This will appear in the tool output which streams to UI
+                progress_prefix = f"[{connector_name}] Calling {tool_name}..."
+                logger.info(progress_prefix)
 
                 client = UserMCPClient(
                     server_url,
@@ -246,10 +249,12 @@ Remember: You are an EXPERT. Execute tasks confidently and completely. NO QUESTI
                 )
                 result = await client.call_tool(tool_name, kwargs)
 
-                logger.info(f"[NotionAgent] Result type: {type(result).__name__}")
-                logger.info(f"[NotionAgent] Result: {str(result)[:500]}...")
+                logger.info(f"[NotionAgent] ✅ Result type: {type(result).__name__}")
+                logger.info(f"[NotionAgent] 📋 Result: {str(result)[:500]}...")
 
-                # Format result
+                # Format result with progress context for streaming UI
+                result_text = ""
+
                 if isinstance(result, dict):
                     if "content" in result:
                         contents = result["content"]
@@ -259,20 +264,26 @@ Remember: You are an EXPERT. Execute tasks confidently and completely. NO QUESTI
                                 if isinstance(c, dict) and c.get("type") == "text":
                                     texts.append(c.get("text", ""))
                             if texts:
-                                logger.info(f"[NotionAgent] ✓ {tool_name} completed")
-                                return "\n".join(texts)
-                    logger.info(f"[NotionAgent] ✓ {tool_name} completed")
-                    return json.dumps(result, indent=2)
+                                result_text = "\n".join(texts)
+                    if not result_text:
+                        result_text = json.dumps(result, indent=2)
+                else:
+                    result_text = str(result)
 
-                logger.info(f"[NotionAgent] ✓ {tool_name} completed")
-                return str(result)
+                # Log completion with tool name clearly visible
+                logger.info(f"[NotionAgent] ✓ {connector_name}/{tool_name} completed successfully")
+
+                # Return with connector context prefix for UI streaming
+                return f"[{connector_name}:{tool_name}] {result_text}"
 
             except json.JSONDecodeError as e:
-                logger.error(f"[NotionAgent] Invalid JSON args for {tool_name}: {e}")
-                return f"Error: Invalid arguments format - {e}"
+                error_msg = f"[{connector_name}:{tool_name}] Error: Invalid arguments format - {e}"
+                logger.error(f"[NotionAgent] {error_msg}")
+                return error_msg
             except Exception as e:
-                logger.error(f"[NotionAgent] Error calling {tool_name}: {e}")
-                return f"Error calling {tool_name}: {str(e)}"
+                error_msg = f"[{connector_name}:{tool_name}] Error: {str(e)}"
+                logger.error(f"[NotionAgent] {error_msg}")
+                return error_msg
 
         return mcp_tool_caller
 

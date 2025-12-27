@@ -300,7 +300,15 @@ class SchemaChatKitServer(ChatKitServer):
         input_user_message: UserMessageItem | None,
         context: Any,
     ) -> AsyncIterator[ThreadStreamEvent]:
-        """Process user message using Schema Query Agent."""
+        """
+        Process user message using Schema Query Agent with streaming progress.
+
+        Yields detailed ProgressUpdateEvent for each step:
+        - Tool calls with names and arguments
+        - Tool outputs with previews
+        - Agent thinking/reasoning steps
+        - Final response
+        """
         import time
 
         try:
@@ -314,18 +322,16 @@ class SchemaChatKitServer(ChatKitServer):
                     if hasattr(content, 'text'):
                         user_message += content.text
 
-            # Log the raw message for debugging
             logger.info(f"[Schema ChatKit] Raw user message: {user_message[:100]}...")
 
-            # Check if tool prefix is present (from frontend tool selection)
+            # Check if tool prefix is present
             if '[TOOL:' in user_message:
                 logger.info(f"[Schema ChatKit] Tool prefix detected in message!")
 
-            # Get selected tool from context (set by chatkit_endpoint)
+            # Get selected tool from context
             selected_tool = context.get("selected_tool")
             if selected_tool:
                 logger.info(f"[Schema ChatKit] Tool from context: {selected_tool}")
-                # Prepend the tool instruction if not already in message
                 if f'[TOOL:{selected_tool.upper()}]' not in user_message:
                     user_message = f"[TOOL:{selected_tool.upper()}] {user_message}"
                     logger.info(f"[Schema ChatKit] Prepended tool prefix to message")
@@ -357,27 +363,16 @@ class SchemaChatKitServer(ChatKitServer):
 
             logger.info(f"[Schema ChatKit] Processing message for user {user_id}: {user_message[:50]}...")
 
-            # Track timing
             start_time = time.time()
-
-            # Show progress indicator using ProgressUpdateEvent (valid ThreadStreamEvent)
-            yield ProgressUpdateEvent(
-                type="progress_update",
-                text="Analyzing your question..."
-            )
-
-            # Get thread_id from ChatKit thread for session persistence
             thread_id = thread.id if thread else None
             logger.info(f"[Schema ChatKit] Thread ID for session: {thread_id}")
 
-            # Load ALL user's connector sub-agents as tools
-            # Each connector (Notion, Slack, etc.) becomes a single tool that handles all operations
+            # Load connector sub-agents as tools
             connector_tools = []
             db_session = context.get("db_session")
 
             if db_session:
                 try:
-                    # Load connector sub-agents for this user
                     logger.info(f"[Schema ChatKit] Loading connector sub-agents for user {user_id}")
                     connector_tools = await get_connector_agent_tools(
                         db_session,
@@ -385,34 +380,32 @@ class SchemaChatKitServer(ChatKitServer):
                     )
                     if connector_tools:
                         tool_names = [getattr(t, 'name', str(t)) for t in connector_tools]
-                        logger.info(f"[Schema ChatKit] Loaded {len(connector_tools)} connector sub-agent tools: {tool_names}")
-                    else:
-                        logger.info(f"[Schema ChatKit] No connector sub-agents found for user {user_id}")
+                        logger.info(f"[Schema ChatKit] Loaded {len(connector_tools)} connector tools: {tool_names}")
                 except Exception as e:
                     logger.warning(f"[Schema ChatKit] Failed to load connector sub-agents: {e}")
 
-            # Create a cache key - include connector count to invalidate when connectors change
+            # Create cache key
             connector_count = len(connector_tools)
             cache_key = f"{user_id}:connectors_{connector_count}"
 
-            # Get or create agent for this user (with connector tools if selected)
+            # Get or create agent
             if cache_key not in _agent_cache:
                 try:
                     yield ProgressUpdateEvent(
                         type="progress_update",
-                        text="Initializing AI agent..."
+                        text="Initializing AI agent with your database schema..."
                     )
                     agent = await create_schema_query_agent(
                         database_uri=database_uri,
                         schema_metadata=schema_metadata,
                         auto_initialize=True,
-                        user_id=user_id,  # Pass user_id for Gmail tool context
+                        user_id=user_id,
                         enable_gmail=True,
-                        thread_id=thread_id,  # Pass thread_id for persistent session
-                        connector_tools=connector_tools,  # Pass connector tools
+                        thread_id=thread_id,
+                        connector_tools=connector_tools,
                     )
                     _agent_cache[cache_key] = agent
-                    logger.info(f"Created new Schema Query Agent for user {user_id} with Gmail + {len(connector_tools)} connector tools")
+                    logger.info(f"Created Schema Query Agent for user {user_id}")
                 except Exception as e:
                     logger.error(f"Failed to create agent for user {user_id}: {e}")
                     yield ErrorEvent(
@@ -425,33 +418,139 @@ class SchemaChatKitServer(ChatKitServer):
             else:
                 agent = _agent_cache[cache_key]
 
-            # Show query progress
-            yield ProgressUpdateEvent(
-                type="progress_update",
-                text="Processing your query..."
-            )
+            # Use streaming query for detailed progress updates
+            logger.info(f"[Schema ChatKit] Starting streamed agent query...")
 
-            # Run agent query with thread_id for session persistence
-            logger.info(f"[Schema ChatKit] Running agent query...")
-            logger.info(f"[Schema ChatKit] User message: {user_message[:200]}...")
-            result = await agent.query(user_message, thread_id=thread_id)
-            logger.info(f"[Schema ChatKit] Agent query completed.")
-            logger.info(f"[Schema ChatKit] Result: {result}")
-            logger.info(f"[Schema ChatKit] Result keys: {list(result.keys()) if result else 'None'}")
+            response_text = ""
+            tools_used = []
 
-            # Get response with better fallback
-            response_text = result.get("response", "") if result else ""
+            async for event in agent.query_streamed(user_message, thread_id=thread_id):
+                event_type = event.get("type", "unknown")
+
+                if event_type == "progress":
+                    # General progress update
+                    yield ProgressUpdateEvent(
+                        type="progress_update",
+                        text=event.get("text", "Processing...")
+                    )
+
+                elif event_type == "tool_call":
+                    # Tool is being called - show tool name and args
+                    tool_name = event.get("tool_name", "tool")
+                    args = event.get("arguments", "")
+                    tools_used.append(tool_name)
+
+                    # Format message based on tool type
+                    if "execute_sql" in tool_name:
+                        msg = f"🔍 Executing SQL query..."
+                    elif tool_name == "notion_connector":
+                        msg = f"📝 Connecting to Notion..."
+                    elif "notion" in tool_name.lower():
+                        # Parse Notion sub-tool name
+                        notion_tool = tool_name.replace("notion-", "").replace("notion_", "")
+                        if "search" in notion_tool:
+                            msg = f"📝 Notion: Searching pages..."
+                        elif "create" in notion_tool and "page" in notion_tool:
+                            msg = f"📝 Notion: Creating page..."
+                        elif "create" in notion_tool and "database" in notion_tool:
+                            msg = f"📝 Notion: Creating database..."
+                        elif "update" in notion_tool:
+                            msg = f"📝 Notion: Updating page..."
+                        elif "query" in notion_tool:
+                            msg = f"📝 Notion: Querying database..."
+                        else:
+                            msg = f"📝 Notion: {notion_tool}"
+                    elif "gmail" in tool_name.lower() or "send_email" in tool_name:
+                        msg = f"📧 Sending email via Gmail..."
+                    elif "google_search" in tool_name.lower():
+                        msg = f"🌐 Searching the web..."
+                    elif "list_tables" in tool_name or "list_objects" in tool_name:
+                        msg = f"📊 Listing database tables..."
+                    elif "get_object_details" in tool_name:
+                        msg = f"📋 Getting table details..."
+                    else:
+                        msg = f"⚙️ Using: {tool_name}"
+
+                    yield ProgressUpdateEvent(
+                        type="progress_update",
+                        text=msg
+                    )
+                    logger.info(f"[Schema ChatKit] Tool call: {tool_name} with args: {args[:100] if args else 'none'}...")
+
+                elif event_type == "tool_output":
+                    # Tool returned a result
+                    tool_name = event.get("tool_name", "tool")
+                    output_preview = event.get("output_preview", "")
+
+                    # Parse connector sub-agent output for detailed progress
+                    # Format: [Connector:tool_name] result
+                    if output_preview.startswith("[") and "]" in output_preview:
+                        # Extract connector info from output
+                        bracket_end = output_preview.index("]")
+                        connector_info = output_preview[1:bracket_end]
+                        if ":" in connector_info:
+                            connector_name, sub_tool = connector_info.split(":", 1)
+                            msg = f"✅ {connector_name}: {sub_tool} completed"
+                        else:
+                            msg = f"✅ {connector_info} completed"
+                    elif "execute_sql" in tool_name:
+                        msg = f"✅ SQL query executed. Analyzing results..."
+                    elif tool_name == "notion_connector":
+                        msg = f"✅ Notion operation completed."
+                    elif "notion" in tool_name.lower():
+                        msg = f"✅ Notion: Operation completed"
+                    elif "gmail" in tool_name.lower() or "send_email" in tool_name:
+                        msg = f"✅ Email sent successfully."
+                    elif "google_search" in tool_name.lower():
+                        msg = f"✅ Web search completed. Processing results..."
+                    else:
+                        msg = f"✅ {tool_name} completed"
+
+                    yield ProgressUpdateEvent(
+                        type="progress_update",
+                        text=msg
+                    )
+                    logger.info(f"[Schema ChatKit] Tool output from {tool_name}: {output_preview[:100]}...")
+
+                elif event_type == "thinking":
+                    # Agent reasoning/thinking
+                    thinking_text = event.get("text", "")
+                    if thinking_text:
+                        yield ProgressUpdateEvent(
+                            type="progress_update",
+                            text=thinking_text
+                        )
+
+                elif event_type == "content_delta":
+                    # Streaming content chunk (for live text output if supported)
+                    pass  # ChatKit doesn't support live text streaming in progress
+
+                elif event_type == "complete":
+                    # Final response
+                    response_text = event.get("response", "")
+                    tools_used = event.get("tools_used", tools_used)
+                    logger.info(f"[Schema ChatKit] Query completed. Tools used: {tools_used}")
+
+                elif event_type == "error":
+                    # Error occurred
+                    error_text = event.get("text", "An error occurred")
+                    response_text = event.get("response", error_text)
+                    logger.error(f"[Schema ChatKit] Stream error: {error_text}")
+
+            # Fallback if no response was captured
             if not response_text:
-                logger.warning(f"[Schema ChatKit] Empty response from agent! Result: {result}")
-                response_text = "I processed your request but couldn't generate a response. Please check the backend logs for details."
-
-            logger.info(f"[Schema ChatKit] Response text length: {len(response_text)}")
+                logger.warning(f"[Schema ChatKit] No response from streaming! Using fallback.")
+                # Fallback to non-streaming query
+                result = await agent.query(user_message, thread_id=thread_id)
+                response_text = result.get("response", "") if result else ""
+                if not response_text:
+                    response_text = "I processed your request but couldn't generate a response."
 
             # Calculate total time
             total_time = time.time() - start_time
-            logger.info(f"[Schema ChatKit] Query processed in {total_time:.1f}s")
+            logger.info(f"[Schema ChatKit] Query processed in {total_time:.1f}s with {len(tools_used)} tool calls")
 
-            # Create the assistant message with the response
+            # Create assistant message with response
             msg_id = f"msg-{uuid.uuid4().hex[:12]}"
 
             assistant_msg = AssistantMessageItem(
@@ -466,7 +565,7 @@ class SchemaChatKitServer(ChatKitServer):
                 )]
             )
 
-            # Yield the proper ThreadStreamEvent types
+            # Yield the final response
             yield ThreadItemAddedEvent(type="thread.item.added", item=assistant_msg)
             yield ThreadItemDoneEvent(type="thread.item.done", item=assistant_msg)
 
