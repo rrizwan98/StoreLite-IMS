@@ -224,14 +224,22 @@ Execute tasks completely using tools."""
         """
         server_url = self.server_url
         auth_config = self.auth_config
+        connector_name = self.connector_name  # "Notion"
 
         async def mcp_tool_caller(ctx, args: str) -> str:
             """Call Notion MCP tool with given arguments."""
             try:
                 kwargs = json.loads(args) if args else {}
+
+                # Log with clear connector context for streaming visibility
                 logger.info(f"[NotionAgent] ═══════════════════════════════════════")
-                logger.info(f"[NotionAgent] Calling tool: {tool_name}")
-                logger.info(f"[NotionAgent] Args: {str(kwargs)[:500]}...")
+                logger.info(f"[NotionAgent] 🔧 TOOL CALL: {tool_name}")
+                logger.info(f"[NotionAgent] 📝 Args: {str(kwargs)[:500]}...")
+
+                # Create formatted progress message that main agent can capture
+                # This will appear in the tool output which streams to UI
+                progress_prefix = f"[{connector_name}] Calling {tool_name}..."
+                logger.info(progress_prefix)
 
                 client = UserMCPClient(
                     server_url,
@@ -241,10 +249,12 @@ Execute tasks completely using tools."""
                 )
                 result = await client.call_tool(tool_name, kwargs)
 
-                logger.info(f"[NotionAgent] Result type: {type(result).__name__}")
-                logger.info(f"[NotionAgent] Result: {str(result)[:500]}...")
+                logger.info(f"[NotionAgent] ✅ Result type: {type(result).__name__}")
+                logger.info(f"[NotionAgent] 📋 Result: {str(result)[:500]}...")
 
-                # Format result
+                # Format result with progress context for streaming UI
+                result_text = ""
+
                 if isinstance(result, dict):
                     if "content" in result:
                         contents = result["content"]
@@ -254,20 +264,26 @@ Execute tasks completely using tools."""
                                 if isinstance(c, dict) and c.get("type") == "text":
                                     texts.append(c.get("text", ""))
                             if texts:
-                                logger.info(f"[NotionAgent] ✓ {tool_name} completed")
-                                return "\n".join(texts)
-                    logger.info(f"[NotionAgent] ✓ {tool_name} completed")
-                    return json.dumps(result, indent=2)
+                                result_text = "\n".join(texts)
+                    if not result_text:
+                        result_text = json.dumps(result, indent=2)
+                else:
+                    result_text = str(result)
 
-                logger.info(f"[NotionAgent] ✓ {tool_name} completed")
-                return str(result)
+                # Log completion with tool name clearly visible
+                logger.info(f"[NotionAgent] ✓ {connector_name}/{tool_name} completed successfully")
+
+                # Return with connector context prefix for UI streaming
+                return f"[{connector_name}:{tool_name}] {result_text}"
 
             except json.JSONDecodeError as e:
-                logger.error(f"[NotionAgent] Invalid JSON args for {tool_name}: {e}")
-                return f"Error: Invalid arguments format - {e}"
+                error_msg = f"[{connector_name}:{tool_name}] Error: Invalid arguments format - {e}"
+                logger.error(f"[NotionAgent] {error_msg}")
+                return error_msg
             except Exception as e:
-                logger.error(f"[NotionAgent] Error calling {tool_name}: {e}")
-                return f"Error calling {tool_name}: {str(e)}"
+                error_msg = f"[{connector_name}:{tool_name}] Error: {str(e)}"
+                logger.error(f"[NotionAgent] {error_msg}")
+                return error_msg
 
         return mcp_tool_caller
 
