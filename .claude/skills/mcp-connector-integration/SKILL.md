@@ -1,11 +1,22 @@
 ---
 name: mcp-connector-integration
-description: Create new MCP connector integrations with OAuth browser authentication, sub-agent creation, and schema_agent integration. Use when adding new external service connectors like Slack, Google Drive, Airtable, Linear, GitHub, or any MCP-compatible service. Triggers on requests to add connectors, integrate external services, or create new MCP sub-agents.
+description: Create new MCP connector integrations with OAuth browser authentication, sub-agent creation, and schema_agent integration. Use when adding new external service connectors like Slack, Airtable, Linear, GitHub, or any MCP-compatible service. Existing connectors include Notion and Google Drive. Triggers on requests to add connectors, integrate external services, or create new MCP sub-agents.
 ---
 
 # MCP Connector Integration Skill
 
 This skill guides you through creating a complete MCP connector integration for external services. Each connector follows the same pattern: OAuth browser authentication, sub-agent creation with OpenAI Agents SDK, and integration with the main schema_agent.
+
+## Currently Implemented Connectors
+
+The following connectors are already implemented and can serve as reference:
+
+| Connector | OAuth Type | MCP Server | Status |
+|-----------|-----------|------------|--------|
+| **Notion** | Dynamic Client Registration (DCR) | Hosted (`mcp.notion.com`) | ✅ Active |
+| **Google Drive** | Standard OAuth 2.0 + PKCE | Self-hosted placeholder | ✅ Active |
+
+Use these as templates when implementing new connectors.
 
 ## Overview
 
@@ -59,7 +70,8 @@ const NEW_CONNECTOR: PredefinedConnector = {
 // Add to PREDEFINED_CONNECTORS array
 export const PREDEFINED_CONNECTORS: PredefinedConnector[] = [
   NOTION_CONNECTOR,
-  NEW_CONNECTOR,  // Add here
+  GOOGLE_DRIVE_CONNECTOR,  // Already implemented
+  NEW_CONNECTOR,  // Add new connectors here
 ];
 ```
 
@@ -318,11 +330,13 @@ from .new_connector_agent import NewConnectorAgent
 class ConnectorAgentRegistry:
     AGENT_CLASSES: Dict[str, Type[BaseConnectorAgent]] = {
         "notion": NotionConnectorAgent,
-        "newservice": NewConnectorAgent,  # Add here
+        "google_drive": GoogleDriveConnectorAgent,  # Already implemented
+        "newservice": NewConnectorAgent,  # Add new agents here
     }
 
     URL_PATTERNS: Dict[str, str] = {
         "notion": "notion",
+        "google-drive": "google_drive",  # Already implemented
         "newservice": "newservice",  # Add URL pattern
     }
 ```
