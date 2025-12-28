@@ -13,7 +13,7 @@ import AppsToolsPanel from './AppsToolsPanel';
 import AddConnectorForm from './AddConnectorForm';
 import ConnectorDetailView from './ConnectorDetailView';
 import OAuthConfirmModal from './OAuthConfirmModal';
-import { Connector, initiateOAuth, getOAuthStatus, connectNotion, getNotionStatus } from '@/lib/connectors-api';
+import { Connector, initiateOAuth, getOAuthStatus, connectNotion, getNotionStatus, connectGoogleDrive, getGDriveStatus } from '@/lib/connectors-api';
 import { SystemTool } from '@/lib/tools-api';
 import { PredefinedConnector, PREDEFINED_CONNECTORS } from '@/lib/predefined-connectors';
 
@@ -59,7 +59,7 @@ export default function ConnectorsModal({
     try {
       const connectedIds: string[] = [];
 
-      // Check Notion status using new endpoint
+      // Check Notion status
       try {
         const notionStatus = await getNotionStatus();
         if (notionStatus.connected) {
@@ -69,7 +69,15 @@ export default function ConnectorsModal({
         // Notion not connected or error
       }
 
-      // Add other connectors here in future...
+      // Check Google Drive status
+      try {
+        const gdriveStatus = await getGDriveStatus();
+        if (gdriveStatus.connected) {
+          connectedIds.push('google_drive');
+        }
+      } catch {
+        // Google Drive not connected or error
+      }
 
       setConnectedPredefinedIds(connectedIds);
     } catch (error) {
@@ -108,16 +116,20 @@ export default function ConnectorsModal({
     setOAuthError(null);
 
     try {
-      // Use the new Notion MCP OAuth endpoint (Zero-config, no developer credentials needed!)
       if (selectedPredefined.id === 'notion') {
         // Use Notion MCP with Dynamic Client Registration
         const response = await connectNotion();
         console.log(`[OAuth] Using ${response.method} method for Notion`);
-
         // Redirect user to Notion's OAuth page
         window.location.href = response.authorization_url;
+      } else if (selectedPredefined.id === 'google_drive') {
+        // Use Google Drive OAuth flow
+        const response = await connectGoogleDrive();
+        console.log('[OAuth] Starting Google Drive OAuth flow');
+        // Redirect user to Google's OAuth page
+        window.location.href = response.authorization_url;
       } else {
-        // For other connectors, use the old OAuth flow
+        // For other connectors, use the generic OAuth flow
         const callbackUrl = `${window.location.origin}/connectors/callback`;
         const response = await initiateOAuth(selectedPredefined.id, callbackUrl);
         window.location.href = response.authorization_url;

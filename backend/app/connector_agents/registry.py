@@ -15,6 +15,7 @@ from app.models import UserMCPConnection
 from app.connectors.encryption import decrypt_credentials
 from .base import BaseConnectorAgent
 from .notion_agent import NotionConnectorAgent
+from .gdrive_agent import GoogleDriveConnectorAgent
 
 logger = logging.getLogger(__name__)
 
@@ -30,18 +31,21 @@ class ConnectorAgentRegistry:
     # Map connector types to agent classes
     AGENT_CLASSES: Dict[str, Type[BaseConnectorAgent]] = {
         "notion": NotionConnectorAgent,
+        "google_drive": GoogleDriveConnectorAgent,
+        "gdrive": GoogleDriveConnectorAgent,  # Alias
         # Future connectors:
         # "slack": SlackConnectorAgent,
-        # "google_docs": GoogleDocsConnectorAgent,
         # "airtable": AirtableConnectorAgent,
     }
 
     # URL patterns to detect connector type
     URL_PATTERNS: Dict[str, str] = {
         "notion": "notion",
+        "gdrive": "google_drive",
+        "google-drive": "google_drive",
+        "google_drive": "google_drive",
         "slack": "slack",
         "airtable": "airtable",
-        "google": "google",
     }
 
     def __init__(self):

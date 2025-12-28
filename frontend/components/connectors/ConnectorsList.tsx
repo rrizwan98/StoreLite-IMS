@@ -26,6 +26,7 @@ import {
   deleteConnector,
   toggleConnector,
   getNotionStatus,
+  getGDriveStatus,
   OAuthStatus,
   checkConnectorHealth,
   HealthCheckResult,
@@ -133,7 +134,7 @@ export default function ConnectorsList({
   async function loadOAuthStatuses(): Promise<Record<string, OAuthStatus>> {
     const statuses: Record<string, OAuthStatus> = {};
 
-    // Check Notion status using new endpoint
+    // Check Notion status
     try {
       const notionStatus = await getNotionStatus();
       statuses['notion'] = {
@@ -145,7 +146,17 @@ export default function ConnectorsList({
       statuses['notion'] = { connected: false };
     }
 
-    // Add other connectors here in future...
+    // Check Google Drive status
+    try {
+      const gdriveStatus = await getGDriveStatus();
+      statuses['google_drive'] = {
+        connected: gdriveStatus.connected,
+        connector_id: gdriveStatus.connector_id,
+        connector_name: gdriveStatus.connector_name,
+      };
+    } catch {
+      statuses['google_drive'] = { connected: false };
+    }
 
     return statuses;
   }

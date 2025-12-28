@@ -14,7 +14,7 @@ import { ArrowLeft, Settings } from 'lucide-react';
 import { SystemToolsList, ConnectorsList } from '@/components/connectors';
 import ConnectorDetailView from '@/components/connectors/ConnectorDetailView';
 import OAuthConfirmModal from '@/components/connectors/OAuthConfirmModal';
-import { initiateOAuth, connectNotion } from '@/lib/connectors-api';
+import { initiateOAuth, connectNotion, connectGoogleDrive } from '@/lib/connectors-api';
 import { PredefinedConnector, PREDEFINED_CONNECTORS } from '@/lib/predefined-connectors';
 
 type View = 'main' | 'connector-detail';
@@ -49,16 +49,20 @@ export default function SettingsPage() {
     setIsConnecting(true);
 
     try {
-      // Use the new Notion MCP OAuth endpoint (Zero-config, no developer credentials needed!)
       if (selectedConnector.id === 'notion') {
         // Use Notion MCP with Dynamic Client Registration
         const response = await connectNotion();
         console.log(`[OAuth] Using ${response.method} method for Notion`);
-
         // Redirect user to Notion's OAuth page
         window.location.href = response.authorization_url;
+      } else if (selectedConnector.id === 'google_drive') {
+        // Use Google Drive OAuth flow
+        const response = await connectGoogleDrive();
+        console.log('[OAuth] Starting Google Drive OAuth flow');
+        // Redirect user to Google's OAuth page
+        window.location.href = response.authorization_url;
       } else {
-        // For other connectors, use the old OAuth flow
+        // For other connectors, use the generic OAuth flow
         const callbackUrl = `${window.location.origin}/connectors/callback`;
         const response = await initiateOAuth(selectedConnector.id, callbackUrl);
         window.location.href = response.authorization_url;
