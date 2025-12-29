@@ -31,8 +31,8 @@ from app.services.agent_session_service import create_user_session, AgentSession
 logger = logging.getLogger(__name__)
 
 # Version marker for debugging
-SCHEMA_AGENT_VERSION = "2.3.0-mcp-gmail-connectors"
-logger.info(f"[Schema Agent] Module loaded - Version {SCHEMA_AGENT_VERSION} (MCP + Gmail + User Connectors)")
+SCHEMA_AGENT_VERSION = "2.4.0-gmail-connector-subagent"
+logger.info(f"[Schema Agent] Module loaded - Version {SCHEMA_AGENT_VERSION} (MCP + User Connectors + Gmail as Sub-Agent)")
 
 
 # ============================================================================
@@ -42,7 +42,7 @@ logger.info(f"[Schema Agent] Module loaded - Version {SCHEMA_AGENT_VERSION} (MCP
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 # Use Gemini 2.0 Flash which supports function calling well
 # gemini-2.0-flash-exp has better tool calling than lite version
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini/gemini-2.5-flash")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini/gemini-robotics-er-1.5-preview")
 
 def get_llm_model():
     """
@@ -86,7 +86,7 @@ URGENT: CHECK FOR TOOL PREFIX FIRST
 BEFORE doing anything else, check if the user's message starts with a tool prefix:
 
 1. [TOOL:GMAIL] - User wants to send results via email
-   If YES: You MUST call the send_email tool after getting query results. This is NON-NEGOTIABLE.
+   If YES: You MUST call the gmail_connector tool after getting query results. This is NON-NEGOTIABLE.
 
 2. [TOOL:GOOGLE_SEARCH] - User wants to search the web
    If YES: You MUST call the google_search tool. This is NON-NEGOTIABLE.
@@ -164,8 +164,6 @@ AVAILABLE MCP TOOLS
 ############################################
 AVAILABLE FUNCTION TOOLS
 ############################################
-- `send_email`: Send query results or any content via user's connected Gmail
-- `check_email_status`: Check if user's Gmail is connected and ready
 - `google_search`: Search the web for real-time information, documentation, news, and current events
 
 ############################################
@@ -249,52 +247,32 @@ STANDARD REPORT STRUCTURE (adapt sections based on content):
   * What was found (data first!)
   * Key insights or patterns
   * Relevant context or implications
-- Use send_email when user explicitly asks to email/send results
-- If email fails due to not connected, inform user to connect Gmail in settings
+- Use gmail_connector when user explicitly asks to email/send results
+- If email fails due to Gmail not connected, inform user to connect Gmail via Connectors
 </tool_usage_rules>
 
 ############################################
-GMAIL TOOL ACTIVATION (IMPORTANT)
+GMAIL CONNECTOR ACTIVATION (IMPORTANT)
 ############################################
-<gmail_tool_rules>
-When message starts with [TOOL:GMAIL], the user has selected the Gmail tool:
+<gmail_connector_rules>
+When message starts with [TOOL:GMAIL], the user has selected the Gmail connector:
 1. Execute the query to get the requested data
-2. ALWAYS call send_email tool with the results - this is MANDATORY
-3. Format email body PROFESSIONALLY with:
+2. ALWAYS call gmail_connector tool with the results - this is MANDATORY
+3. The gmail_connector sub-agent handles all email operations:
+   - Sending emails (gmail_send)
+   - Checking status (gmail_status)
+   - Reading inbox (gmail_read_inbox)
+   - Searching emails (gmail_search)
+4. Format email body PROFESSIONALLY with:
    - Greeting: "Hello,"
    - Brief description of the data
-   - Data formatted in clean, readable tables (use ASCII tables, not markdown)
+   - Data formatted in clean, readable tables
    - Summary/insights section
-   - Sign-off: "Best regards,\nAI Data Assistant\nIMS Inventory System"
-4. Use descriptive email subject based on the query
+   - Sign-off: "Best regards,\nAI Data Assistant"
+5. Use descriptive email subject based on the query
 
-EMAIL FORMAT TEMPLATE:
-```
-Hello,
-
-Here is the data you requested:
-
-[QUERY DESCRIPTION]
-
-[DATA IN READABLE TABLE FORMAT]
-Example:
-+--------+------------+-----------+
-| Column | Column     | Column    |
-+--------+------------+-----------+
-| Value  | Value      | Value     |
-+--------+------------+-----------+
-
-Summary:
-- [Key insight 1]
-- [Key insight 2]
-
-Best regards,
-AI Data Assistant
-IMS Inventory System
-```
-
-CRITICAL: When [TOOL:GMAIL] is present, sending email is NOT optional - always send!
-</gmail_tool_rules>
+CRITICAL: When [TOOL:GMAIL] is present, sending email is NOT optional - always send via gmail_connector!
+</gmail_connector_rules>
 
 ############################################
 GOOGLE SEARCH TOOL (WEB GROUNDING)
@@ -541,7 +519,6 @@ class SchemaQueryAgent:
         schema_metadata: dict,
         read_only: bool = True,
         user_id: Optional[int] = None,
-        enable_gmail: bool = True,
         thread_id: Optional[str] = None,
         connector_tools: Optional[List[Any]] = None,
     ):
@@ -552,16 +529,14 @@ class SchemaQueryAgent:
             database_uri: PostgreSQL connection string for user's database
             schema_metadata: Discovered schema metadata dict
             read_only: Whether to use read-only mode (default: True)
-            user_id: User ID for tool context (needed for Gmail integration)
-            enable_gmail: Whether to enable Gmail tools (default: True)
+            user_id: User ID for tool context
             thread_id: Thread ID for ChatKit session (for persistent conversation)
-            connector_tools: Optional list of tools from user's MCP connectors
+            connector_tools: Optional list of tools from user's MCP connectors (Gmail, Notion, GDrive, etc.)
         """
         self.database_uri = database_uri
         self.schema_metadata = schema_metadata
         self.read_only = read_only
         self.user_id = user_id
-        self.enable_gmail = enable_gmail
         self.thread_id = thread_id
         self.connector_tools = connector_tools or []
 
@@ -595,7 +570,7 @@ class SchemaQueryAgent:
 
         logger.info(
             f"[Schema Agent] Created agent instance "
-            f"(read_only={read_only}, user_id={user_id}, gmail={enable_gmail}, "
+            f"(read_only={read_only}, user_id={user_id}, "
             f"thread={thread_id}, connectors={len(self.connector_tools)}, session={self._session_id})"
         )
 
@@ -789,16 +764,8 @@ IMPORTANT CONNECTOR TOOL RULES:
                 system_prompt = system_prompt + connector_tools_section
                 logger.info(f"[Schema Agent] Added {len(self._connector_tool_names)} connector tools to system prompt")
 
-            # Prepare function tools list (Gmail tools if enabled)
+            # Prepare function tools list
             function_tools = []
-            if self.enable_gmail and self.user_id:
-                try:
-                    from app.mcp_server.tools_gmail import GMAIL_TOOLS
-                    function_tools = list(GMAIL_TOOLS)
-                    self._function_tools = ["send_email", "check_email_status"]
-                    logger.info(f"[Schema Agent] Gmail tools enabled for user {self.user_id}")
-                except ImportError as e:
-                    logger.warning(f"[Schema Agent] Gmail tools not available: {e}")
 
             # Add Google Search tool (always available as System Tool)
             try:
@@ -863,28 +830,38 @@ IMPORTANT CONNECTOR TOOL RULES:
             logger.info(f"[Schema Agent] ═══════════════════════════════════════")
             logger.info(f"[Schema Agent] Run completed. Analyzing result...")
             logger.info(f"[Schema Agent] Result type: {type(result).__name__}")
-            logger.info(f"[Schema Agent] Result attributes: {dir(result)}")
 
             if hasattr(result, 'new_items'):
                 logger.info(f"[Schema Agent] New items count: {len(result.new_items)}")
                 for idx, item in enumerate(result.new_items):
-                    item_type = type(item).__name__
+                    item_type = getattr(item, 'type', type(item).__name__)
                     logger.info(f"[Schema Agent] Item {idx}: {item_type}")
                     if hasattr(item, 'raw_item'):
                         raw_str = str(item.raw_item)[:300]
                         logger.info(f"[Schema Agent] Raw item {idx}: {raw_str}...")
 
-            # Extract response with better fallback handling
+            # Extract response with comprehensive fallback handling
             response_text = ""
 
-            # Try final_output first
+            # Method 1: Try final_output first (works for most cases)
             if result.final_output:
                 response_text = str(result.final_output)
                 logger.info(f"[Schema Agent] Got response from final_output: {len(response_text)} chars")
 
-            # If empty, try to extract from new_items
+            # Method 2: Use ItemHelpers for message_output_item extraction
             if not response_text and hasattr(result, 'new_items'):
-                for item in result.new_items:
+                for item in reversed(result.new_items):  # Check from latest to earliest
+                    item_type = getattr(item, 'type', '')
+
+                    # Use ItemHelpers for message_output_item (recommended approach)
+                    if item_type == 'message_output_item':
+                        extracted = ItemHelpers.text_message_output(item)
+                        if extracted:
+                            response_text = extracted
+                            logger.info(f"[Schema Agent] Got response from ItemHelpers.text_message_output: {len(response_text)} chars")
+                            break
+
+                    # Fallback: Try direct content/text attributes
                     if hasattr(item, 'content') and item.content:
                         response_text = str(item.content)
                         logger.info(f"[Schema Agent] Got response from new_items.content: {len(response_text)} chars")
@@ -893,22 +870,70 @@ IMPORTANT CONNECTOR TOOL RULES:
                         response_text = str(item.text)
                         logger.info(f"[Schema Agent] Got response from new_items.text: {len(response_text)} chars")
                         break
-                    elif hasattr(item, 'raw_item'):
-                        raw = item.raw_item
-                        if isinstance(raw, dict) and 'content' in raw:
-                            contents = raw.get('content', [])
-                            if isinstance(contents, list):
-                                for c in contents:
-                                    if isinstance(c, dict) and c.get('type') == 'text':
-                                        response_text = c.get('text', '')
-                                        if response_text:
-                                            logger.info(f"[Schema Agent] Got response from raw_item.content: {len(response_text)} chars")
-                                            break
 
-            # If still empty, provide a meaningful message
+            # Method 3: Deep extraction from raw_item for Gemini/LiteLLM responses
+            if not response_text and hasattr(result, 'new_items'):
+                for item in reversed(result.new_items):
+                    if hasattr(item, 'raw_item'):
+                        raw = item.raw_item
+
+                        # Handle dict format
+                        if isinstance(raw, dict):
+                            # Check for 'content' list (OpenAI format)
+                            if 'content' in raw:
+                                contents = raw.get('content', [])
+                                if isinstance(contents, list):
+                                    for c in contents:
+                                        if isinstance(c, dict) and c.get('type') == 'text':
+                                            response_text = c.get('text', '')
+                                            if response_text:
+                                                logger.info(f"[Schema Agent] Got response from raw_item.content[].text: {len(response_text)} chars")
+                                                break
+                                elif isinstance(contents, str) and contents:
+                                    response_text = contents
+                                    logger.info(f"[Schema Agent] Got response from raw_item.content (str): {len(response_text)} chars")
+                            # Check for direct 'text' field
+                            elif 'text' in raw and raw['text']:
+                                response_text = str(raw['text'])
+                                logger.info(f"[Schema Agent] Got response from raw_item.text: {len(response_text)} chars")
+                            # Check for 'message' field (some providers)
+                            elif 'message' in raw and raw['message']:
+                                msg = raw['message']
+                                if isinstance(msg, dict) and 'content' in msg:
+                                    response_text = str(msg['content'])
+                                else:
+                                    response_text = str(msg)
+                                logger.info(f"[Schema Agent] Got response from raw_item.message: {len(response_text)} chars")
+
+                        # Handle object with attributes
+                        elif hasattr(raw, 'content'):
+                            content = raw.content
+                            if isinstance(content, list):
+                                for c in content:
+                                    if hasattr(c, 'text') and c.text:
+                                        response_text = c.text
+                                        logger.info(f"[Schema Agent] Got response from raw_item.content[].text (obj): {len(response_text)} chars")
+                                        break
+                            elif isinstance(content, str) and content:
+                                response_text = content
+                                logger.info(f"[Schema Agent] Got response from raw_item.content (obj str): {len(response_text)} chars")
+                        elif hasattr(raw, 'text') and raw.text:
+                            response_text = raw.text
+                            logger.info(f"[Schema Agent] Got response from raw_item.text (obj): {len(response_text)} chars")
+
+                    if response_text:
+                        break
+
+            # If still empty, log detailed debug info and provide error message
             if not response_text:
-                logger.warning(f"[Schema Agent] No response text found in result!")
-                response_text = "I completed the requested operations. Please check the logs for details."
+                logger.error(f"[Schema Agent] CRITICAL: No response text found!")
+                logger.error(f"[Schema Agent] Result final_output: {result.final_output}")
+                if hasattr(result, 'new_items'):
+                    for idx, item in enumerate(result.new_items):
+                        logger.error(f"[Schema Agent] DEBUG Item {idx}: type={getattr(item, 'type', 'unknown')}, attrs={[a for a in dir(item) if not a.startswith('_')]}")
+                        if hasattr(item, 'raw_item'):
+                            logger.error(f"[Schema Agent] DEBUG Raw {idx}: {item.raw_item}")
+                response_text = "I'm sorry, I couldn't generate a proper response. Please try rephrasing your question or check the database connection."
 
             logger.info(f"[Schema Agent] Final output (first 300 chars): {response_text[:300]}...")
             logger.info(f"[Schema Agent] ═══════════════════════════════════════")
@@ -1037,13 +1062,8 @@ AVAILABLE CONNECTOR TOOLS:
 
             # Prepare function tools
             function_tools = []
-            if self.enable_gmail and self.user_id:
-                try:
-                    from app.mcp_server.tools_gmail import GMAIL_TOOLS
-                    function_tools = list(GMAIL_TOOLS)
-                except ImportError:
-                    pass
 
+            # Add Google Search tool
             try:
                 from app.mcp_server.tools_google_search import GOOGLE_SEARCH_TOOLS
                 function_tools.extend(GOOGLE_SEARCH_TOOLS)
@@ -1203,30 +1223,73 @@ AVAILABLE CONNECTOR TOOLS:
                         if delta:
                             yield {"type": "content_delta", "text": str(delta)}
 
-            # After streaming completes, access final_output directly (it's a property, not a method)
-            # Extract final response if not captured during streaming
+            # After streaming completes, extract final response
+            # Method 1: Try final_output first
             if not response_text and result.final_output:
                 response_text = str(result.final_output)
+                logger.info(f"[Schema Agent Stream] Got response from final_output: {len(response_text)} chars")
 
-            # Fallback extraction from new_items
+            # Method 2: Use ItemHelpers for message_output_item extraction
             if not response_text and hasattr(result, 'new_items'):
-                for item in result.new_items:
+                for item in reversed(result.new_items):
+                    item_type = getattr(item, 'type', '')
+
+                    if item_type == 'message_output_item':
+                        extracted = ItemHelpers.text_message_output(item)
+                        if extracted:
+                            response_text = extracted
+                            logger.info(f"[Schema Agent Stream] Got response from ItemHelpers: {len(response_text)} chars")
+                            break
+
                     if hasattr(item, 'content') and item.content:
                         response_text = str(item.content)
+                        logger.info(f"[Schema Agent Stream] Got response from content: {len(response_text)} chars")
                         break
-                    elif hasattr(item, 'raw_item'):
+
+            # Method 3: Deep extraction from raw_item
+            if not response_text and hasattr(result, 'new_items'):
+                for item in reversed(result.new_items):
+                    if hasattr(item, 'raw_item'):
                         raw = item.raw_item
-                        if isinstance(raw, dict) and 'content' in raw:
-                            contents = raw.get('content', [])
-                            if isinstance(contents, list):
-                                for c in contents:
-                                    if isinstance(c, dict) and c.get('type') == 'text':
-                                        response_text = c.get('text', '')
-                                        if response_text:
-                                            break
+
+                        if isinstance(raw, dict):
+                            if 'content' in raw:
+                                contents = raw.get('content', [])
+                                if isinstance(contents, list):
+                                    for c in contents:
+                                        if isinstance(c, dict) and c.get('type') == 'text':
+                                            response_text = c.get('text', '')
+                                            if response_text:
+                                                break
+                                elif isinstance(contents, str) and contents:
+                                    response_text = contents
+                            elif 'text' in raw and raw['text']:
+                                response_text = str(raw['text'])
+                            elif 'message' in raw:
+                                msg = raw['message']
+                                if isinstance(msg, dict) and 'content' in msg:
+                                    response_text = str(msg['content'])
+                                elif msg:
+                                    response_text = str(msg)
+
+                        elif hasattr(raw, 'content'):
+                            content = raw.content
+                            if isinstance(content, list):
+                                for c in content:
+                                    if hasattr(c, 'text') and c.text:
+                                        response_text = c.text
+                                        break
+                            elif isinstance(content, str) and content:
+                                response_text = content
+                        elif hasattr(raw, 'text') and raw.text:
+                            response_text = raw.text
+
+                    if response_text:
+                        break
 
             if not response_text:
-                response_text = "I completed the requested operations."
+                logger.error(f"[Schema Agent Stream] CRITICAL: No response text found!")
+                response_text = "I'm sorry, I couldn't generate a proper response. Please try rephrasing your question."
 
             # Add to history
             self._conversation_history.append({"role": "user", "content": natural_query})
@@ -1339,7 +1402,6 @@ async def create_schema_query_agent(
     auto_initialize: bool = True,
     read_only: bool = True,
     user_id: Optional[int] = None,
-    enable_gmail: bool = True,
     thread_id: Optional[str] = None,
     connector_tools: Optional[List[Any]] = None,
 ) -> SchemaQueryAgent:
@@ -1351,10 +1413,9 @@ async def create_schema_query_agent(
         schema_metadata: Discovered schema metadata
         auto_initialize: Whether to initialize immediately
         read_only: Whether to use read-only mode
-        user_id: User ID for tool context (needed for Gmail integration)
-        enable_gmail: Whether to enable Gmail tools (default: True)
+        user_id: User ID for tool context
         thread_id: Thread ID for ChatKit session (for persistent conversation)
-        connector_tools: Optional list of tools from user's MCP connectors
+        connector_tools: Optional list of tools from user's MCP connectors (Gmail, Notion, GDrive, etc.)
 
     Returns:
         Initialized SchemaQueryAgent instance with PostgreSQL session support
@@ -1364,7 +1425,6 @@ async def create_schema_query_agent(
         schema_metadata=schema_metadata,
         read_only=read_only,
         user_id=user_id,
-        enable_gmail=enable_gmail,
         thread_id=thread_id,
         connector_tools=connector_tools,
     )

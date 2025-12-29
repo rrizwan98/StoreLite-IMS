@@ -27,6 +27,7 @@ import {
   toggleConnector,
   getNotionStatus,
   getGDriveStatus,
+  getGmailStatus,
   OAuthStatus,
   checkConnectorHealth,
   HealthCheckResult,
@@ -36,6 +37,7 @@ import {
   PREDEFINED_CONNECTORS,
   PredefinedConnector,
 } from '@/lib/predefined-connectors';
+
 
 interface ConnectorsListProps {
   onConnectorClick?: (connector: PredefinedConnector) => void;
@@ -68,6 +70,10 @@ export default function ConnectorsList({
         getConnectors(),
         loadOAuthStatuses(),
       ]);
+
+      console.log('[ConnectorsList] Loaded connectors:', connectorsData);
+      console.log('[ConnectorsList] Connector URLs:', connectorsData.map(c => c.server_url));
+      console.log('[ConnectorsList] OAuth statuses:', statuses);
 
       setConnectors(connectorsData);
       setOauthStatuses(statuses);
@@ -158,6 +164,18 @@ export default function ConnectorsList({
       statuses['google_drive'] = { connected: false };
     }
 
+    // Check Gmail status
+    try {
+      const gmailStatus = await getGmailStatus();
+      statuses['gmail'] = {
+        connected: gmailStatus.connected,
+        connector_id: gmailStatus.connector_id,
+        connector_name: gmailStatus.connector_name,
+      };
+    } catch {
+      statuses['gmail'] = { connected: false };
+    }
+
     return statuses;
   }
 
@@ -221,8 +239,14 @@ export default function ConnectorsList({
   }
 
   // Find connected connectors by matching MCP server URL
+  // Returns the most recent connector (highest ID) if duplicates exist
   const getConnectedConnector = (predefined: PredefinedConnector): Connector | undefined => {
-    return connectors.find(c => c.server_url === predefined.mcpServerUrl);
+    const matching = connectors.filter(c => c.server_url === predefined.mcpServerUrl);
+    if (matching.length === 0) return undefined;
+    // Return the one with highest ID (most recent)
+    return matching.reduce((latest, current) =>
+      current.id > latest.id ? current : latest
+    );
   };
 
   return (
@@ -294,12 +318,28 @@ export default function ConnectorsList({
                       </span>
                     )}
                   </div>
-                  <p className="text-sm text-gray-500 mt-0.5 truncate">
-                    {healthStatus && !isHealthy
-                      ? healthStatus.error_message || 'Connection failed - click Reconnect'
-                      : predefined.description
-                    }
-                  </p>
+                  {/* Show email and tools count for connected connectors */}
+                  {isConnected && connectedConnector ? (
+                    <div className="text-sm text-gray-500 mt-0.5 space-y-0.5">
+                      {connectedConnector.email && (
+                        <p className="truncate">
+                          <span className="text-gray-400">Email:</span> {connectedConnector.email}
+                        </p>
+                      )}
+                      <p>
+                        <span className="text-gray-400">Tools:</span> {connectedConnector.tool_count || 0}
+                      </p>
+                      {healthStatus && !isHealthy && (
+                        <p className="text-red-500 text-xs">
+                          {healthStatus.error_message || 'Connection failed - click Reconnect'}
+                        </p>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-gray-500 mt-0.5 truncate">
+                      {predefined.description}
+                    </p>
+                  )}
                 </div>
 
                 {/* Actions for connected connectors */}

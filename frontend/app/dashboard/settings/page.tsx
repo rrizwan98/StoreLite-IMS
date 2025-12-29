@@ -14,7 +14,7 @@ import { ArrowLeft, Settings } from 'lucide-react';
 import { SystemToolsList, ConnectorsList } from '@/components/connectors';
 import ConnectorDetailView from '@/components/connectors/ConnectorDetailView';
 import OAuthConfirmModal from '@/components/connectors/OAuthConfirmModal';
-import { initiateOAuth, connectNotion, connectGoogleDrive } from '@/lib/connectors-api';
+import { initiateOAuth, connectNotion, connectGoogleDrive, connectGmail } from '@/lib/connectors-api';
 import { PredefinedConnector, PREDEFINED_CONNECTORS } from '@/lib/predefined-connectors';
 
 type View = 'main' | 'connector-detail';
@@ -59,6 +59,12 @@ export default function SettingsPage() {
         // Use Google Drive OAuth flow
         const response = await connectGoogleDrive();
         console.log('[OAuth] Starting Google Drive OAuth flow');
+        // Redirect user to Google's OAuth page
+        window.location.href = response.authorization_url;
+      } else if (selectedConnector.id === 'gmail') {
+        // Use Gmail OAuth flow
+        const response = await connectGmail();
+        console.log('[OAuth] Starting Gmail OAuth flow');
         // Redirect user to Google's OAuth page
         window.location.href = response.authorization_url;
       } else {

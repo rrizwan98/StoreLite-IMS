@@ -392,7 +392,7 @@ class PostgreSQLChatKitStore(Store):
             # Return the raw data as a dict - ChatKit will handle it
             # We need to return proper ChatKit types
             if item_type == 'user_message':
-                from chatkit.types import UserMessageItem as UMI, UserMessageContent, InferenceOptions
+                from chatkit.types import UserMessageItem as UMI, UserMessageTextContent, InferenceOptions
                 content_list = data.get('content', [])
 
                 # Get or create inference_options (required field)
@@ -406,7 +406,7 @@ class PostgreSQLChatKitStore(Store):
                     created_at=data.get('created_at', db_item.created_at.isoformat()),
                     type='user_message',
                     content=[
-                        UserMessageContent(type=c.get('type', 'input_text'), text=c.get('text', ''))
+                        UserMessageTextContent(type='input_text', text=c.get('text', ''))
                         for c in content_list
                     ] if content_list else [],
                     inference_options=InferenceOptions(**inference_opts),

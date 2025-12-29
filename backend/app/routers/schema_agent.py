@@ -400,7 +400,6 @@ class SchemaChatKitServer(ChatKitServer):
                         schema_metadata=schema_metadata,
                         auto_initialize=True,
                         user_id=user_id,
-                        enable_gmail=True,
                         thread_id=thread_id,
                         connector_tools=connector_tools,
                     )
@@ -460,8 +459,8 @@ class SchemaChatKitServer(ChatKitServer):
                             msg = f"📝 Notion: Querying database..."
                         else:
                             msg = f"📝 Notion: {notion_tool}"
-                    elif "gmail" in tool_name.lower() or "send_email" in tool_name:
-                        msg = f"📧 Sending email via Gmail..."
+                    elif "gmail" in tool_name.lower() or "gmail_connector" in tool_name:
+                        msg = f"📧 Processing email via Gmail..."
                     elif "google_search" in tool_name.lower():
                         msg = f"🌐 Searching the web..."
                     elif "list_tables" in tool_name or "list_objects" in tool_name:
@@ -499,8 +498,8 @@ class SchemaChatKitServer(ChatKitServer):
                         msg = f"✅ Notion operation completed."
                     elif "notion" in tool_name.lower():
                         msg = f"✅ Notion: Operation completed"
-                    elif "gmail" in tool_name.lower() or "send_email" in tool_name:
-                        msg = f"✅ Email sent successfully."
+                    elif "gmail" in tool_name.lower() or "gmail_connector" in tool_name:
+                        msg = f"✅ Gmail operation completed."
                     elif "google_search" in tool_name.lower():
                         msg = f"✅ Web search completed. Processing results..."
                     else:
@@ -1198,12 +1197,11 @@ async def chat_with_agent(
                 database_uri=connection.database_uri,
                 schema_metadata=connection.schema_metadata,
                 auto_initialize=True,
-                user_id=user.id,  # Pass user_id for Gmail tool context
-                enable_gmail=True,
+                user_id=user.id,
                 thread_id=session_thread_id,  # Pass session_id for persistent conversation
             )
             _agent_cache[user.id] = agent
-            logger.info(f"Created new Schema Query Agent for user {user.id} with Gmail tools and PostgreSQL session")
+            logger.info(f"Created new Schema Query Agent for user {user.id} with PostgreSQL session")
         except Exception as e:
             logger.error(f"Failed to create agent for user {user.id}: {e}")
             return ChatResponse(

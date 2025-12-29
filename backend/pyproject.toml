@@ -58,6 +58,9 @@ dependencies = [
 
     # Google Gen AI (Gemini Search Grounding)
     "google-genai>=1.0.0",
+
+    # Markdown to HTML (for email formatting)
+    "markdown2>=2.4.0",
 ]
 
 [project.optional-dependencies]

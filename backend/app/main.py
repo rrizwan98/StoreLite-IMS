@@ -157,7 +157,7 @@ async def root():
 
 # ============ Include Routers ============
 
-from app.routers import inventory, billing, agent, chatkit_server, analytics, db_connect, inventory_agent, auth, schema_agent, gmail, tools, connectors, oauth_connectors, notion_mcp_oauth, gdrive_oauth
+from app.routers import inventory, billing, agent, chatkit_server, analytics, db_connect, inventory_agent, auth, schema_agent, gmail, tools, connectors, oauth_connectors, notion_mcp_oauth, gdrive_oauth, gmail_oauth
 
 # Authentication router (must be first for auth to work)
 app.include_router(auth.router)
@@ -187,6 +187,9 @@ app.include_router(notion_mcp_oauth.router)
 
 # Google Drive OAuth
 app.include_router(gdrive_oauth.router)
+
+# Gmail OAuth (MCP Connector Pattern)
+app.include_router(gmail_oauth.router)
 
 logger.info("FastAPI application initialized")
 

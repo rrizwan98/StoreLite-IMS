@@ -326,7 +326,8 @@ class UserMCPConnection(Base):
         nullable=False,
         index=True
     )
-    name = Column(String(255), nullable=False)
+    name = Column(String(255), nullable=False)  # Clean tool name (e.g., "Gmail", "Google Drive")
+    email = Column(String(255), nullable=True)  # Connected account email (e.g., "user@gmail.com")
     description = Column(Text, nullable=True)
     server_url = Column(String(500), nullable=False)
     auth_type = Column(String(50), default="none", nullable=False)  # 'none', 'oauth', 'api_key'

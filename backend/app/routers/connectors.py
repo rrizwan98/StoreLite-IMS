@@ -64,6 +64,7 @@ async def list_connectors(
         response_list.append({
             "id": conn.id,
             "name": conn.name,
+            "email": conn.email,  # Separate email field
             "description": conn.description,
             "server_url": conn.server_url,
             "auth_type": conn.auth_type,
@@ -119,6 +120,7 @@ async def get_connector(
     return {
         "id": connector.id,
         "name": connector.name,
+        "email": connector.email,
         "description": connector.description,
         "server_url": connector.server_url,
         "auth_type": connector.auth_type,
@@ -541,6 +543,7 @@ async def toggle_connector(
     return {
         "id": connector.id,
         "name": connector.name,
+        "email": connector.email,
         "description": connector.description,
         "server_url": connector.server_url,
         "auth_type": connector.auth_type,
@@ -599,11 +602,159 @@ async def health_check_connector(
         auth_config = decrypt_credentials(connector.auth_config)
         logger.info(f"[Health Check] Decrypted auth config for {connector.name}, keys: {list(auth_config.keys())}")
 
+    # Special handling for sub-agent connectors (Gmail, GDrive) that use direct API calls
+    # These don't have real MCP servers - they use custom protocol URLs as markers
+    if connector.server_url in ("gmail://mcp", "gdrive://mcp"):
+        # For these connectors, check if we have a valid access token
+        access_token = auth_config.get("access_token")
+        refresh_token = auth_config.get("refresh_token")
+        logger.info(f"[Health Check] {connector.name} - has access_token: {bool(access_token)}, has refresh_token: {bool(refresh_token)}")
+
+        if access_token:
+            logger.info(f"[Health Check] Token preview: {access_token[:20]}...")
+            # Verify token is valid by making a simple API call
+            import httpx
+            import os
+
+            async def refresh_google_token(refresh_token: str) -> str | None:
+                """Try to refresh the access token using refresh token."""
+                try:
+                    async with httpx.AsyncClient(timeout=15.0) as client:
+                        response = await client.post(
+                            "https://oauth2.googleapis.com/token",
+                            data={
+                                "grant_type": "refresh_token",
+                                "refresh_token": refresh_token,
+                                "client_id": os.getenv("GOOGLE_CLIENT_ID", ""),
+                                "client_secret": os.getenv("GOOGLE_CLIENT_SECRET", ""),
+                            },
+                            headers={"Content-Type": "application/x-www-form-urlencoded"}
+                        )
+                        if response.status_code == 200:
+                            data = response.json()
+                            return data.get("access_token")
+                except Exception as e:
+                    logger.error(f"[Health Check] Token refresh failed: {e}")
+                return None
+
+            try:
+                if connector.server_url == "gmail://mcp":
+                    # Test Gmail API
+                    async with httpx.AsyncClient(timeout=15.0) as client:
+                        response = await client.get(
+                            "https://gmail.googleapis.com/gmail/v1/users/me/profile",
+                            headers={"Authorization": f"Bearer {access_token}"}
+                        )
+
+                        # If token expired (401), try refreshing
+                        if response.status_code == 401 and refresh_token:
+                            logger.info("[Health Check] Gmail token expired, attempting refresh...")
+                            new_token = await refresh_google_token(refresh_token)
+                            if new_token:
+                                # Retry with new token
+                                response = await client.get(
+                                    "https://gmail.googleapis.com/gmail/v1/users/me/profile",
+                                    headers={"Authorization": f"Bearer {new_token}"}
+                                )
+                                if response.status_code == 200:
+                                    # Update stored token
+                                    auth_config["access_token"] = new_token
+                                    from app.connectors.encryption import encrypt_credentials
+                                    connector.auth_config = encrypt_credentials(auth_config)
+                                    await db.commit()
+                                    logger.info("[Health Check] Gmail token refreshed and saved")
+
+                        if response.status_code == 200:
+                            tool_count = len(connector.discovered_tools or [])
+                            logger.info(f"Connector {connector_id} health check: HEALTHY (Gmail API OK)")
+                            return {
+                                "is_healthy": True,
+                                "connector_id": connector.id,
+                                "connector_name": connector.name,
+                                "tool_count": tool_count,
+                                "message": f"Gmail connected with {tool_count} tools"
+                            }
+                        else:
+                            logger.warning(f"Gmail health check failed: {response.status_code} - {response.text[:200]}")
+                            return {
+                                "is_healthy": False,
+                                "connector_id": connector.id,
+                                "connector_name": connector.name,
+                                "error_code": "token_invalid",
+                                "error_message": "Gmail token expired or invalid. Please reconnect.",
+                                "message": f"Gmail API returned {response.status_code}"
+                            }
+                elif connector.server_url == "gdrive://mcp":
+                    # Test Google Drive API
+                    async with httpx.AsyncClient(timeout=15.0) as client:
+                        response = await client.get(
+                            "https://www.googleapis.com/drive/v3/about?fields=user",
+                            headers={"Authorization": f"Bearer {access_token}"}
+                        )
+
+                        # If token expired (401), try refreshing
+                        if response.status_code == 401 and refresh_token:
+                            logger.info("[Health Check] GDrive token expired, attempting refresh...")
+                            new_token = await refresh_google_token(refresh_token)
+                            if new_token:
+                                # Retry with new token
+                                response = await client.get(
+                                    "https://www.googleapis.com/drive/v3/about?fields=user",
+                                    headers={"Authorization": f"Bearer {new_token}"}
+                                )
+                                if response.status_code == 200:
+                                    # Update stored token
+                                    auth_config["access_token"] = new_token
+                                    from app.connectors.encryption import encrypt_credentials
+                                    connector.auth_config = encrypt_credentials(auth_config)
+                                    await db.commit()
+                                    logger.info("[Health Check] GDrive token refreshed and saved")
+
+                        if response.status_code == 200:
+                            tool_count = len(connector.discovered_tools or [])
+                            logger.info(f"Connector {connector_id} health check: HEALTHY (GDrive API OK)")
+                            return {
+                                "is_healthy": True,
+                                "connector_id": connector.id,
+                                "connector_name": connector.name,
+                                "tool_count": tool_count,
+                                "message": f"Google Drive connected with {tool_count} tools"
+                            }
+                        else:
+                            logger.warning(f"GDrive health check failed: {response.status_code}")
+                            return {
+                                "is_healthy": False,
+                                "connector_id": connector.id,
+                                "connector_name": connector.name,
+                                "error_code": "token_invalid",
+                                "error_message": "Google Drive token expired or invalid. Please reconnect.",
+                                "message": "Google Drive token expired or invalid"
+                            }
+            except Exception as e:
+                logger.error(f"Health check API error for {connector.name}: {e}")
+                return {
+                    "is_healthy": False,
+                    "connector_id": connector.id,
+                    "connector_name": connector.name,
+                    "error_code": "api_error",
+                    "error_message": str(e),
+                    "message": f"API check failed: {str(e)}"
+                }
+        else:
+            return {
+                "is_healthy": False,
+                "connector_id": connector.id,
+                "connector_name": connector.name,
+                "error_code": "no_token",
+                "error_message": "No access token found. Please reconnect.",
+                "message": "No access token found"
+            }
+
     # Use longer timeout for OAuth connectors (Notion MCP needs 30s)
     timeout = 30.0 if connector.auth_type == "oauth" else 15.0
     logger.info(f"[Health Check] Testing {connector.name} with timeout={timeout}s, auth_type={connector.auth_type}")
 
-    # Test connection
+    # Test connection for real MCP servers
     try:
         validation_result = await validate_mcp_connection(
             server_url=connector.server_url,

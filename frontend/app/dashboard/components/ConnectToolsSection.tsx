@@ -23,6 +23,7 @@ const iconMap: Record<string, React.ReactNode> = {
   download: <Download className="h-5 w-5" />,
 };
 
+
 export default function ConnectToolsSection({ className = '' }: ConnectToolsSectionProps) {
   const [systemTools, setSystemTools] = useState<SystemTool[]>([]);
   const [connectors, setConnectors] = useState<Connector[]>([]);
@@ -189,9 +190,14 @@ export default function ConnectToolsSection({ className = '' }: ConnectToolsSect
                             Checking...
                           </p>
                         ) : isHealthy ? (
-                          <p className="text-xs text-purple-600">
-                            {connector.tool_count} tool{connector.tool_count !== 1 ? 's' : ''}
-                          </p>
+                          <div className="text-xs text-gray-500 space-y-0.5">
+                            {connector.email && (
+                              <p>Email: {connector.email}</p>
+                            )}
+                            <p className="text-purple-600">
+                              Tools: {connector.tool_count || 0}
+                            </p>
+                          </div>
                         ) : (
                           <p className="text-xs text-red-600 flex items-center">
                             <AlertTriangle className="w-3 h-3 mr-1" />

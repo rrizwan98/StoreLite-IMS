@@ -1,16 +1,16 @@
 'use client';
 
 /**
- * Google Drive OAuth Callback Page
+ * Gmail OAuth Callback Page
  *
- * Handles OAuth callback after user authorizes Google Drive access.
+ * Handles OAuth callback after user authorizes Gmail access.
  *
  * Flow:
- * 1. User clicks "Connect Google Drive" in our app
+ * 1. User clicks "Connect Gmail" in our app
  * 2. User is redirected to Google's OAuth page
  * 3. User authorizes access
  * 4. Google redirects here with ?code=xxx&state=xxx
- * 5. We call backend /api/gdrive/callback to exchange code for token
+ * 5. We call backend /api/gmail/callback to exchange code for token
  * 6. Show success/error status
  */
 
@@ -18,9 +18,9 @@ import { useEffect, useState, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { CheckCircle, XCircle, Loader2, MessageSquare, Settings } from 'lucide-react';
 import { getAccessToken } from '@/lib/auth-api';
-import { exchangeGDriveCode } from '@/lib/connectors-api';
+import { exchangeGmailCode } from '@/lib/connectors-api';
 
-function GDriveCallbackContent() {
+function GmailCallbackContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
 
@@ -49,37 +49,37 @@ function GDriveCallbackContent() {
       // If we have code and state, exchange for token
       if (code && state) {
         try {
-          console.log('[GDrive Callback] Exchanging code for token...');
-          console.log('[GDrive Callback] Code:', code.substring(0, 20) + '...');
-          console.log('[GDrive Callback] State:', state);
+          console.log('[Gmail Callback] Exchanging code for token...');
+          console.log('[Gmail Callback] Code:', code.substring(0, 20) + '...');
+          console.log('[Gmail Callback] State:', state);
 
           const token = getAccessToken();
           if (!token) {
-            console.error('[GDrive Callback] No access token - user not logged in');
+            console.error('[Gmail Callback] No access token - user not logged in');
             setStatus('error');
-            setErrorMessage('You must be logged in to connect Google Drive. Please log in and try again.');
+            setErrorMessage('You must be logged in to connect Gmail. Please log in and try again.');
             return;
           }
 
-          console.log('[GDrive Callback] User token exists, calling exchangeGDriveCode...');
+          console.log('[Gmail Callback] User token exists, calling exchangeGmailCode...');
 
           // Exchange code for token via backend
-          const data = await exchangeGDriveCode(code, state);
+          const data = await exchangeGmailCode(code, state);
 
-          console.log('[GDrive Callback] Exchange response:', data);
+          console.log('[Gmail Callback] Exchange response:', data);
 
           if (data.success) {
-            console.log('[GDrive Callback] SUCCESS! Connector ID:', data.connector_id);
+            console.log('[Gmail Callback] SUCCESS! Connector ID:', data.connector_id);
             setStatus('success');
-            setConnectorName(data.connector_name || 'Google Drive');
+            setConnectorName(data.connector_name || 'Gmail');
             setEmail(data.email || '');
           } else {
-            console.error('[GDrive Callback] Failed:', data.message);
+            console.error('[Gmail Callback] Failed:', data.message);
             setStatus('error');
             setErrorMessage(data.message || 'Failed to complete connection.');
           }
         } catch (err) {
-          console.error('[GDrive Callback] Exchange error:', err);
+          console.error('[Gmail Callback] Exchange error:', err);
           setStatus('error');
           const errorMessage = err instanceof Error ? err.message : 'Network error';
           setErrorMessage(errorMessage);
@@ -113,8 +113,8 @@ function GDriveCallbackContent() {
         {/* Loading State */}
         {status === 'loading' && (
           <div className="p-8 text-center">
-            <Loader2 className="h-12 w-12 text-blue-600 animate-spin mx-auto mb-4" />
-            <h2 className="text-xl font-semibold text-gray-900">Connecting to Google Drive...</h2>
+            <Loader2 className="h-12 w-12 text-red-600 animate-spin mx-auto mb-4" />
+            <h2 className="text-xl font-semibold text-gray-900">Connecting to Gmail...</h2>
             <p className="text-gray-500 mt-2">Please wait while we finish setting up.</p>
           </div>
         )}
@@ -143,10 +143,10 @@ function GDriveCallbackContent() {
             )}
 
             {/* What's Next */}
-            <div className="mt-6 p-4 bg-blue-50 rounded-xl">
-              <p className="text-sm text-blue-800">
-                <strong>What&apos;s next?</strong> You can now search and access your Google Drive files in chat.
-                Just ask the Schema Agent to find or read files from your Drive!
+            <div className="mt-6 p-4 bg-red-50 rounded-xl">
+              <p className="text-sm text-red-800">
+                <strong>What&apos;s next?</strong> You can now send emails, read your inbox, and search emails in chat.
+                Just ask the Schema Agent to send an email or check your inbox!
               </p>
             </div>
 
@@ -154,7 +154,7 @@ function GDriveCallbackContent() {
             <div className="mt-6 space-y-3">
               <button
                 onClick={handleStartChat}
-                className="w-full flex items-center justify-center px-4 py-3 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 transition-colors"
+                className="w-full flex items-center justify-center px-4 py-3 bg-red-600 text-white rounded-xl font-medium hover:bg-red-700 transition-colors"
               >
                 <MessageSquare className="h-5 w-5 mr-2" />
                 Start Chat
@@ -192,7 +192,7 @@ function GDriveCallbackContent() {
             <div className="mt-8 space-y-3">
               <button
                 onClick={handleTryAgain}
-                className="w-full flex items-center justify-center px-4 py-3 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 transition-colors"
+                className="w-full flex items-center justify-center px-4 py-3 bg-red-600 text-white rounded-xl font-medium hover:bg-red-700 transition-colors"
               >
                 Try Again
               </button>
@@ -210,17 +210,17 @@ function GDriveCallbackContent() {
   );
 }
 
-export default function GDriveCallbackPage() {
+export default function GmailCallbackPage() {
   return (
     <Suspense fallback={
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
         <div className="max-w-md w-full bg-white rounded-2xl shadow-lg p-8 text-center">
-          <Loader2 className="h-12 w-12 text-blue-600 animate-spin mx-auto mb-4" />
+          <Loader2 className="h-12 w-12 text-red-600 animate-spin mx-auto mb-4" />
           <h2 className="text-xl font-semibold text-gray-900">Loading...</h2>
         </div>
       </div>
     }>
-      <GDriveCallbackContent />
+      <GmailCallbackContent />
     </Suspense>
   );
 }

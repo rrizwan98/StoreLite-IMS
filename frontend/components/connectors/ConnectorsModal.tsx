@@ -13,7 +13,7 @@ import AppsToolsPanel from './AppsToolsPanel';
 import AddConnectorForm from './AddConnectorForm';
 import ConnectorDetailView from './ConnectorDetailView';
 import OAuthConfirmModal from './OAuthConfirmModal';
-import { Connector, initiateOAuth, getOAuthStatus, connectNotion, getNotionStatus, connectGoogleDrive, getGDriveStatus } from '@/lib/connectors-api';
+import { Connector, initiateOAuth, getOAuthStatus, connectNotion, getNotionStatus, connectGoogleDrive, getGDriveStatus, connectGmail, getGmailStatus } from '@/lib/connectors-api';
 import { SystemTool } from '@/lib/tools-api';
 import { PredefinedConnector, PREDEFINED_CONNECTORS } from '@/lib/predefined-connectors';
 
@@ -79,6 +79,16 @@ export default function ConnectorsModal({
         // Google Drive not connected or error
       }
 
+      // Check Gmail status
+      try {
+        const gmailStatus = await getGmailStatus();
+        if (gmailStatus.connected) {
+          connectedIds.push('gmail');
+        }
+      } catch {
+        // Gmail not connected or error
+      }
+
       setConnectedPredefinedIds(connectedIds);
     } catch (error) {
       console.error('Failed to load OAuth statuses:', error);
@@ -110,37 +120,56 @@ export default function ConnectorsModal({
   }
 
   async function handleOAuthConfirm() {
-    if (!selectedPredefined) return;
+    if (!selectedPredefined) {
+      console.error('[OAuth] No connector selected');
+      return;
+    }
 
+    console.log(`[OAuth] Starting OAuth for connector: ${selectedPredefined.id}`);
     setIsConnecting(true);
     setOAuthError(null);
 
     try {
       if (selectedPredefined.id === 'notion') {
         // Use Notion MCP with Dynamic Client Registration
+        console.log('[OAuth] Calling connectNotion()...');
         const response = await connectNotion();
         console.log(`[OAuth] Using ${response.method} method for Notion`);
+        console.log(`[OAuth] Redirecting to: ${response.authorization_url}`);
         // Redirect user to Notion's OAuth page
         window.location.href = response.authorization_url;
       } else if (selectedPredefined.id === 'google_drive') {
         // Use Google Drive OAuth flow
+        console.log('[OAuth] Calling connectGoogleDrive()...');
         const response = await connectGoogleDrive();
         console.log('[OAuth] Starting Google Drive OAuth flow');
+        console.log(`[OAuth] Redirecting to: ${response.authorization_url}`);
+        // Redirect user to Google's OAuth page
+        window.location.href = response.authorization_url;
+      } else if (selectedPredefined.id === 'gmail') {
+        // Use Gmail OAuth flow
+        console.log('[OAuth] Calling connectGmail()...');
+        const response = await connectGmail();
+        console.log('[OAuth] Starting Gmail OAuth flow');
+        console.log(`[OAuth] Redirecting to: ${response.authorization_url}`);
         // Redirect user to Google's OAuth page
         window.location.href = response.authorization_url;
       } else {
         // For other connectors, use the generic OAuth flow
+        console.log(`[OAuth] Using generic OAuth for: ${selectedPredefined.id}`);
         const callbackUrl = `${window.location.origin}/connectors/callback`;
         const response = await initiateOAuth(selectedPredefined.id, callbackUrl);
+        console.log(`[OAuth] Redirecting to: ${response.authorization_url}`);
         window.location.href = response.authorization_url;
       }
     } catch (error) {
-      console.error('Failed to initiate OAuth:', error);
+      console.error('[OAuth] Failed to initiate OAuth:', error);
       setIsConnecting(false);
       setShowOAuthConfirm(false);
 
       // Show user-friendly error message
       const errorMessage = error instanceof Error ? error.message : 'Failed to connect';
+      console.error(`[OAuth] Error message: ${errorMessage}`);
       setOAuthError(errorMessage);
     }
   }
