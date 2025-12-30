@@ -61,6 +61,13 @@ dependencies = [
 
     # Markdown to HTML (for email formatting)
     "markdown2>=2.4.0",
+
+    # File Processing (Feature 012)
+    "pandas>=2.0.0",
+    "openpyxl>=3.1.0",         # Excel file support
+    "pdfplumber>=0.10.0",      # PDF text/table extraction
+    "Pillow>=10.0.0",          # Image processing
+    "aiofiles>=23.0.0",        # Async file operations
 ]
 
 [project.optional-dependencies]

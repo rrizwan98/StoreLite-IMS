@@ -8,7 +8,7 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, Settings } from 'lucide-react';
 import { SystemToolsList, ConnectorsList } from '@/components/connectors';
@@ -16,6 +16,7 @@ import ConnectorDetailView from '@/components/connectors/ConnectorDetailView';
 import OAuthConfirmModal from '@/components/connectors/OAuthConfirmModal';
 import { initiateOAuth, connectNotion, connectGoogleDrive, connectGmail } from '@/lib/connectors-api';
 import { PredefinedConnector, PREDEFINED_CONNECTORS } from '@/lib/predefined-connectors';
+import { getFileRetention, updateFileRetention, FileRetentionMode } from '@/lib/user-settings-api';
 
 type View = 'main' | 'connector-detail';
 
@@ -25,6 +26,45 @@ export default function SettingsPage() {
   const [showOAuthConfirm, setShowOAuthConfirm] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
+
+  // File retention setting
+  const [fileRetention, setFileRetention] = useState<FileRetentionMode>('keep_24h');
+  const [fileRetentionLoading, setFileRetentionLoading] = useState(false);
+  const [fileRetentionSaving, setFileRetentionSaving] = useState(false);
+  const [fileRetentionError, setFileRetentionError] = useState<string>('');
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      try {
+        setFileRetentionLoading(true);
+        const res = await getFileRetention();
+        if (!cancelled) setFileRetention(res.file_retention_mode);
+      } catch (e: any) {
+        if (!cancelled) setFileRetentionError(e?.message || 'Failed to load file retention setting');
+      } finally {
+        if (!cancelled) setFileRetentionLoading(false);
+      }
+    }
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  async function handleRetentionChange(mode: FileRetentionMode) {
+    setFileRetention(mode);
+    setFileRetentionError('');
+    try {
+      setFileRetentionSaving(true);
+      const res = await updateFileRetention(mode);
+      setFileRetention(res.file_retention_mode);
+    } catch (e: any) {
+      setFileRetentionError(e?.message || 'Failed to save file retention setting');
+    } finally {
+      setFileRetentionSaving(false);
+    }
+  }
 
   function handlePredefinedConnectorClick(connector: PredefinedConnector) {
     setSelectedConnector(connector);
@@ -137,6 +177,77 @@ export default function SettingsPage() {
                 <ConnectorsList
                   onConnectorClick={handlePredefinedConnectorClick}
                 />
+              </div>
+            </section>
+
+            {/* File Retention Section */}
+            <section className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+              <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
+                <h2 className="text-lg font-semibold text-gray-900">File retention</h2>
+                <p className="text-sm text-gray-500 mt-1">
+                  Control how long uploaded attachments remain available for thread replay.
+                </p>
+              </div>
+              <div className="p-6">
+                {fileRetentionLoading ? (
+                  <p className="text-sm text-gray-500">Loading...</p>
+                ) : (
+                  <div className="space-y-3">
+                    <label className="flex items-start gap-3 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="file-retention"
+                        checked={fileRetention === 'keep_24h'}
+                        onChange={() => handleRetentionChange('keep_24h')}
+                        disabled={fileRetentionSaving}
+                        className="mt-1"
+                      />
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">Keep 24h</p>
+                        <p className="text-xs text-gray-500">Best default. Attachments remain accessible for 24 hours.</p>
+                      </div>
+                    </label>
+
+                    <label className="flex items-start gap-3 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="file-retention"
+                        checked={fileRetention === 'keep_48h'}
+                        onChange={() => handleRetentionChange('keep_48h')}
+                        disabled={fileRetentionSaving}
+                        className="mt-1"
+                      />
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">Keep 48h</p>
+                        <p className="text-xs text-gray-500">Useful if users revisit threads later.</p>
+                      </div>
+                    </label>
+
+                    <label className="flex items-start gap-3 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="file-retention"
+                        checked={fileRetention === 'delete_immediately'}
+                        onChange={() => handleRetentionChange('delete_immediately')}
+                        disabled={fileRetentionSaving}
+                        className="mt-1"
+                      />
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">Delete immediately after response</p>
+                        <p className="text-xs text-gray-500">
+                          Strong privacy. Attachments won&apos;t be available when reopening the thread.
+                        </p>
+                      </div>
+                    </label>
+
+                    {fileRetentionSaving && (
+                      <p className="text-xs text-gray-500">Saving...</p>
+                    )}
+                    {fileRetentionError && (
+                      <p className="text-xs text-red-600">{fileRetentionError}</p>
+                    )}
+                  </div>
+                )}
               </div>
             </section>
 

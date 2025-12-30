@@ -329,30 +329,104 @@ class PostgreSQLChatKitStore(Store):
             await self.db.rollback()
 
     async def save_attachment(self, attachment: Any, context: Any) -> None:
-        """Save an attachment (in-memory for now)."""
+        """Save an attachment (in-memory cache)."""
         if hasattr(attachment, 'id'):
             self._attachments[attachment.id] = attachment
+            logger.info(f"[ChatKitStore] Saved attachment to cache: {attachment.id}")
 
     async def load_attachment(self, attachment_id: str, context: Any) -> Any:
-        """Load an attachment."""
-        return self._attachments.get(attachment_id)
+        """
+        Load an attachment by ID.
+
+        First checks in-memory cache, then falls back to database lookup
+        for attachments uploaded via /api/files/chatkit-upload endpoint.
+        """
+        # Check in-memory cache first
+        if attachment_id in self._attachments:
+            logger.info(f"[ChatKitStore] Loaded attachment from cache: {attachment_id}")
+            return self._attachments[attachment_id]
+
+        # Fall back to database lookup for files uploaded via /api/files/chatkit-upload
+        try:
+            from app.models import UploadedFile
+            from chatkit.types import FileAttachment, ImageAttachment
+            import os
+
+            def _base_url_from_context(ctx: Any) -> str:
+                """
+                Build an absolute base URL for preview_url.
+                Prefer request headers from ChatKit context so the URL matches the host
+                the browser is using (important when not localhost).
+                """
+                try:
+                    headers = (ctx or {}).get("headers") or {}
+                    host = headers.get("x-forwarded-host") or headers.get("host")
+                    scheme = headers.get("x-forwarded-proto") or "http"
+                    if host:
+                        return f"{scheme}://{host}"
+                except Exception:
+                    pass
+                return os.getenv("API_BASE_URL", "http://localhost:8000")
+
+            result = await self.db.execute(
+                select(UploadedFile).where(UploadedFile.file_id == attachment_id)
+            )
+            file_record = result.scalar_one_or_none()
+
+            if file_record:
+                logger.info(f"[ChatKitStore] Loaded attachment from database: {attachment_id} ({file_record.file_type})")
+
+                # Create proper ChatKit attachment object
+                if file_record.file_type == 'image':
+                    # preview_url must be an absolute URL for Pydantic validation
+                    base_url = _base_url_from_context(context)
+                    attachment = ImageAttachment(
+                        id=file_record.file_id,
+                        name=file_record.file_name,
+                        mime_type=file_record.mime_type or 'application/octet-stream',
+                        preview_url=f"{base_url}/api/files/{file_record.file_id}/preview"
+                    )
+                else:
+                    attachment = FileAttachment(
+                        id=file_record.file_id,
+                        name=file_record.file_name,
+                        mime_type=file_record.mime_type or 'application/octet-stream'
+                    )
+
+                # Cache it for future lookups
+                self._attachments[attachment_id] = attachment
+                return attachment
+
+        except Exception as e:
+            logger.error(f"[ChatKitStore] Failed to load attachment from database: {e}")
+
+        logger.warning(f"[ChatKitStore] Attachment not found: {attachment_id}")
+        return None
 
     async def delete_attachment(self, attachment_id: str, context: Any) -> None:
-        """Delete an attachment."""
+        """Delete an attachment from cache."""
         if attachment_id in self._attachments:
             del self._attachments[attachment_id]
+            logger.info(f"[ChatKitStore] Deleted attachment from cache: {attachment_id}")
 
     def _serialize_item(self, item: ThreadItem) -> str:
         """Serialize a ThreadItem to JSON string."""
         try:
-            # Custom JSON encoder for datetime objects
+            # Custom JSON encoder for datetime and Pydantic types
             def json_serializer(obj):
                 if isinstance(obj, datetime):
                     return obj.isoformat()
+                # Handle Pydantic URL types (AnyUrl, HttpUrl, etc.)
+                if hasattr(obj, '__str__') and 'Url' in type(obj).__name__:
+                    return str(obj)
+                # Handle any Pydantic model
+                if hasattr(obj, 'model_dump'):
+                    return obj.model_dump()
                 raise TypeError(f"Object of type {type(obj)} is not JSON serializable")
 
             if hasattr(item, 'model_dump'):
-                data = item.model_dump()
+                # Use mode='json' for proper serialization of Pydantic types
+                data = item.model_dump(mode='json')
                 return json.dumps(data, default=json_serializer)
             elif hasattr(item, 'dict'):
                 data = item.dict()
@@ -393,12 +467,26 @@ class PostgreSQLChatKitStore(Store):
             # We need to return proper ChatKit types
             if item_type == 'user_message':
                 from chatkit.types import UserMessageItem as UMI, UserMessageTextContent, InferenceOptions
+                from chatkit.types import ImageAttachment, FileAttachment
                 content_list = data.get('content', [])
+                attachments_list = data.get('attachments', [])
 
                 # Get or create inference_options (required field)
                 inference_opts = data.get('inference_options', {})
                 if not inference_opts:
                     inference_opts = {}
+
+                # Reconstruct attachments from stored data
+                attachments = []
+                for att_data in attachments_list:
+                    try:
+                        att_type = att_data.get('type', 'file')
+                        if att_type == 'image':
+                            attachments.append(ImageAttachment(**att_data))
+                        else:
+                            attachments.append(FileAttachment(**att_data))
+                    except Exception as e:
+                        logger.warning(f"[ChatKitStore] Could not deserialize attachment: {e}")
 
                 return UMI(
                     id=data.get('id', db_item.id),
@@ -409,6 +497,7 @@ class PostgreSQLChatKitStore(Store):
                         UserMessageTextContent(type='input_text', text=c.get('text', ''))
                         for c in content_list
                     ] if content_list else [],
+                    attachments=attachments,
                     inference_options=InferenceOptions(**inference_opts),
                 )
             elif item_type == 'assistant_message':

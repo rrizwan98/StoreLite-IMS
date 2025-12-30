@@ -20,6 +20,7 @@ from typing import Optional, Dict, Any, List, AsyncIterator
 from datetime import datetime
 
 from agents import Agent, Runner, ItemHelpers
+from agents.run import RunConfig
 from agents.mcp import MCPServerStdio
 from agents.extensions.models.litellm_model import LitellmModel
 from agents.extensions.memory import SQLAlchemySession
@@ -42,7 +43,7 @@ logger.info(f"[Schema Agent] Module loaded - Version {SCHEMA_AGENT_VERSION} (MCP
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 # Use Gemini 2.0 Flash which supports function calling well
 # gemini-2.0-flash-exp has better tool calling than lite version
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini/gemini-robotics-er-1.5-preview")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini/gemini-2.5-flash")
 
 def get_llm_model():
     """
@@ -81,14 +82,23 @@ def generate_schema_agent_prompt(schema_metadata: dict) -> str:
     return f"""You are a world-class database analyst and query assistant. Your job is to deeply understand user questions, execute precise SQL queries, and provide comprehensive, well-structured answers grounded in actual data.
 
 ############################################
-URGENT: CHECK FOR TOOL PREFIX FIRST
+URGENT: CHECK FOR MESSAGE PREFIX FIRST
 ############################################
-BEFORE doing anything else, check if the user's message starts with a tool prefix:
+BEFORE doing anything else, check if the user's message starts with a prefix:
 
-1. [TOOL:GMAIL] - User wants to send results via email
+1. [FILE:uuid] - User has attached a file for analysis
+   If YES: Extract the file_id from the prefix (e.g., [FILE:abc-123-def] → file_id="abc-123-def")
+
+   **For PDF files:** Call `pdf_read_text(file_id)` to read the ENTIRE document first
+   **For CSV/Excel:** Call `data_read(file_id)` to see columns and data
+   **For Images:** Call `image_get_info(file_id)` for dimensions
+
+   IMPORTANT: For PDFs, ALWAYS read the full document with pdf_read_text - NEVER ask for page numbers!
+
+2. [TOOL:GMAIL] - User wants to send results via email
    If YES: You MUST call the gmail_connector tool after getting query results. This is NON-NEGOTIABLE.
 
-2. [TOOL:GOOGLE_SEARCH] - User wants to search the web
+3. [TOOL:GOOGLE_SEARCH] - User wants to search the web
    If YES: You MUST call the google_search tool. This is NON-NEGOTIABLE.
    The response MUST include Sources section with clickable links.
 
@@ -165,6 +175,81 @@ AVAILABLE MCP TOOLS
 AVAILABLE FUNCTION TOOLS
 ############################################
 - `google_search`: Search the web for real-time information, documentation, news, and current events
+
+**PDF Document Tools:**
+- `pdf_read_text`: Read ENTIRE PDF content (all pages, all text, all tables)
+- `pdf_search_text`: Search for specific text in PDF with page locations
+- `pdf_get_info`: Get PDF metadata (page count, author, title)
+
+**Data File Tools (CSV/Excel):**
+- `data_read`: Read data file with columns, statistics, and sample rows
+- `data_filter`: Filter data by column conditions (equals, contains, greater_than, etc.)
+- `data_aggregate`: Calculate aggregations (sum, avg, count, min, max)
+
+**Image Tools:**
+- `image_get_info`: Get image dimensions, format, and metadata
+
+**General:**
+- `get_uploaded_file_info`: Check file status and type before processing
+
+############################################
+FILE UPLOAD ANALYSIS (CRITICAL - READ CAREFULLY)
+############################################
+When a message contains [FILE:uuid] or user mentions an uploaded file:
+
+<pdf_file_rules>
+**FOR PDF FILES - ALWAYS DO THIS:**
+1. FIRST: Call `pdf_read_text(file_id)` to read the ENTIRE document
+   - This extracts ALL text from ALL pages automatically
+   - You do NOT need to specify page numbers - it reads everything
+   - NEVER ask user for page numbers - just read the whole document
+
+2. THEN: Answer the user's question from the extracted text
+   - The text contains everything in the PDF
+   - Search through it to find what user is asking about
+
+3. IF user asks to find specific text: Use `pdf_search_text(file_id, "search term")`
+   - This searches the ENTIRE PDF and returns all matches with page locations
+
+**CRITICAL PDF RULES:**
+- NEVER ask "What page is this on?" - YOU read the document and find it
+- NEVER say "Could you specify the page?" - YOU search through all pages
+- ALWAYS call pdf_read_text FIRST before answering any PDF question
+- The pdf_read_text tool gives you the COMPLETE document text
+</pdf_file_rules>
+
+<csv_excel_rules>
+**FOR CSV/EXCEL FILES:**
+1. Call `data_read(file_id)` to see columns, statistics, and sample data
+2. Use `data_filter(file_id, column, operator, value)` to find specific rows
+3. Use `data_aggregate(file_id, column, operation)` for calculations
+</csv_excel_rules>
+
+<image_rules>
+**FOR IMAGE FILES:**
+1. Call `image_get_info(file_id)` to get dimensions and format
+</image_rules>
+
+<file_analysis_patterns>
+PATTERN: User uploads PDF and asks a question
+→ Call pdf_read_text(file_id) to get ALL document text
+→ Analyze the text to find the answer
+→ Provide complete answer with relevant quotes/data
+
+PATTERN: User asks to find something in PDF
+→ Call pdf_search_text(file_id, "search term") to find all occurrences
+→ Show matches with page numbers and context
+
+PATTERN: User uploads CSV/Excel
+→ Call data_read(file_id) to understand structure
+→ Use data_filter or data_aggregate as needed
+→ Provide insights with statistics
+
+PATTERN: Compare file with database
+→ Read file content first (appropriate tool for type)
+→ Query relevant database tables
+→ Compare and provide insights
+</file_analysis_patterns>
 
 ############################################
 CONNECTOR SUB-AGENTS (EXTERNAL INTEGRATIONS)
@@ -676,7 +761,7 @@ class SchemaQueryAgent:
 
     async def query(
         self,
-        natural_query: str,
+        natural_query: str | List[Dict[str, Any]],
         thread_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
@@ -686,7 +771,9 @@ class SchemaQueryAgent:
         Uses PostgreSQL-backed session for persistent conversation history.
 
         Args:
-            natural_query: User's question in natural language
+            natural_query: User's question - can be:
+                - A simple string for text-only queries
+                - A list of input items for multi-modal queries (images, files)
             thread_id: Optional thread ID for ChatKit (for persistent conversation)
 
         Returns:
@@ -695,7 +782,13 @@ class SchemaQueryAgent:
         mcp_server = None
 
         try:
-            logger.info(f"[Schema Agent] Processing query: {natural_query[:50]}...")
+            # Log query info
+            if isinstance(natural_query, str):
+                query_preview = natural_query[:50]
+            else:
+                query_preview = "[Multi-modal input]"
+
+            logger.info(f"[Schema Agent] Processing query: {query_preview}...")
 
             # Use provided thread_id or instance thread_id
             effective_thread_id = thread_id or self.thread_id
@@ -776,6 +869,16 @@ IMPORTANT CONNECTOR TOOL RULES:
             except ImportError as e:
                 logger.warning(f"[Schema Agent] Google Search tool not available: {e}")
 
+            # Add File Analysis tools (Feature 012 - File Upload Processing)
+            try:
+                from app.mcp_server.tools_file_analysis import FILE_ANALYSIS_TOOLS, set_file_analysis_context
+                function_tools.extend(FILE_ANALYSIS_TOOLS)
+                self._function_tools.append("analyze_uploaded_file") if hasattr(self, '_function_tools') else None
+                self._function_tools.append("get_uploaded_file_info") if hasattr(self, '_function_tools') else None
+                logger.info(f"[Schema Agent] File Analysis tools enabled")
+            except ImportError as e:
+                logger.warning(f"[Schema Agent] File Analysis tools not available: {e}")
+
             # Add connector tools if available
             if self.connector_tools:
                 function_tools.extend(self.connector_tools)
@@ -809,6 +912,21 @@ IMPORTANT CONNECTOR TOOL RULES:
             logger.info(f"[Schema Agent] Function tools available: {[t.name if hasattr(t, 'name') else str(t) for t in function_tools]}")
             logger.info(f"[Schema Agent] Session persistence: {'PostgreSQL' if session else 'In-memory'}")
 
+            # If using session memory + list inputs (multi-modal), Agents SDK requires a session_input_callback
+            # so it knows how to merge the new list with stored conversation history.
+            is_multimodal_input = isinstance(natural_query, list)
+            # Multimodal inputs can be very large (base64 images). Disable tracing to avoid 5MB trace payload errors.
+            run_config = RunConfig(tracing_disabled=True, trace_include_sensitive_data=False) if is_multimodal_input else None
+            if session and is_multimodal_input:
+                async def _merge_session_inputs(history_items: list, new_items: list):
+                    return history_items + new_items
+                run_config = RunConfig(
+                    session_input_callback=_merge_session_inputs,
+                    tracing_disabled=True,
+                    trace_include_sensitive_data=False,
+                )
+                logger.info("[Schema Agent] Multi-modal input detected - using session_input_callback for session memory")
+
             # Run the agent with session for persistent conversation history
             # Increased max_turns to 25 for complex multi-step operations (Notion workflows)
             logger.info(f"[Schema Agent] ═══════════════════════════════════════")
@@ -816,6 +934,7 @@ IMPORTANT CONNECTOR TOOL RULES:
             logger.info(f"[Schema Agent] Query: {natural_query}")
             logger.info(f"[Schema Agent] Tools count: {len(function_tools)}")
             logger.info(f"[Schema Agent] Max turns: 25")
+            logger.info(f"[Schema Agent] Session: {'enabled' if session else 'disabled'} (multimodal={is_multimodal_input})")
             logger.info(f"[Schema Agent] ═══════════════════════════════════════")
 
             result = await Runner.run(
@@ -823,6 +942,7 @@ IMPORTANT CONNECTOR TOOL RULES:
                 input=natural_query,
                 max_turns=25,  # Allow more iterations for complex multi-tool workflows
                 context=run_context,
+                run_config=run_config,
                 session=session,  # Use PostgreSQL-backed session for conversation memory
             )
 
@@ -988,7 +1108,7 @@ IMPORTANT CONNECTOR TOOL RULES:
 
     async def query_streamed(
         self,
-        natural_query: str,
+        natural_query: str | List[Dict[str, Any]],
         thread_id: Optional[str] = None,
     ) -> AsyncIterator[Dict[str, Any]]:
         """
@@ -998,7 +1118,10 @@ IMPORTANT CONNECTOR TOOL RULES:
         for real-time UI feedback in ChatKit.
 
         Args:
-            natural_query: User's question in natural language
+            natural_query: User's question - can be:
+                - A simple string for text-only queries
+                - A list of input items for multi-modal queries (images, files)
+                  Format: [{"role": "user", "content": [{"type": "input_text", "text": "..."}, {"type": "input_image", "image_url": "data:..."}]}]
             thread_id: Optional thread ID for ChatKit
 
         Yields:
@@ -1007,7 +1130,22 @@ IMPORTANT CONNECTOR TOOL RULES:
         mcp_server = None
 
         try:
-            logger.info(f"[Schema Agent] Processing streamed query: {natural_query[:50]}...")
+            # Log query info
+            if isinstance(natural_query, str):
+                query_preview = natural_query[:50]
+                is_multimodal = False
+            else:
+                # Multi-modal input - extract text preview
+                query_preview = "[Multi-modal input]"
+                is_multimodal = True
+                for item in natural_query:
+                    if isinstance(item, dict) and item.get("content"):
+                        for content in item["content"]:
+                            if isinstance(content, dict) and content.get("type") == "input_text":
+                                query_preview = content.get("text", "")[:50]
+                                break
+
+            logger.info(f"[Schema Agent] Processing streamed query: {query_preview}... (multimodal={is_multimodal})")
 
             yield {"type": "progress", "text": "Analyzing your question..."}
 
@@ -1070,6 +1208,14 @@ AVAILABLE CONNECTOR TOOLS:
             except ImportError:
                 pass
 
+            # Add File Analysis tools (Feature 012)
+            try:
+                from app.mcp_server.tools_file_analysis import FILE_ANALYSIS_TOOLS
+                function_tools.extend(FILE_ANALYSIS_TOOLS)
+                logger.info(f"[Schema Agent Stream] File Analysis tools enabled")
+            except ImportError:
+                pass
+
             if self.connector_tools:
                 function_tools.extend(self.connector_tools)
                 yield {"type": "progress", "text": f"Loaded {len(self.connector_tools)} connector tools."}
@@ -1090,12 +1236,28 @@ AVAILABLE CONNECTOR TOOLS:
 
             yield {"type": "progress", "text": "Processing your query..."}
 
+            # If using session memory + list inputs (multi-modal), Agents SDK requires a session_input_callback
+            # so it knows how to merge the new list with stored conversation history.
+            is_multimodal_input = isinstance(natural_query, list)
+            # Multimodal inputs can be very large (base64 images). Disable tracing to avoid 5MB trace payload errors.
+            run_config = RunConfig(tracing_disabled=True, trace_include_sensitive_data=False) if is_multimodal_input else None
+            if session and is_multimodal_input:
+                async def _merge_session_inputs(history_items: list, new_items: list):
+                    return history_items + new_items
+                run_config = RunConfig(
+                    session_input_callback=_merge_session_inputs,
+                    tracing_disabled=True,
+                    trace_include_sensitive_data=False,
+                )
+                logger.info("[Schema Agent Stream] Multi-modal input detected - using session_input_callback for session memory")
+            
             # Run with streaming
             result = Runner.run_streamed(
                 agent,
                 input=natural_query,
                 max_turns=25,
                 context=run_context,
+                run_config=run_config,
                 session=session,
             )
 
@@ -1319,14 +1481,36 @@ AVAILABLE CONNECTOR TOOLS:
                 except Exception:
                     pass
 
-    def _detect_visualization(self, response: str, query: str) -> Optional[Dict[str, str]]:
+    def _detect_visualization(self, response: Any, query: Any) -> Optional[Dict[str, str]]:
         """
         Detect if response data is suitable for visualization.
 
         Returns visualization hint dict or None.
         """
-        query_lower = query.lower()
-        response_lower = response.lower()
+        # query can be a string OR multi-modal list payload. Normalize to text.
+        query_text = ""
+        if isinstance(query, str):
+            query_text = query
+        elif isinstance(query, list):
+            # Possible shapes:
+            # - ChatKit/Agent multi-modal: [{"role": "user", "content": [{"type":"input_text","text":"..."}, ...]}]
+            # - Other list forms; we try best-effort extraction.
+            try:
+                for msg in query:
+                    if isinstance(msg, dict):
+                        content = msg.get("content")
+                        if isinstance(content, list):
+                            for part in content:
+                                if isinstance(part, dict) and part.get("type") == "input_text" and part.get("text"):
+                                    query_text = str(part["text"])
+                                    break
+                        if query_text:
+                            break
+            except Exception:
+                query_text = ""
+
+        query_lower = (query_text or "").lower()
+        response_lower = (response if isinstance(response, str) else str(response)).lower()
 
         # Keywords that suggest different chart types
         if any(word in query_lower for word in ["trend", "over time", "monthly", "daily", "weekly"]):

@@ -32,6 +32,7 @@ from chatkit.server import (
     UserMessageItem,
     ThreadStreamEvent,
 )
+from chatkit.store import AttachmentStore
 from chatkit.types import (
     ThreadItemDoneEvent,
     ThreadItemAddedEvent,
@@ -41,10 +42,15 @@ from chatkit.types import (
     ErrorEvent,
     ErrorCode,
     Page,
+    ImageAttachment,
+    FileAttachment,
 )
+from chatkit.agents import ThreadItemConverter
+from openai.types.responses import ResponseInputImageParam, ResponseInputTextParam, ResponseInputFileParam
 
 from app.database import get_db
 from app.models import User, UserConnection
+from app.models import UserSettings, UploadedFile
 from app.routers.auth import get_current_user
 from app.services.schema_discovery import (
     test_connection,
@@ -68,6 +74,143 @@ from app.connector_agents import get_connector_agent_tools
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/schema-agent", tags=["schema-agent"])
+
+
+# ============================================================================
+# Custom ThreadItemConverter for File Attachments
+# ============================================================================
+
+class SchemaAgentThreadItemConverter(ThreadItemConverter):
+    """
+    Custom ThreadItemConverter that properly converts file attachments to model input.
+
+    This is required because:
+    1. ChatKit's default converter doesn't know how to read our file storage
+    2. Images need to be converted to base64 data URLs for the model to see them
+    3. PDFs need to be converted to base64 file params
+
+    This class reads file bytes from our storage and converts them to the proper
+    OpenAI ResponseInput format.
+    """
+
+    def __init__(self, db_session=None):
+        """Initialize with optional database session for file lookups."""
+        super().__init__()
+        self.db_session = db_session
+
+    async def attachment_to_message_content(self, attachment):
+        """
+        Convert attachment to model input content.
+
+        For images: Returns ResponseInputImageParam with base64 data URL
+        For PDFs: Returns ResponseInputFileParam with base64 file data
+        For other files: Returns ResponseInputTextParam with file info
+        """
+        import base64
+        import aiofiles
+        from pathlib import Path
+
+        attachment_id = getattr(attachment, 'id', None)
+        if not attachment_id:
+            logger.warning("[ThreadItemConverter] Attachment has no ID")
+            return None
+
+        logger.info(f"[ThreadItemConverter] Converting attachment: {attachment_id}")
+
+        # Read file bytes from storage
+        file_bytes = await self._read_file_bytes(attachment_id)
+
+        if file_bytes is None:
+            logger.warning(f"[ThreadItemConverter] Could not read file bytes for: {attachment_id}")
+            # Return text description as fallback
+            return ResponseInputTextParam(
+                type="input_text",
+                text=f"[Attached file: {getattr(attachment, 'name', 'unknown')} (could not read content)]"
+            )
+
+        mime_type = getattr(attachment, 'mime_type', 'application/octet-stream')
+        file_name = getattr(attachment, 'name', 'unknown')
+
+        # Check if it's an image attachment
+        if isinstance(attachment, ImageAttachment) or mime_type.startswith('image/'):
+            # Convert to base64 data URL for images
+            b64_content = base64.b64encode(file_bytes).decode('utf-8')
+            data_url = f"data:{mime_type};base64,{b64_content}"
+
+            logger.info(f"[ThreadItemConverter] Converted image to data URL ({len(file_bytes)} bytes)")
+
+            return ResponseInputImageParam(
+                type="input_image",
+                detail="auto",
+                image_url=data_url,
+            )
+
+        # Check if it's a PDF
+        elif mime_type == 'application/pdf':
+            b64_content = base64.b64encode(file_bytes).decode('utf-8')
+            data_url = f"data:{mime_type};base64,{b64_content}"
+
+            logger.info(f"[ThreadItemConverter] Converted PDF to file param ({len(file_bytes)} bytes)")
+
+            return ResponseInputFileParam(
+                type="input_file",
+                file_data=data_url,
+                filename=file_name,
+            )
+
+        # For other file types, return text description with content
+        else:
+            # For CSV/Excel, the processed_data already contains the content
+            # Just return a text description
+            logger.info(f"[ThreadItemConverter] File type {mime_type} - returning text description")
+
+            return ResponseInputTextParam(
+                type="input_text",
+                text=f"[Attached file: {file_name} ({mime_type})]"
+            )
+
+    async def _read_file_bytes(self, file_id: str) -> bytes | None:
+        """Read file bytes from storage using file ID."""
+        import aiofiles
+        from pathlib import Path
+
+        try:
+            # Look up file record from database
+            from app.database import async_session
+            from app.models import UploadedFile
+
+            # Use provided session or create new one
+            if self.db_session:
+                result = await self.db_session.execute(
+                    select(UploadedFile).where(UploadedFile.file_id == file_id)
+                )
+                file_record = result.scalar_one_or_none()
+            else:
+                async with async_session() as db:
+                    result = await db.execute(
+                        select(UploadedFile).where(UploadedFile.file_id == file_id)
+                    )
+                    file_record = result.scalar_one_or_none()
+
+            if not file_record:
+                logger.warning(f"[ThreadItemConverter] File not found in database: {file_id}")
+                return None
+
+            storage_path = Path(file_record.storage_path)
+            if not storage_path.exists():
+                logger.warning(f"[ThreadItemConverter] File not found on disk: {storage_path}")
+                return None
+
+            # Read file bytes
+            async with aiofiles.open(storage_path, 'rb') as f:
+                file_bytes = await f.read()
+
+            logger.info(f"[ThreadItemConverter] Read {len(file_bytes)} bytes from {storage_path}")
+            return file_bytes
+
+        except Exception as e:
+            logger.error(f"[ThreadItemConverter] Error reading file {file_id}: {e}")
+            return None
 
 security = HTTPBearer(auto_error=False)
 
@@ -270,18 +413,96 @@ class SchemaAgentStore(Store):
     async def save_attachment(self, attachment: Any, context: Any) -> None:
         if hasattr(attachment, 'id'):
             self._attachments[attachment.id] = attachment
+            logger.info(f"[Store] Saved attachment: {attachment.id}")
 
     async def load_attachment(self, attachment_id: str, context: Any) -> Any:
-        return self._attachments.get(attachment_id)
+        """
+        Load attachment by ID.
+
+        First checks in-memory cache, then falls back to database lookup
+        for attachments uploaded via /api/files/chatkit-upload endpoint.
+        """
+        # Check in-memory cache first
+        if attachment_id in self._attachments:
+            logger.info(f"[Store] Loaded attachment from cache: {attachment_id}")
+            return self._attachments[attachment_id]
+
+        # Fall back to database lookup for files uploaded via /api/files/chatkit-upload
+        try:
+            from app.database import async_session
+            from app.models import UploadedFile
+            from sqlalchemy import select
+            from chatkit.types import FileAttachment, ImageAttachment
+            import os
+
+            def _base_url_from_context(ctx: Any) -> str:
+                try:
+                    headers = (ctx or {}).get("headers") or {}
+                    host = headers.get("x-forwarded-host") or headers.get("host")
+                    scheme = headers.get("x-forwarded-proto") or "http"
+                    if host:
+                        return f"{scheme}://{host}"
+                except Exception:
+                    pass
+                return os.getenv("API_BASE_URL", "http://localhost:8000")
+
+            async with async_session() as db:
+                result = await db.execute(
+                    select(UploadedFile).where(UploadedFile.file_id == attachment_id)
+                )
+                file_record = result.scalar_one_or_none()
+
+                if file_record:
+                    logger.info(f"[Store] Loaded attachment from database: {attachment_id} ({file_record.file_type})")
+
+                    # Create proper ChatKit attachment object
+                    if file_record.file_type == 'image':
+                        # preview_url must be an absolute URL for Pydantic validation
+                        base_url = _base_url_from_context(context)
+                        attachment = ImageAttachment(
+                            id=file_record.file_id,
+                            name=file_record.file_name,
+                            mime_type=file_record.mime_type or 'application/octet-stream',
+                            preview_url=f"{base_url}/api/files/{file_record.file_id}/preview"
+                        )
+                    else:
+                        attachment = FileAttachment(
+                            id=file_record.file_id,
+                            name=file_record.file_name,
+                            mime_type=file_record.mime_type or 'application/octet-stream'
+                        )
+
+                    # Cache it for future lookups
+                    self._attachments[attachment_id] = attachment
+                    return attachment
+
+        except Exception as e:
+            logger.error(f"[Store] Failed to load attachment from database: {e}")
+
+        logger.warning(f"[Store] Attachment not found: {attachment_id}")
+        return None
 
     async def delete_attachment(self, attachment_id: str, context: Any) -> None:
         if attachment_id in self._attachments:
             del self._attachments[attachment_id]
+            logger.info(f"[Store] Deleted attachment from cache: {attachment_id}")
 
 
 # ============================================================================
 # ChatKit Server for Schema Agent
 # ============================================================================
+
+class SchemaNoopAttachmentStore(AttachmentStore):
+    """
+    ChatKit may call attachments.delete as part of its UI lifecycle (e.g. clearing composer state).
+    We already handle actual uploads via /api/files/chatkit-upload (direct upload strategy),
+    so we just need to *not crash* here. No-op keeps uploaded files available for analysis.
+    """
+
+    async def delete_attachment(self, attachment_id: str, context: Any) -> None:
+        logger.info(f"[Schema ChatKit] Attachment delete requested (noop): {attachment_id}")
+        return
+
 
 class SchemaChatKitServer(ChatKitServer):
     """
@@ -291,8 +512,8 @@ class SchemaChatKitServer(ChatKitServer):
     against user's database.
     """
 
-    def __init__(self, store: Store):
-        super().__init__(store)
+    def __init__(self, store: Store, attachment_store: AttachmentStore | None = None):
+        super().__init__(store, attachment_store=attachment_store)
 
     async def respond(
         self,
@@ -308,6 +529,9 @@ class SchemaChatKitServer(ChatKitServer):
         - Tool outputs with previews
         - Agent thinking/reasoning steps
         - Final response
+
+        For image attachments, converts them to base64 data URLs and passes
+        them as multi-modal input to the agent.
         """
         import time
 
@@ -315,14 +539,43 @@ class SchemaChatKitServer(ChatKitServer):
             if input_user_message is None:
                 return
 
-            # Extract user message text
+            # ============================================================================
+            # Extract user message text from content AND attachments from attachments field
+            # UserMessageItem structure:
+            # - content: list[UserMessageTextContent | UserMessageTagContent] - text/tags
+            # - attachments: list[Attachment] - FileAttachment or ImageAttachment objects
+            # ============================================================================
             user_message = ""
-            if hasattr(input_user_message, 'content'):
-                for content in input_user_message.content:
-                    if hasattr(content, 'text'):
-                        user_message += content.text
+            attachments_list = []  # List of actual Attachment objects
 
-            logger.info(f"[Schema ChatKit] Raw user message: {user_message[:100]}...")
+            # Extract text from content array
+            if hasattr(input_user_message, 'content') and input_user_message.content:
+                logger.info(f"[Schema ChatKit] Content has {len(input_user_message.content)} items")
+                for idx, content_item in enumerate(input_user_message.content):
+                    content_type = getattr(content_item, 'type', None)
+                    # Extract text content
+                    if content_type == 'input_text' or hasattr(content_item, 'text'):
+                        text = getattr(content_item, 'text', '')
+                        if text:
+                            user_message += text
+                            logger.info(f"[Schema ChatKit] Extracted text: {text[:50]}...")
+
+            # Extract attachments from the dedicated attachments field (NOT content)
+            if hasattr(input_user_message, 'attachments') and input_user_message.attachments:
+                logger.info(f"[Schema ChatKit] Found {len(input_user_message.attachments)} attachment(s) in message!")
+                for idx, att in enumerate(input_user_message.attachments):
+                    att_id = getattr(att, 'id', None)
+                    att_name = getattr(att, 'name', 'unknown')
+                    att_type = getattr(att, 'type', 'file')
+                    att_mime = getattr(att, 'mime_type', 'application/octet-stream')
+                    logger.info(f"[Schema ChatKit] Attachment[{idx}]: id={att_id}, name={att_name}, type={att_type}, mime={att_mime}")
+                    if att_id:
+                        attachments_list.append(att)
+            else:
+                logger.info(f"[Schema ChatKit] No attachments field or empty attachments")
+
+            logger.info(f"[Schema ChatKit] Raw user message: {user_message[:100] if user_message else '(empty)'}...")
+            logger.info(f"[Schema ChatKit] Found {len(attachments_list)} attachment(s) in message")
 
             # Check if tool prefix is present
             if '[TOOL:' in user_message:
@@ -335,6 +588,21 @@ class SchemaChatKitServer(ChatKitServer):
                 if f'[TOOL:{selected_tool.upper()}]' not in user_message:
                     user_message = f"[TOOL:{selected_tool.upper()}] {user_message}"
                     logger.info(f"[Schema ChatKit] Prepended tool prefix to message")
+
+            # Get attached file IDs from context AND from message attachments
+            # Merge both sources to ensure we capture all attachments
+            attachment_ids_from_message = [getattr(att, 'id', None) for att in attachments_list if getattr(att, 'id', None)]
+            attached_file_ids = list(set(
+                context.get("attached_file_ids", []) + attachment_ids_from_message
+            ))
+
+            if attached_file_ids:
+                logger.info(f"[Schema ChatKit] Total attached files: {len(attached_file_ids)} - {attached_file_ids}")
+                # Add file prefix for text-based agent processing (fallback)
+                file_prefix = " ".join([f"[FILE:{fid}]" for fid in attached_file_ids])
+                if not any(f"[FILE:" in user_message for _ in [1]):
+                    user_message = f"{file_prefix} {user_message}"
+                    logger.info(f"[Schema ChatKit] Prepended {len(attached_file_ids)} file reference(s) to message")
 
             # Get user_id and connection info from context
             user_id = context.get("user_id")
@@ -420,10 +688,105 @@ class SchemaChatKitServer(ChatKitServer):
             # Use streaming query for detailed progress updates
             logger.info(f"[Schema ChatKit] Starting streamed agent query...")
 
+            # Set file analysis context for file tools (required for analyze_uploaded_file)
+            if attached_file_ids and db_session:
+                try:
+                    from app.mcp_server.tools_file_analysis import set_file_analysis_context, clear_file_analysis_context
+                    set_file_analysis_context(user_id, db_session)
+                    logger.info(f"[Schema ChatKit] File analysis context set for {len(attached_file_ids)} file(s)")
+                except ImportError as e:
+                    logger.warning(f"[Schema ChatKit] Could not set file analysis context: {e}")
+
+            # ============================================================================
+            # Convert attachments to multi-modal input for the agent
+            # We use the attachments_list directly from UserMessageItem.attachments
+            # which contains the actual Attachment objects (ImageAttachment/FileAttachment)
+            # ============================================================================
+            multimodal_content = []
+
+            # Add text content
+            if user_message:
+                multimodal_content.append({
+                    "type": "input_text",
+                    "text": user_message
+                })
+
+            # Convert attachments (images, PDFs) to base64 for multi-modal input
+            # First try to use attachments from the message directly
+            # Fall back to looking up by file IDs from context if needed
+            attachments_to_convert = attachments_list.copy()  # Actual Attachment objects from message
+
+            # If we have file IDs from context but no attachments from message,
+            # try to load them from the store
+            if not attachments_to_convert and attached_file_ids:
+                logger.info(f"[Schema ChatKit] No attachments in message, loading {len(attached_file_ids)} from store...")
+                for file_id in attached_file_ids:
+                    try:
+                        attachment = await self.store.load_attachment(file_id, context)
+                        if attachment:
+                            attachments_to_convert.append(attachment)
+                    except Exception as e:
+                        logger.warning(f"[Schema ChatKit] Could not load attachment {file_id}: {e}")
+
+            if attachments_to_convert:
+                yield ProgressUpdateEvent(
+                    type="progress_update",
+                    text=f"Processing {len(attachments_to_convert)} attached file(s)..."
+                )
+
+                converter = SchemaAgentThreadItemConverter(db_session=db_session)
+
+                for attachment in attachments_to_convert:
+                    try:
+                        att_id = getattr(attachment, 'id', 'unknown')
+                        att_type = getattr(attachment, 'type', 'file')
+                        logger.info(f"[Schema ChatKit] Converting attachment: {att_id} (type: {att_type})")
+
+                        # Convert attachment to model input
+                        content_param = await converter.attachment_to_message_content(attachment)
+
+                        if content_param:
+                            # Convert Pydantic model to dict for agent input
+                            if hasattr(content_param, 'model_dump'):
+                                content_dict = content_param.model_dump()
+                            elif hasattr(content_param, 'dict'):
+                                content_dict = content_param.dict()
+                            else:
+                                content_dict = dict(content_param)
+
+                            multimodal_content.append(content_dict)
+                            logger.info(f"[Schema ChatKit] Added {content_dict.get('type', 'unknown')} content for {att_id}")
+
+                            # Show progress for image processing
+                            if content_dict.get('type') == 'input_image':
+                                yield ProgressUpdateEvent(
+                                    type="progress_update",
+                                    text="Image loaded and ready for analysis..."
+                                )
+                        else:
+                            logger.warning(f"[Schema ChatKit] Converter returned None for attachment: {att_id}")
+
+                    except Exception as e:
+                        att_id = getattr(attachment, 'id', 'unknown')
+                        logger.error(f"[Schema ChatKit] Error converting attachment {att_id}: {e}")
+
+            # Prepare agent input - either string or multi-modal list
+            if len(multimodal_content) > 1:
+                # Multi-modal input with images/files
+                agent_input = [{
+                    "role": "user",
+                    "content": multimodal_content
+                }]
+                logger.info(f"[Schema ChatKit] Using multi-modal input with {len(multimodal_content)} content items")
+            else:
+                # Simple text input
+                agent_input = user_message
+                logger.info(f"[Schema ChatKit] Using simple text input")
+
             response_text = ""
             tools_used = []
 
-            async for event in agent.query_streamed(user_message, thread_id=thread_id):
+            async for event in agent.query_streamed(agent_input, thread_id=thread_id):
                 event_type = event.get("type", "unknown")
 
                 if event_type == "progress":
@@ -463,6 +826,10 @@ class SchemaChatKitServer(ChatKitServer):
                         msg = f"📧 Processing email via Gmail..."
                     elif "google_search" in tool_name.lower():
                         msg = f"🌐 Searching the web..."
+                    elif "analyze_uploaded_file" in tool_name.lower():
+                        msg = f"📄 Analyzing uploaded file..."
+                    elif "get_uploaded_file_info" in tool_name.lower():
+                        msg = f"📄 Getting file information..."
                     elif "list_tables" in tool_name or "list_objects" in tool_name:
                         msg = f"📊 Listing database tables..."
                     elif "get_object_details" in tool_name:
@@ -545,6 +912,15 @@ class SchemaChatKitServer(ChatKitServer):
                 if not response_text:
                     response_text = "I processed your request but couldn't generate a response."
 
+            # Clear file analysis context after use
+            if attached_file_ids:
+                try:
+                    from app.mcp_server.tools_file_analysis import clear_file_analysis_context
+                    clear_file_analysis_context()
+                    logger.info(f"[Schema ChatKit] File analysis context cleared")
+                except ImportError:
+                    pass
+
             # Calculate total time
             total_time = time.time() - start_time
             logger.info(f"[Schema ChatKit] Query processed in {total_time:.1f}s with {len(tools_used)} tool calls")
@@ -567,6 +943,41 @@ class SchemaChatKitServer(ChatKitServer):
             # Yield the final response
             yield ThreadItemAddedEvent(type="thread.item.added", item=assistant_msg)
             yield ThreadItemDoneEvent(type="thread.item.done", item=assistant_msg)
+
+            # If user chose delete_immediately, remove these attachments now (best-effort)
+            if attached_file_ids and db_session:
+                try:
+                    result = await db_session.execute(
+                        select(UserSettings).where(UserSettings.user_id == user_id)
+                    )
+                    settings = result.scalar_one_or_none()
+                    mode = settings.file_retention_mode if settings else "keep_24h"
+                    if mode == "delete_immediately":
+                        now = datetime.utcnow()
+                        res_files = await db_session.execute(
+                            select(UploadedFile).where(
+                                UploadedFile.user_id == user_id,
+                                UploadedFile.file_id.in_(attached_file_ids),
+                                UploadedFile.deleted_at.is_(None),
+                            )
+                        )
+                        files_to_delete = res_files.scalars().all()
+                        for f in files_to_delete:
+                            try:
+                                if f.storage_path:
+                                    from pathlib import Path
+                                    p = Path(f.storage_path)
+                                    if p.exists():
+                                        p.unlink()
+                            except Exception:
+                                pass
+                            f.status = "deleted"
+                            f.deleted_at = now
+                        if files_to_delete:
+                            await db_session.commit()
+                        logger.info(f"[Schema ChatKit] Deleted {len(files_to_delete)} attachment(s) after response (mode=delete_immediately)")
+                except Exception as e:
+                    logger.warning(f"[Schema ChatKit] Failed to delete attachments after response: {e}")
 
         except Exception as e:
             logger.error(f"[Schema ChatKit] Error: {e}", exc_info=True)
@@ -1305,11 +1716,12 @@ async def chatkit_endpoint(
         body = await request.body()
         logger.info(f"[Schema ChatKit] Request received from user {user.id}")
 
-        # Parse raw body to extract operation type, tool selection, and connector
+        # Parse raw body to extract operation type, tool selection, connector, and attachments
         selected_tool = None
         selected_connector_id = None
         selected_connector_url = None
         selected_connector_name = None
+        attached_file_ids = []  # List of attached file IDs from ChatKit
         operation = None
         try:
             body_str = body.decode('utf-8')
@@ -1332,6 +1744,26 @@ async def chatkit_endpoint(
                     selected_connector_url = metadata.get('selected_connector_url')
                     selected_connector_name = metadata.get('selected_connector_name')
                     logger.info(f"[Schema ChatKit] Connector from metadata: {selected_connector_name} ({selected_connector_id})")
+
+                # Check for attachments in ChatKit message format
+                # ChatKit sends attachments in user messages with structure: {type: 'file'|'image', id: 'file_id', ...}
+                if body_json.get('item') and isinstance(body_json['item'], dict):
+                    item = body_json['item']
+                    if item.get('content') and isinstance(item['content'], list):
+                        for content_part in item['content']:
+                            if isinstance(content_part, dict):
+                                # Check for attachments array in content
+                                if content_part.get('attachments'):
+                                    for attachment in content_part['attachments']:
+                                        if isinstance(attachment, dict) and attachment.get('id'):
+                                            attached_file_ids.append(attachment['id'])
+                                            logger.info(f"[Schema ChatKit] Found attachment: {attachment.get('id')} ({attachment.get('type', 'file')})")
+
+                # Also check for attached_file_id in metadata (legacy support)
+                if metadata.get('attached_file_id'):
+                    attached_file_ids.append(metadata['attached_file_id'])
+                    logger.info(f"[Schema ChatKit] File from metadata: {metadata['attached_file_id']}")
+
             except json.JSONDecodeError:
                 pass
 
@@ -1359,11 +1791,11 @@ async def chatkit_endpoint(
         # Create PostgreSQL-backed store for persistent history (always create for history operations)
         try:
             db_store = create_chatkit_store(db, user.id)
-            chatkit_server = SchemaChatKitServer(db_store)
+            chatkit_server = SchemaChatKitServer(db_store, attachment_store=SchemaNoopAttachmentStore())
             logger.info(f"[Schema ChatKit] Using PostgreSQL-backed store for user {user.id}")
         except Exception as store_error:
             logger.warning(f"[Schema ChatKit] Failed to create DB store, using fallback: {store_error}")
-            chatkit_server = SchemaChatKitServer(_fallback_store)
+            chatkit_server = SchemaChatKitServer(_fallback_store, attachment_store=SchemaNoopAttachmentStore())
 
         # For read-only history operations, we don't need database connection
         read_only_operations = ['threads.list', 'threads.get', 'threads.items', 'threads.delete']
@@ -1403,6 +1835,7 @@ async def chatkit_endpoint(
                 "selected_connector_id": selected_connector_id,
                 "selected_connector_url": selected_connector_url,
                 "selected_connector_name": selected_connector_name,
+                "attached_file_ids": attached_file_ids,  # Pass attached file IDs for file analysis
                 "db_session": db,  # Pass DB session for connector tools loading
             }
 
@@ -1410,6 +1843,8 @@ async def chatkit_endpoint(
                 logger.info(f"[Schema ChatKit] Passing tool '{selected_tool}' to agent context")
             if selected_connector_id:
                 logger.info(f"[Schema ChatKit] Passing connector '{selected_connector_name}' to agent context")
+            if attached_file_ids:
+                logger.info(f"[Schema ChatKit] Passing {len(attached_file_ids)} attached file(s) to agent context")
 
         # Process with ChatKit server
         result = await chatkit_server.process(body, context)

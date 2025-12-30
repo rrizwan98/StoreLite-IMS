@@ -57,6 +57,7 @@ class User(Base):
 
     # Relationships
     connection = relationship("UserConnection", back_populates="user", uselist=False, cascade="all, delete-orphan")
+    settings = relationship("UserSettings", back_populates="user", uselist=False, cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"<User(id={self.id}, email={self.email})>"
@@ -98,6 +99,44 @@ class UserConnection(Base):
 
     def __repr__(self):
         return f"<UserConnection(user_id={self.user_id}, type={self.connection_type}, mode={self.connection_mode}, status={self.mcp_server_status})>"
+
+
+class UserSettings(Base):
+    """
+    User preferences/settings.
+
+    NOTE: Created as a separate table (instead of altering users/user_connections)
+    so existing deployments can pick it up via Base.metadata.create_all without
+    requiring a manual ALTER TABLE migration.
+    """
+
+    __tablename__ = "user_settings"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False, index=True)
+
+    # File retention policy for ChatKit attachments / local uploads
+    # Modes:
+    # - keep_24h: keep for 24 hours (default)
+    # - keep_48h: keep for 48 hours
+    # - delete_immediately: delete right after agent response completes
+    file_retention_mode = Column(String(32), nullable=False, default="keep_24h")
+
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    __table_args__ = (
+        CheckConstraint(
+            "file_retention_mode IN ('keep_24h', 'keep_48h', 'delete_immediately')",
+            name="user_settings_file_retention_mode_check",
+        ),
+        {"extend_existing": True},
+    )
+
+    user = relationship("User", back_populates="settings")
+
+    def __repr__(self):
+        return f"<UserSettings(user_id={self.user_id}, file_retention_mode={self.file_retention_mode})>"
 
 
 class Item(Base):
@@ -359,3 +398,66 @@ class UserMCPConnection(Base):
 
     def __repr__(self):
         return f"<UserMCPConnection(id={self.id}, name={self.name}, active={self.is_active})>"
+
+
+# ============================================================================
+# Uploaded Files Models (Feature 012 - File Upload Processing)
+# ============================================================================
+
+class UploadedFile(Base):
+    """
+    Uploaded file for Schema Agent analysis.
+    Stores file metadata and processed content.
+    Files auto-expire after 24 hours.
+    """
+    __tablename__ = "uploaded_files"
+
+    id = Column(Integer, primary_key=True, index=True)
+    file_id = Column(String(36), unique=True, nullable=False, index=True)  # UUID
+    user_id = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True
+    )
+    file_name = Column(String(255), nullable=False)
+    file_type = Column(String(20), nullable=False)  # csv, excel, pdf, image
+    file_size = Column(Integer, nullable=False)  # bytes
+    mime_type = Column(String(100), nullable=False)
+    status = Column(String(20), default='processing', nullable=False, index=True)  # processing, ready, error
+    storage_path = Column(String(500), nullable=True)  # Path to stored file
+    processed_data = Column(PortableJSON, nullable=True)  # Parsed content
+    error_message = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    expires_at = Column(DateTime, nullable=True, index=True)  # Auto-delete time
+    deleted_at = Column(DateTime, nullable=True)
+
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('processing', 'ready', 'error', 'deleted')",
+            name="uploaded_file_status_check"
+        ),
+        CheckConstraint(
+            "file_type IN ('csv', 'excel', 'pdf', 'image')",
+            name="uploaded_file_type_check"
+        ),
+        {"extend_existing": True},
+    )
+
+    # Relationships
+    user = relationship("User", backref="uploaded_files")
+
+    @property
+    def is_expired(self) -> bool:
+        """Check if file has expired."""
+        if self.expires_at:
+            return datetime.utcnow() > self.expires_at
+        return False
+
+    @property
+    def is_ready(self) -> bool:
+        """Check if file is ready for use."""
+        return self.status == 'ready' and not self.is_expired
+
+    def __repr__(self):
+        return f"<UploadedFile(id={self.file_id}, name={self.file_name}, status={self.status})>"

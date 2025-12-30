@@ -22,6 +22,8 @@ import { useAuth } from '@/lib/auth-context';
 import { getAccessToken } from '@/lib/auth-api';
 import { getAllTools, SystemTool } from '@/lib/tools-api';
 import { getConnectors, Connector } from '@/lib/connectors-api';
+// File upload is now handled by ChatKit's native attachments feature
+// The backend /api/files/chatkit-upload endpoint handles file uploads
 
 // ChatKit icon type - valid icons for tools
 type ChatKitIcon = 'mail' | 'chart' | 'document' | 'globe' | 'cube' | 'sparkle' | 'bolt' | 'settings-slider' | 'search' | 'notebook' | 'plus';
@@ -30,6 +32,8 @@ type ChatKitIcon = 'mail' | 'chart' | 'document' | 'globe' | 'cube' | 'sparkle' 
 // Tool selection comes from ChatKit's + button (composer tools)
 let selectedToolId: string | null = null;
 let selectedConnectorInfo: { id: number; url: string; name: string } | null = null;
+// Note: File attachments are now handled natively by ChatKit's attachments feature
+// ChatKit automatically includes attachment IDs in the message payload
 
 // Declare ChatKit element type for TypeScript
 declare global {
@@ -109,6 +113,7 @@ export default function SchemaAgentPage() {
   }, []);
 
   // Build all tools array from system tools + connectors
+  // File uploads are handled by ChatKit's native attachments feature
   const buildAllTools = useCallback((): ChatKitToolOption[] => {
     const tools: ChatKitToolOption[] = [];
 
@@ -227,10 +232,37 @@ export default function SchemaAgentPage() {
             url: apiUrl,
             // domainKey is required for custom API - using empty string for development
             domainKey: '',
+            // Upload strategy for ChatKit attachments - sends files to our backend
+            // Uses ChatKit-specific endpoint that returns the correct response format
+            // IMPORTANT: ChatKit does NOT use the custom api.fetch for file uploads!
+            // It uses its own internal fetch, so we pass the token as a query parameter
+            uploadStrategy: {
+              type: 'direct',
+              uploadUrl: `${API_BASE_URL}/api/files/chatkit-upload?token=${encodeURIComponent(token || '')}`,
+            },
             // Custom fetch for auth token and tool/connector injection
+            // File attachments are handled natively by ChatKit's attachments feature
             fetch: async (url: string, options: RequestInit) => {
               try {
-                // Check if this is a message request and we have a selected tool or connector
+                // Check if this is a file upload request (multipart/form-data)
+                // File uploads go to our /api/files/chatkit-upload endpoint
+                const isFileUpload = url.includes('/api/files/chatkit-upload') ||
+                  (options.headers && (options.headers as Record<string, string>)['Content-Type']?.includes('multipart/form-data'));
+
+                // For file uploads, only add Authorization header (don't override Content-Type)
+                if (isFileUpload) {
+                  console.log('[ChatKit] File upload detected, preserving multipart headers');
+                  return fetch(url, {
+                    ...options,
+                    headers: {
+                      ...options.headers,
+                      'Authorization': `Bearer ${token}`,
+                      // DO NOT set Content-Type here - let the browser set it with boundary for multipart
+                    },
+                  });
+                }
+
+                // For message requests, handle tool/connector injection
                 if (options.body && (selectedToolId || selectedConnectorInfo)) {
                   try {
                     const body = JSON.parse(options.body as string);
@@ -286,6 +318,7 @@ export default function SchemaAgentPage() {
                   }
                 }
 
+                // For non-file requests, set JSON content type
                 return fetch(url, {
                   ...options,
                   headers: {
@@ -323,10 +356,30 @@ export default function SchemaAgentPage() {
           // Composer configuration (ComposerOption)
           composer: {
             placeholder: chatKitTools.length > 0
-              ? 'Ask about your data... (Click + or type / for tools)'
+              ? 'Ask about your data... (Click + for tools or 📎 for files)'
               : 'Ask about your data...',
             // Dynamic tools menu from system tools + MCP connectors
             tools: chatKitTools.length > 0 ? chatKitTools : undefined,
+            // Official ChatKit attachments configuration for file uploads
+            attachments: {
+              enabled: true,
+              maxCount: 5,
+              maxSize: 20 * 1024 * 1024, // 20MB max
+              accept: {
+                // CSV files
+                'text/csv': ['.csv'],
+                // Excel files
+                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'],
+                'application/vnd.ms-excel': ['.xls'],
+                // PDF files
+                'application/pdf': ['.pdf'],
+                // Image files
+                'image/png': ['.png'],
+                'image/jpeg': ['.jpg', '.jpeg'],
+                'image/gif': ['.gif'],
+                'image/webp': ['.webp'],
+              },
+            },
           },
           // Disclaimer configuration (DisclaimerOption)
           disclaimer: {
