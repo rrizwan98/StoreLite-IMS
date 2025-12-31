@@ -28,6 +28,9 @@ from agents.model_settings import ModelSettings
 
 from app.services.schema_discovery import format_schema_for_prompt
 from app.services.agent_session_service import create_user_session, AgentSessionManager
+from dotenv import load_dotenv
+
+load_dotenv()
 
 logger = logging.getLogger(__name__)
 
@@ -40,27 +43,38 @@ logger.info(f"[Schema Agent] Module loaded - Version {SCHEMA_AGENT_VERSION} (MCP
 # Configuration
 # ============================================================================
 
+# LLM Provider Selection: "gemini" or "openai"
+# Set LLM_PROVIDER in .env to switch between models
+LLM_PROVIDER = os.getenv("LLM_PROVIDER", "gemini")  # default: gemini
+
+# API Keys
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-# Use Gemini 2.0 Flash which supports function calling well
-# gemini-2.0-flash-exp has better tool calling than lite version
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+
+# Model Names
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini/gemini-robotics-er-1.5-preview")
+OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-5.2-nano")
+
 
 def get_llm_model():
     """
-    Get the LLM model instance.
-    Uses Gemini via LiteLLM if GEMINI_API_KEY is set, otherwise falls back to OpenAI.
+    Get the LLM model based on LLM_PROVIDER setting.
+
+    Set LLM_PROVIDER in .env:
+      - "gemini" → Uses Gemini via LiteLLM
+      - "openai" → Uses OpenAI directly
     """
-    if GEMINI_API_KEY:
+    if LLM_PROVIDER == "openai":
+        # Use OpenAI model directly
+        logger.info(f"[Schema Agent] Using OpenAI model: {OPENAI_MODEL}")
+        return OPENAI_MODEL
+    else:
+        # Use Gemini via LiteLLM (default)
         logger.info(f"[Schema Agent] Using Gemini model: {GEMINI_MODEL}")
         return LitellmModel(
             model=GEMINI_MODEL,
             api_key=GEMINI_API_KEY,
         )
-    else:
-        # Fallback to OpenAI if no Gemini key
-        openai_model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
-        logger.info(f"[Schema Agent] Using OpenAI model: {openai_model}")
-        return openai_model
 
 
 # ============================================================================
