@@ -36,6 +36,7 @@ from chatkit.store import AttachmentStore
 from chatkit.types import (
     ThreadItemDoneEvent,
     ThreadItemAddedEvent,
+    ThreadItemUpdatedEvent,
     AssistantMessageItem,
     AssistantMessageContent,
     ProgressUpdateEvent,
@@ -44,6 +45,18 @@ from chatkit.types import (
     Page,
     ImageAttachment,
     FileAttachment,
+    # WorkflowItem types for collapsible streaming progress display
+    WorkflowItem,
+    Workflow,
+    CustomTask,
+    SearchTask,
+    ThoughtTask,
+    URLSource,
+    CustomSummary,
+    DurationSummary,
+    # Workflow update event types
+    WorkflowTaskAdded,
+    WorkflowTaskUpdated,
 )
 from chatkit.agents import ThreadItemConverter
 from openai.types.responses import ResponseInputImageParam, ResponseInputTextParam, ResponseInputFileParam
@@ -792,124 +805,396 @@ class SchemaChatKitServer(ChatKitServer):
                 agent_input = user_message
                 logger.info(f"[Schema ChatKit] Using simple text input")
 
+            # ============================================================================
+            # WorkflowItem-based streaming with collapsible dropdown
+            # Shows real-time progress that user can expand/collapse after completion
+            # ============================================================================
             response_text = ""
             tools_used = []
+            workflow_tasks = []  # Track all tasks for the workflow
+            task_index = 0  # Current task index
+            workflow_id = f"workflow-{uuid.uuid4().hex[:12]}"
+            search_urls = []  # Track URLs from web search
+            thoughts_content = []  # Track reasoning/thoughts
+
+            # Helper to get icon for tool type (using valid ChatKit icons)
+            # Valid icons: agent, analytics, atom, batch, bolt, book-open, book-closed, book-clock,
+            # bug, calendar, chart, check, check-circle, check-circle-filled, chevron-left, chevron-right,
+            # circle-question, compass, confetti, cube, desktop, document, dot, dots-horizontal, dots-vertical,
+            # empty-circle, external-link, globe, keys, lab, images, info, lifesaver, lightbulb, mail,
+            # map-pin, maps, mobile, name, notebook, notebook-pencil, page-blank, phone, play, plus,
+            # profile, profile-card, reload, star, star-filled, search, sparkle, sparkle-double,
+            # square-code, square-image, square-text, suitcase, settings-slider, user, wreath, write, write-alt, write-alt2
+            def get_tool_icon(tool_name: str) -> str:
+                if "execute_sql" in tool_name or "query" in tool_name.lower():
+                    return "analytics"
+                elif "notion" in tool_name.lower():
+                    return "notebook"
+                elif "gmail" in tool_name.lower():
+                    return "mail"
+                elif "google_search" in tool_name.lower():
+                    return "search"
+                elif "file" in tool_name.lower() or "upload" in tool_name.lower():
+                    return "document"
+                elif "list_tables" in tool_name or "list_objects" in tool_name:
+                    return "chart"
+                else:
+                    return "sparkle"
+
+            # Helper to get display title for tool
+            def get_tool_title(tool_name: str) -> str:
+                if "execute_sql" in tool_name:
+                    return "Executing SQL Query"
+                elif tool_name == "notion_connector":
+                    return "Connecting to Notion"
+                elif "notion" in tool_name.lower():
+                    notion_tool = tool_name.replace("notion-", "").replace("notion_", "")
+                    if "search" in notion_tool:
+                        return "Searching Notion"
+                    elif "create" in notion_tool and "page" in notion_tool:
+                        return "Creating Notion Page"
+                    elif "create" in notion_tool and "database" in notion_tool:
+                        return "Creating Notion Database"
+                    elif "update" in notion_tool:
+                        return "Updating Notion"
+                    elif "query" in notion_tool:
+                        return "Querying Notion Database"
+                    return f"Notion: {notion_tool}"
+                elif "gmail" in tool_name.lower() or "gmail_connector" in tool_name:
+                    return "Processing Email"
+                elif "google_search" in tool_name.lower():
+                    return "Searching the Web"
+                elif "file_search" in tool_name.lower():
+                    return "Searching Files"
+                elif "analyze_uploaded_file" in tool_name.lower():
+                    return "Analyzing File"
+                elif "get_uploaded_file_info" in tool_name.lower():
+                    return "Getting File Info"
+                elif "list_tables" in tool_name or "list_objects" in tool_name:
+                    return "Listing Tables"
+                elif "get_object_details" in tool_name:
+                    return "Getting Table Details"
+                else:
+                    return f"Using {tool_name}"
+
+            # Create initial workflow with first task (analyzing)
+            initial_task = CustomTask(
+                type="custom",
+                title="Analyzing Request",
+                content="Understanding your question and planning the approach...",
+                status_indicator="loading",
+                icon="search"
+            )
+            workflow_tasks.append(initial_task)
+
+            # Create workflow item (expanded while processing)
+            workflow = Workflow(
+                type="custom",
+                tasks=workflow_tasks.copy(),
+                expanded=True,
+                summary=None
+            )
+
+            workflow_item = WorkflowItem(
+                id=workflow_id,
+                thread_id=thread.id,
+                created_at=datetime.now(),
+                type="workflow",
+                workflow=workflow
+            )
+
+            # Emit workflow started
+            yield ThreadItemAddedEvent(type="thread.item.added", item=workflow_item)
 
             async for event in agent.query_streamed(agent_input, thread_id=thread_id):
                 event_type = event.get("type", "unknown")
 
                 if event_type == "progress":
-                    # General progress update
-                    yield ProgressUpdateEvent(
-                        type="progress_update",
-                        text=event.get("text", "Processing...")
-                    )
+                    # Update first task content
+                    progress_text = event.get("text", "Processing...")
+                    if workflow_tasks and workflow_tasks[0].status_indicator == "loading":
+                        workflow_tasks[0].content = progress_text
+                        yield ThreadItemUpdatedEvent(
+                            type="thread.item.updated",
+                            item_id=workflow_id,
+                            update=WorkflowTaskUpdated(
+                                type="workflow.task.updated",
+                                task_index=0,
+                                task=workflow_tasks[0]
+                            )
+                        )
 
                 elif event_type == "tool_call":
-                    # Tool is being called - show tool name and args
+                    # Tool is being called - add a new task with loading state
                     tool_name = event.get("tool_name", "tool")
                     args = event.get("arguments", "")
                     tools_used.append(tool_name)
 
-                    # Format message based on tool type
-                    if "execute_sql" in tool_name:
-                        msg = f"🔍 Executing SQL query..."
-                    elif tool_name == "notion_connector":
-                        msg = f"📝 Connecting to Notion..."
-                    elif "notion" in tool_name.lower():
-                        # Parse Notion sub-tool name
-                        notion_tool = tool_name.replace("notion-", "").replace("notion_", "")
-                        if "search" in notion_tool:
-                            msg = f"📝 Notion: Searching pages..."
-                        elif "create" in notion_tool and "page" in notion_tool:
-                            msg = f"📝 Notion: Creating page..."
-                        elif "create" in notion_tool and "database" in notion_tool:
-                            msg = f"📝 Notion: Creating database..."
-                        elif "update" in notion_tool:
-                            msg = f"📝 Notion: Updating page..."
-                        elif "query" in notion_tool:
-                            msg = f"📝 Notion: Querying database..."
-                        else:
-                            msg = f"📝 Notion: {notion_tool}"
-                    elif "gmail" in tool_name.lower() or "gmail_connector" in tool_name:
-                        msg = f"📧 Processing email via Gmail..."
-                    elif "google_search" in tool_name.lower():
-                        msg = f"🌐 Searching the web..."
-                    elif "analyze_uploaded_file" in tool_name.lower():
-                        msg = f"📄 Analyzing uploaded file..."
-                    elif "get_uploaded_file_info" in tool_name.lower():
-                        msg = f"📄 Getting file information..."
-                    elif "list_tables" in tool_name or "list_objects" in tool_name:
-                        msg = f"📊 Listing database tables..."
-                    elif "get_object_details" in tool_name:
-                        msg = f"📋 Getting table details..."
-                    else:
-                        msg = f"⚙️ Using: {tool_name}"
+                    # Mark previous task as complete if it was loading
+                    for t in workflow_tasks:
+                        if t.status_indicator == "loading":
+                            t.status_indicator = "complete"
 
-                    yield ProgressUpdateEvent(
-                        type="progress_update",
-                        text=msg
+                    # Determine if this is a web search (use SearchTask)
+                    if "google_search" in tool_name.lower():
+                        # Extract search query from args (may be JSON)
+                        search_query = "searching..."
+                        if args:
+                            try:
+                                import json as json_parse
+                                args_dict = json_parse.loads(args) if isinstance(args, str) else args
+                                if isinstance(args_dict, dict):
+                                    search_query = args_dict.get("query", args_dict.get("q", str(args_dict)[:100]))
+                                else:
+                                    search_query = str(args_dict)[:100]
+                            except:
+                                # Not JSON, use as-is
+                                search_query = str(args)[:100]
+                        
+                        new_task = SearchTask(
+                            type="web_search",
+                            title=get_tool_title(tool_name),
+                            title_query=search_query,  # Show query in title
+                            queries=[search_query],
+                            sources=[],  # Will be populated on output
+                            status_indicator="loading"
+                        )
+                    else:
+                        # Regular CustomTask for other tools
+                        new_task = CustomTask(
+                            type="custom",
+                            title=get_tool_title(tool_name),
+                            content=f"Processing...",
+                            status_indicator="loading",
+                            icon=get_tool_icon(tool_name)
+                        )
+
+                    workflow_tasks.append(new_task)
+                    task_index = len(workflow_tasks) - 1
+
+                    # First update previous tasks that were loading to complete
+                    for prev_idx, prev_task in enumerate(workflow_tasks[:-1]):
+                        if hasattr(prev_task, 'status_indicator') and prev_task.status_indicator == "complete":
+                            yield ThreadItemUpdatedEvent(
+                                type="thread.item.updated",
+                                item_id=workflow_id,
+                                update=WorkflowTaskUpdated(
+                                    type="workflow.task.updated",
+                                    task_index=prev_idx,
+                                    task=prev_task
+                                )
+                            )
+
+                    # Add new task
+                    yield ThreadItemUpdatedEvent(
+                        type="thread.item.updated",
+                        item_id=workflow_id,
+                        update=WorkflowTaskAdded(
+                            type="workflow.task.added",
+                            task_index=task_index,
+                            task=new_task
+                        )
                     )
-                    logger.info(f"[Schema ChatKit] Tool call: {tool_name} with args: {args[:100] if args else 'none'}...")
+
+                    logger.info(f"[Schema ChatKit] Tool call: {tool_name} (task {task_index})")
 
                 elif event_type == "tool_output":
-                    # Tool returned a result
+                    # Tool returned a result - update task to complete
                     tool_name = event.get("tool_name", "tool")
                     output_preview = event.get("output_preview", "")
 
-                    # Parse connector sub-agent output for detailed progress
-                    # Format: [Connector:tool_name] result
-                    if output_preview.startswith("[") and "]" in output_preview:
-                        # Extract connector info from output
-                        bracket_end = output_preview.index("]")
-                        connector_info = output_preview[1:bracket_end]
-                        if ":" in connector_info:
-                            connector_name, sub_tool = connector_info.split(":", 1)
-                            msg = f"✅ {connector_name}: {sub_tool} completed"
-                        else:
-                            msg = f"✅ {connector_info} completed"
-                    elif "execute_sql" in tool_name:
-                        msg = f"✅ SQL query executed. Analyzing results..."
-                    elif tool_name == "notion_connector":
-                        msg = f"✅ Notion operation completed."
-                    elif "notion" in tool_name.lower():
-                        msg = f"✅ Notion: Operation completed"
-                    elif "gmail" in tool_name.lower() or "gmail_connector" in tool_name:
-                        msg = f"✅ Gmail operation completed."
-                    elif "google_search" in tool_name.lower():
-                        msg = f"✅ Web search completed. Processing results..."
-                    else:
-                        msg = f"✅ {tool_name} completed"
+                    # Find the task for this tool and update it
+                    for i, t in enumerate(workflow_tasks):
+                        if t.status_indicator == "loading":
+                            t.status_indicator = "complete"
 
-                    yield ProgressUpdateEvent(
-                        type="progress_update",
-                        text=msg
-                    )
-                    logger.info(f"[Schema ChatKit] Tool output from {tool_name}: {output_preview[:100]}...")
+                            # For SearchTask, extract URLs with titles from markdown sources
+                            if isinstance(t, SearchTask) and "google_search" in tool_name.lower():
+                                import re as url_re
+
+                                # Try to extract markdown links: [Title](URL)
+                                markdown_links = url_re.findall(r'\[([^\]]+)\]\(([^\)]+)\)', output_preview)
+
+                                if markdown_links:
+                                    # Use title and URL from markdown
+                                    t.sources = [
+                                        URLSource(url=url[:200], title=title[:50])
+                                        for title, url in markdown_links[:5]
+                                        if url.startswith('http')
+                                    ]
+                                    search_urls.extend([url for _, url in markdown_links[:5]])
+                                else:
+                                    # Fallback: just extract URLs
+                                    urls = url_re.findall(r'https?://[^\s\)\]\"\'\<\>]+', output_preview)
+                                    if urls:
+                                        # Try to get domain as title
+                                        t.sources = []
+                                        for j, u in enumerate(urls[:5]):
+                                            try:
+                                                from urllib.parse import urlparse
+                                                domain = urlparse(u).netloc
+                                                t.sources.append(URLSource(url=u[:200], title=domain or f"Source {j+1}"))
+                                            except:
+                                                t.sources.append(URLSource(url=u[:200], title=f"Source {j+1}"))
+                                        search_urls.extend(urls[:5])
+                            elif hasattr(t, 'content'):
+                                # Truncate output for display
+                                t.content = output_preview[:200] + "..." if len(output_preview) > 200 else output_preview
+                            break
+
+                    # Emit task update for the completed task
+                    for update_idx, update_task in enumerate(workflow_tasks):
+                        if update_task.status_indicator == "complete":
+                            yield ThreadItemUpdatedEvent(
+                                type="thread.item.updated",
+                                item_id=workflow_id,
+                                update=WorkflowTaskUpdated(
+                                    type="workflow.task.updated",
+                                    task_index=update_idx,
+                                    task=update_task
+                                )
+                            )
+                            break
+
+                    logger.info(f"[Schema ChatKit] Tool output from {tool_name}")
 
                 elif event_type == "thinking":
-                    # Agent reasoning/thinking
+                    # Agent reasoning/thinking - add ThoughtTask
                     thinking_text = event.get("text", "")
                     if thinking_text:
-                        yield ProgressUpdateEvent(
-                            type="progress_update",
-                            text=thinking_text
-                        )
+                        # Extract the actual thought content (remove "Agent thinking:" prefix if present)
+                        thought_content = thinking_text.replace("Agent thinking:", "").strip()
+                        if thought_content:
+                            thoughts_content.append(thought_content)
+
+                            # Add or update ThoughtTask
+                            thought_task = ThoughtTask(
+                                type="thought",
+                                title="Reasoning",
+                                content=thought_content[:500]  # Limit content length
+                            )
+
+                            # Check if we already have a thought task, update it
+                            thought_exists = False
+                            for i, t in enumerate(workflow_tasks):
+                                if isinstance(t, ThoughtTask):
+                                    # Append to existing thoughts
+                                    workflow_tasks[i].content = "\n".join(thoughts_content)[:500]
+                                    thought_exists = True
+                                    break
+
+                            if not thought_exists:
+                                workflow_tasks.append(thought_task)
+                                yield ThreadItemUpdatedEvent(
+                                    type="thread.item.updated",
+                                    item_id=workflow_id,
+                                    update=WorkflowTaskAdded(
+                                        type="workflow.task.added",
+                                        task_index=len(workflow_tasks) - 1,
+                                        task=thought_task
+                                    )
+                                )
+                            else:
+                                # Update existing thought task
+                                for thought_idx, t in enumerate(workflow_tasks):
+                                    if isinstance(t, ThoughtTask):
+                                        yield ThreadItemUpdatedEvent(
+                                            type="thread.item.updated",
+                                            item_id=workflow_id,
+                                            update=WorkflowTaskUpdated(
+                                                type="workflow.task.updated",
+                                                task_index=thought_idx,
+                                                task=t
+                                            )
+                                        )
+                                        break
 
                 elif event_type == "content_delta":
-                    # Streaming content chunk (for live text output if supported)
-                    pass  # ChatKit doesn't support live text streaming in progress
+                    # Streaming content chunk - could update a "generating response" task
+                    pass
 
                 elif event_type == "complete":
-                    # Final response
+                    # Final response - mark all tasks complete
                     response_text = event.get("response", "")
                     tools_used = event.get("tools_used", tools_used)
+
+                    # Mark all tasks as complete
+                    for t in workflow_tasks:
+                        if hasattr(t, 'status_indicator'):
+                            t.status_indicator = "complete"
+
+                    # Add final "Done" task
+                    done_task = CustomTask(
+                        type="custom",
+                        title="Done",
+                        content=f"Completed {len(tools_used)} operation(s)",
+                        status_indicator="complete",
+                        icon="check"
+                    )
+                    workflow_tasks.append(done_task)
+
+                    # Calculate duration
+                    duration_seconds = int(time.time() - start_time)
+
+                    # Create summary for collapsed state (DurationSummary 'duration' is in SECONDS)
+                    summary = DurationSummary(
+                        duration=duration_seconds
+                    )
+
+                    # Add done task
+                    yield ThreadItemUpdatedEvent(
+                        type="thread.item.updated",
+                        item_id=workflow_id,
+                        update=WorkflowTaskAdded(
+                            type="workflow.task.added",
+                            task_index=len(workflow_tasks) - 1,
+                            task=done_task
+                        )
+                    )
+
+                    # Update workflow to collapsed state with summary
+                    workflow_item.workflow.tasks = workflow_tasks.copy()
+                    workflow_item.workflow.summary = summary
+                    workflow_item.workflow.expanded = False  # Collapse after completion
+
+                    yield ThreadItemDoneEvent(type="thread.item.done", item=workflow_item)
+
                     logger.info(f"[Schema ChatKit] Query completed. Tools used: {tools_used}")
 
                 elif event_type == "error":
                     # Error occurred
                     error_text = event.get("text", "An error occurred")
                     response_text = event.get("response", error_text)
+
+                    # Mark current tasks as failed and add error task
+                    for t in workflow_tasks:
+                        if hasattr(t, 'status_indicator') and t.status_indicator == "loading":
+                            t.status_indicator = "complete"  # Mark as done (no error state in ChatKit)
+
+                    error_task = CustomTask(
+                        type="custom",
+                        title="Error",
+                        content=error_text[:200],
+                        status_indicator="complete",
+                        icon="info"
+                    )
+                    workflow_tasks.append(error_task)
+
+                    # Add error task
+                    yield ThreadItemUpdatedEvent(
+                        type="thread.item.updated",
+                        item_id=workflow_id,
+                        update=WorkflowTaskAdded(
+                            type="workflow.task.added",
+                            task_index=len(workflow_tasks) - 1,
+                            task=error_task
+                        )
+                    )
+
+                    workflow_item.workflow.tasks = workflow_tasks.copy()
+                    workflow_item.workflow.expanded = False
+                    yield ThreadItemDoneEvent(type="thread.item.done", item=workflow_item)
+
                     logger.error(f"[Schema ChatKit] Stream error: {error_text}")
 
             # Fallback if no response was captured

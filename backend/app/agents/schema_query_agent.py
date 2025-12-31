@@ -1375,10 +1375,16 @@ AVAILABLE CONNECTOR TOOLS:
                     # Tool call output received
                     elif item_type == "tool_call_output_item":
                         output = getattr(item, 'output', '')
-                        output_preview = str(output)[:200] + "..." if len(str(output)) > 200 else str(output)
-
+                        
                         # Use last tool name if available
                         tool_name = last_tool_name or "tool"
+                        
+                        # For google_search, send more output to capture URLs
+                        if "google_search" in tool_name.lower():
+                            # Send up to 2000 chars to capture Sources section with URLs
+                            output_preview = str(output)[:2000] if len(str(output)) > 2000 else str(output)
+                        else:
+                            output_preview = str(output)[:200] + "..." if len(str(output)) > 200 else str(output)
 
                         yield {
                             "type": "tool_output",
