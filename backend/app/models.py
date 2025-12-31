@@ -461,3 +461,84 @@ class UploadedFile(Base):
 
     def __repr__(self):
         return f"<UploadedFile(id={self.file_id}, name={self.file_name}, status={self.status})>"
+
+
+# ============================================================================
+# Gemini File Search Models (Feature 013 - Gemini File Search Integration)
+# ============================================================================
+
+class UserFileSearchStore(Base):
+    """
+    One FileSearchStore per user - created on first upload.
+    Stores reference to Gemini's FileSearchStore for semantic search.
+    """
+    __tablename__ = "user_file_search_stores"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        unique=True,  # ONE store per user
+        nullable=False,
+        index=True
+    )
+    gemini_store_id = Column(String(255), nullable=False)  # "fileSearchStores/abc123"
+    display_name = Column(String(255), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    __table_args__ = ({"extend_existing": True},)
+
+    # Relationships
+    user = relationship("User", backref="file_search_store")
+    documents = relationship(
+        "UserFileDocument",
+        back_populates="store",
+        cascade="all, delete-orphan",
+        order_by="UserFileDocument.created_at.desc()"
+    )
+
+    def __repr__(self):
+        return f"<UserFileSearchStore(user_id={self.user_id}, store={self.gemini_store_id})>"
+
+
+class UserFileDocument(Base):
+    """
+    Track each uploaded document in Gemini File Search.
+    Stores file metadata and processing status.
+    """
+    __tablename__ = "user_file_documents"
+
+    id = Column(Integer, primary_key=True, index=True)
+    store_id = Column(
+        Integer,
+        ForeignKey("user_file_search_stores.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True
+    )
+    gemini_doc_id = Column(String(255), nullable=True)  # "fileSearchStores/abc/documents/xyz"
+    original_filename = Column(String(255), nullable=False)
+    display_name = Column(String(255), nullable=False)
+    mime_type = Column(String(100), nullable=False)
+    file_size = Column(Integer, nullable=False)  # bytes
+    status = Column(String(20), default='processing', nullable=False, index=True)  # processing, ready, failed
+    error_message = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('processing', 'ready', 'failed')",
+            name="user_file_document_status_check"
+        ),
+        {"extend_existing": True},
+    )
+
+    # Relationships
+    store = relationship("UserFileSearchStore", back_populates="documents")
+
+    @property
+    def is_ready(self) -> bool:
+        """Check if file is ready for search."""
+        return self.status == 'ready'
+
+    def __repr__(self):
+        return f"<UserFileDocument(id={self.id}, name={self.original_filename}, status={self.status})>"

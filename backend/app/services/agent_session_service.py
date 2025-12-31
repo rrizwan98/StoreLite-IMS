@@ -17,8 +17,10 @@ from sqlalchemy.ext.asyncio import create_async_engine, AsyncEngine
 logger = logging.getLogger(__name__)
 
 
-# Cache for session instances (keyed by session_id)
-_session_cache: Dict[str, SQLAlchemySession] = {}
+# IMPORTANT:
+# Do NOT cache SQLAlchemySession objects long-term.
+# They hold DB connections/engines internally, which can become stale/closed
+# (especially with reloads). Persistence is already provided by the DB tables.
 _tables_created: bool = False
 
 
@@ -82,11 +84,6 @@ def create_user_session(user_id: int, thread_id: Optional[str] = None) -> SQLAlc
     else:
         session_id = f"user-{user_id}-default"
 
-    # Check cache first
-    if session_id in _session_cache:
-        logger.debug(f"[AgentSession] Returning cached session: {session_id}")
-        return _session_cache[session_id]
-
     try:
         database_url = _get_async_database_url()
 
@@ -99,9 +96,7 @@ def create_user_session(user_id: int, thread_id: Optional[str] = None) -> SQLAlc
         )
 
         _tables_created = True
-        _session_cache[session_id] = session
-
-        logger.info(f"[AgentSession] Created session: {session_id}")
+        logger.info(f"[AgentSession] Created session (non-cached): {session_id}")
         return session
 
     except Exception as e:
@@ -121,9 +116,6 @@ def get_session_by_id(session_id: str) -> SQLAlchemySession:
     """
     global _tables_created
 
-    if session_id in _session_cache:
-        return _session_cache[session_id]
-
     database_url = _get_async_database_url()
 
     session = SQLAlchemySession.from_url(
@@ -133,8 +125,6 @@ def get_session_by_id(session_id: str) -> SQLAlchemySession:
     )
 
     _tables_created = True
-    _session_cache[session_id] = session
-
     return session
 
 
@@ -149,11 +139,8 @@ async def delete_user_sessions(user_id: int) -> bool:
         True if successful
     """
     try:
-        # Remove all sessions for this user from cache
-        keys_to_remove = [k for k in _session_cache.keys() if k.startswith(f"user-{user_id}-")]
-        for key in keys_to_remove:
-            del _session_cache[key]
-        logger.info(f"[AgentSession] Cleared {len(keys_to_remove)} sessions for user {user_id}")
+        # Sessions are no longer cached in-process; nothing to clear here.
+        logger.info(f"[AgentSession] delete_user_sessions: sessions are non-cached; no action for user {user_id}")
         return True
     except Exception as e:
         logger.error(f"[AgentSession] Failed to delete sessions for user {user_id}: {e}")
@@ -186,9 +173,7 @@ async def cleanup_session_engine():
     Cleanup the session cache on shutdown.
     Call this when the application is shutting down.
     """
-    global _session_cache, _tables_created
-
-    _session_cache.clear()
+    global _tables_created
     _tables_created = False
     logger.info("[AgentSession] Session cache cleared")
 
@@ -209,7 +194,6 @@ class AgentSessionManager:
             user_id: The user's ID
         """
         self.user_id = user_id
-        self._current_session: Optional[SQLAlchemySession] = None
         self._current_thread_id: Optional[str] = None
 
     def get_session(self, thread_id: Optional[str] = None) -> SQLAlchemySession:
@@ -222,12 +206,10 @@ class AgentSessionManager:
         Returns:
             SQLAlchemySession instance
         """
-        # If thread changed, get new session
-        if thread_id != self._current_thread_id or self._current_session is None:
-            self._current_session = create_user_session(self.user_id, thread_id)
-            self._current_thread_id = thread_id
-
-        return self._current_session
+        # Always return a fresh session object to avoid stale/closed connections.
+        # The DB provides persistence, so this does not break history replay.
+        self._current_thread_id = thread_id
+        return create_user_session(self.user_id, thread_id)
 
     async def get_history(self, limit: int = 50) -> list:
         """
@@ -246,7 +228,6 @@ class AgentSessionManager:
         Clear the current session.
         Creates a fresh session on next get_session call.
         """
-        self._current_session = None
         self._current_thread_id = None
         logger.info(f"[AgentSession] Cleared session for user {self.user_id}")
 

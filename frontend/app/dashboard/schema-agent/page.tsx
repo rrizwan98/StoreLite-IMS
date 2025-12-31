@@ -22,6 +22,7 @@ import { useAuth } from '@/lib/auth-context';
 import { getAccessToken } from '@/lib/auth-api';
 import { getAllTools, SystemTool } from '@/lib/tools-api';
 import { getConnectors, Connector } from '@/lib/connectors-api';
+import { FileSearchModal } from '@/components/file-search';
 // File upload is now handled by ChatKit's native attachments feature
 // The backend /api/files/chatkit-upload endpoint handles file uploads
 
@@ -82,6 +83,9 @@ export default function SchemaAgentPage() {
   const [connectors, setConnectors] = useState<Connector[]>([]);
   const [toolsLoaded, setToolsLoaded] = useState(false);
   const [showAllTools, setShowAllTools] = useState(false);
+
+  // File Search Modal state
+  const [showFileSearchModal, setShowFileSearchModal] = useState(false);
 
   // Maximum tools to show initially (before "See more")
   const MAX_VISIBLE_TOOLS = 6;
@@ -414,6 +418,15 @@ export default function SchemaAgentPage() {
                 configuredRef.current = false; // Force reconfigure
                 return;
               }
+              // Handle File Search - open modal instead of just selecting tool
+              if (toolId === 'file_search') {
+                console.log('[Tool] File Search selected - opening modal');
+                setShowFileSearchModal(true);
+                // Still set the tool so queries use file_search
+                selectedToolId = toolId;
+                selectedConnectorInfo = null;
+                return;
+              }
               // Parse connector info if it's an MCP connector (format: mcp:id:url:name)
               if (toolId.startsWith('mcp:')) {
                 const parts = toolId.split(':');
@@ -442,6 +455,14 @@ export default function SchemaAgentPage() {
                 console.log('[Tool] See more clicked - expanding tools');
                 setShowAllTools(true);
                 configuredRef.current = false; // Force reconfigure
+                return;
+              }
+              // Handle File Search - open modal
+              if (toolId === 'file_search') {
+                console.log('[Tool] File Search selected - opening modal');
+                setShowFileSearchModal(true);
+                selectedToolId = toolId;
+                selectedConnectorInfo = null;
                 return;
               }
               // Parse connector info if it's an MCP connector
@@ -481,6 +502,14 @@ export default function SchemaAgentPage() {
               console.log('[Tool] See more clicked - expanding tools');
               setShowAllTools(true);
               configuredRef.current = false; // Force reconfigure
+              return;
+            }
+            // Handle File Search - open modal
+            if (toolId === 'file_search') {
+              console.log('[Tool] File Search selected from composer - opening modal');
+              setShowFileSearchModal(true);
+              selectedToolId = toolId;
+              selectedConnectorInfo = null;
               return;
             }
             // Parse connector info if it's an MCP connector
@@ -676,6 +705,15 @@ export default function SchemaAgentPage() {
           Read-only mode - Only SELECT queries are executed on your database
         </div>
       </div>
+
+      {/* File Search Modal */}
+      <FileSearchModal
+        isOpen={showFileSearchModal}
+        onClose={() => setShowFileSearchModal(false)}
+        onFilesReady={() => {
+          console.log('[FileSearch] Files ready - can now search');
+        }}
+      />
     </div>
   );
 }

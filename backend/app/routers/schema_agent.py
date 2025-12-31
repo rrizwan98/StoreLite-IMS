@@ -697,6 +697,15 @@ class SchemaChatKitServer(ChatKitServer):
                 except ImportError as e:
                     logger.warning(f"[Schema ChatKit] Could not set file analysis context: {e}")
 
+            # Set Gemini file search context (always set for file_search tool - Feature 013)
+            if db_session:
+                try:
+                    from app.mcp_server.tools_file_search import set_file_search_context
+                    set_file_search_context(user_id, db_session)
+                    logger.info(f"[Schema ChatKit] Gemini file search context set for user {user_id}")
+                except ImportError as e:
+                    logger.warning(f"[Schema ChatKit] Could not set Gemini file search context: {e}")
+
             # ============================================================================
             # Convert attachments to multi-modal input for the agent
             # We use the attachments_list directly from UserMessageItem.attachments

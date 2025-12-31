@@ -43,7 +43,7 @@ logger.info(f"[Schema Agent] Module loaded - Version {SCHEMA_AGENT_VERSION} (MCP
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 # Use Gemini 2.0 Flash which supports function calling well
 # gemini-2.0-flash-exp has better tool calling than lite version
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini/gemini-2.5-flash")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini/gemini-robotics-er-1.5-preview")
 
 def get_llm_model():
     """
@@ -101,6 +101,11 @@ BEFORE doing anything else, check if the user's message starts with a prefix:
 3. [TOOL:GOOGLE_SEARCH] - User wants to search the web
    If YES: You MUST call the google_search tool. This is NON-NEGOTIABLE.
    The response MUST include Sources section with clickable links.
+
+4. [TOOL:FILE_SEARCH] - User wants to search their uploaded files
+   If YES: You MUST call the file_search tool. This is NON-NEGOTIABLE.
+   This searches ALL files the user has uploaded via File Search feature.
+   The response MUST include Sources section with citations from the files.
 
 Failure to use the selected tool is a critical error.
 
@@ -175,6 +180,7 @@ AVAILABLE MCP TOOLS
 AVAILABLE FUNCTION TOOLS
 ############################################
 - `google_search`: Search the web for real-time information, documentation, news, and current events
+- `file_search`: Search through user's uploaded files (PDFs, documents, spreadsheets) using semantic search with citations
 
 **PDF Document Tools:**
 - `pdf_read_text`: Read ENTIRE PDF content (all pages, all text, all tables)
@@ -879,6 +885,15 @@ IMPORTANT CONNECTOR TOOL RULES:
             except ImportError as e:
                 logger.warning(f"[Schema Agent] File Analysis tools not available: {e}")
 
+            # Add Gemini File Search tool (Feature 013 - Semantic file search with RAG)
+            try:
+                from app.mcp_server.tools_file_search import FILE_SEARCH_TOOLS
+                function_tools.extend(FILE_SEARCH_TOOLS)
+                self._function_tools.append("file_search") if hasattr(self, '_function_tools') else None
+                logger.info(f"[Schema Agent] Gemini File Search tool enabled")
+            except ImportError as e:
+                logger.warning(f"[Schema Agent] Gemini File Search tool not available: {e}")
+
             # Add connector tools if available
             if self.connector_tools:
                 function_tools.extend(self.connector_tools)
@@ -1213,6 +1228,14 @@ AVAILABLE CONNECTOR TOOLS:
                 from app.mcp_server.tools_file_analysis import FILE_ANALYSIS_TOOLS
                 function_tools.extend(FILE_ANALYSIS_TOOLS)
                 logger.info(f"[Schema Agent Stream] File Analysis tools enabled")
+            except ImportError:
+                pass
+
+            # Add Gemini File Search tool (Feature 013)
+            try:
+                from app.mcp_server.tools_file_search import FILE_SEARCH_TOOLS
+                function_tools.extend(FILE_SEARCH_TOOLS)
+                logger.info(f"[Schema Agent Stream] Gemini File Search tool enabled")
             except ImportError:
                 pass
 

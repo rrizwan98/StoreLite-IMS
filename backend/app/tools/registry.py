@@ -83,6 +83,16 @@ SYSTEM_TOOLS: Dict[str, SystemTool] = {
         is_enabled=True,
         is_beta=False,
     ),
+    "file_search": SystemTool(
+        id="file_search",
+        name="File Search",
+        description="Search through your uploaded files (PDFs, documents, spreadsheets) using semantic search with citations",
+        icon="document",
+        category="utilities",
+        auth_type="none",  # Uses user's Gemini FileSearchStore
+        is_enabled=True,
+        is_beta=False,
+    ),
 }
 
 
