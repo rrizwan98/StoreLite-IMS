@@ -57,6 +57,8 @@ from chatkit.types import (
     # Workflow update event types
     WorkflowTaskAdded,
     WorkflowTaskUpdated,
+    # Annotation types for inline citations (like ChatGPT sources)
+    Annotation,
 )
 from chatkit.agents import ThreadItemConverter
 from openai.types.responses import ResponseInputImageParam, ResponseInputTextParam, ResponseInputFileParam
@@ -814,7 +816,7 @@ class SchemaChatKitServer(ChatKitServer):
             workflow_tasks = []  # Track all tasks for the workflow
             task_index = 0  # Current task index
             workflow_id = f"workflow-{uuid.uuid4().hex[:12]}"
-            search_urls = []  # Track URLs from web search
+            search_sources = []  # Track URLs from web search as dicts {url, title}
             thoughts_content = []  # Track reasoning/thoughts
 
             # Helper to get icon for tool type (using valid ChatKit icons)
@@ -876,6 +878,129 @@ class SchemaChatKitServer(ChatKitServer):
                     return "Getting Table Details"
                 else:
                     return f"Using {tool_name}"
+
+            def format_response_with_sources(
+                response_text: str,
+                collected_urls: List[dict]
+            ) -> str:
+                """
+                Format response text with inline citations and a sources section.
+
+                Since ChatKit annotations may not work with custom API setup,
+                this formats sources directly in markdown for better display:
+                - Replaces domain mentions with clickable markdown links
+                - Adds a clean "📚 Sources" section at the end with all links
+
+                Example:
+                    Input: "Buy from Naheed.pk"
+                    Output: "Buy from [Naheed.pk](https://www.naheed.pk)"
+
+                Args:
+                    response_text: The full response text
+                    collected_urls: List of dicts with 'url' and 'title' from web search
+
+                Returns:
+                    Formatted response text with markdown links
+                """
+                import re as fmt_re
+                from urllib.parse import urlparse
+
+                seen_urls = set()
+                source_map = {}  # domain -> {url, title}
+                all_sources = []
+
+                # Extract existing markdown links from response: [Title](URL)
+                markdown_links = fmt_re.findall(r'\[([^\]]+)\]\((https?://[^\)]+)\)', response_text)
+                for title, url in markdown_links:
+                    if url not in seen_urls:
+                        seen_urls.add(url)
+                        try:
+                            domain = urlparse(url).netloc.replace('www.', '')
+                        except:
+                            domain = title[:30]
+                        all_sources.append({'url': url, 'title': title, 'domain': domain})
+                        source_map[domain.lower()] = {'url': url, 'title': title, 'domain': domain}
+                        short_domain = domain.split('.')[0].lower()
+                        if short_domain not in source_map:
+                            source_map[short_domain] = {'url': url, 'title': title, 'domain': domain}
+
+                # Extract plain text format: "- Daraz Pakistan: https://www.daraz.pk"
+                plain_links = fmt_re.findall(r'[-\*]\s*([^:\n]+):\s*(https?://[^\s\n]+)', response_text)
+                for title, url in plain_links:
+                    title = title.strip()
+                    url = url.strip()
+                    if url not in seen_urls:
+                        seen_urls.add(url)
+                        try:
+                            domain = urlparse(url).netloc.replace('www.', '')
+                        except:
+                            domain = title[:30]
+                        all_sources.append({'url': url, 'title': title, 'domain': domain})
+                        source_map[domain.lower()] = {'url': url, 'title': title, 'domain': domain}
+                        short_domain = domain.split('.')[0].lower()
+                        if short_domain not in source_map:
+                            source_map[short_domain] = {'url': url, 'title': title, 'domain': domain}
+                        # Map title words
+                        for word in title.lower().split():
+                            if len(word) > 3 and word not in source_map:
+                                source_map[word] = {'url': url, 'title': title, 'domain': domain}
+
+                # Add collected URLs from search tasks
+                for source in collected_urls:
+                    url = source.get('url', '')
+                    if url and url not in seen_urls:
+                        seen_urls.add(url)
+                        title = source.get('title', '')
+                        try:
+                            domain = urlparse(url).netloc.replace('www.', '')
+                        except:
+                            domain = 'source'
+                        if not title:
+                            title = domain
+                        all_sources.append({'url': url, 'title': title, 'domain': domain})
+                        source_map[domain.lower()] = {'url': url, 'title': title, 'domain': domain}
+                        short_domain = domain.split('.')[0].lower()
+                        if short_domain not in source_map:
+                            source_map[short_domain] = {'url': url, 'title': title, 'domain': domain}
+
+                # Remove existing Sources section
+                clean_text = response_text
+                sources_patterns = [
+                    r'\n\n(Sources?\s*\([^)]*\)\s*:?\s*\n[-\*].*?)$',
+                    r'\n\n(Sources?:?\s*\n[-\*].*?)$',
+                    r'\n\n(References?:?\s*\n[-\*].*?)$',
+                ]
+                for pattern in sources_patterns:
+                    match = fmt_re.search(pattern, response_text, fmt_re.DOTALL | fmt_re.IGNORECASE)
+                    if match:
+                        clean_text = response_text[:match.start()]
+                        break
+
+                # Remove standalone source URLs
+                clean_text = fmt_re.sub(
+                    r'\n[-\*]\s*[^:\n]+:\s*https?://[^\s\n]+',
+                    '',
+                    clean_text,
+                    flags=fmt_re.MULTILINE
+                )
+
+                # Don't add inline links (ChatKit doesn't render markdown links)
+                # Just keep domain mentions as-is in the text
+
+                # Add formatted sources section at the end if we have sources
+                # Use bare URLs which ChatKit may auto-link
+                if all_sources:
+                    clean_text = clean_text.strip()
+                    clean_text += "\n\n---\n\n**Sources:**\n"
+                    seen_in_footer = set()
+                    for i, source in enumerate(all_sources[:8], 1):  # Limit to 8 sources
+                        if source['url'] not in seen_in_footer:
+                            seen_in_footer.add(source['url'])
+                            title = source['title'][:40]
+                            # Format: [1] Title - URL (bare URL for auto-linking)
+                            clean_text += f"[{i}] {title}\n{source['url']}\n\n"
+
+                return clean_text.strip()
 
             # Create initial workflow with first task (analyzing)
             initial_task = CustomTask(
@@ -1022,7 +1147,12 @@ class SchemaChatKitServer(ChatKitServer):
                                         for title, url in markdown_links[:5]
                                         if url.startswith('http')
                                     ]
-                                    search_urls.extend([url for _, url in markdown_links[:5]])
+                                    # Store sources as dicts for annotation creation
+                                    search_sources.extend([
+                                        {'url': url, 'title': title}
+                                        for title, url in markdown_links[:5]
+                                        if url.startswith('http')
+                                    ])
                                 else:
                                     # Fallback: just extract URLs
                                     urls = url_re.findall(r'https?://[^\s\)\]\"\'\<\>]+', output_preview)
@@ -1033,10 +1163,13 @@ class SchemaChatKitServer(ChatKitServer):
                                             try:
                                                 from urllib.parse import urlparse
                                                 domain = urlparse(u).netloc
-                                                t.sources.append(URLSource(url=u[:200], title=domain or f"Source {j+1}"))
+                                                title = domain or f"Source {j+1}"
+                                                t.sources.append(URLSource(url=u[:200], title=title))
+                                                # Store source as dict for annotation creation
+                                                search_sources.append({'url': u, 'title': title})
                                             except:
                                                 t.sources.append(URLSource(url=u[:200], title=f"Source {j+1}"))
-                                        search_urls.extend(urls[:5])
+                                                search_sources.append({'url': u, 'title': f"Source {j+1}"})
                             elif hasattr(t, 'content'):
                                 # Truncate output for display
                                 t.content = output_preview[:200] + "..." if len(output_preview) > 200 else output_preview
@@ -1219,18 +1352,26 @@ class SchemaChatKitServer(ChatKitServer):
             total_time = time.time() - start_time
             logger.info(f"[Schema ChatKit] Query processed in {total_time:.1f}s with {len(tools_used)} tool calls")
 
-            # Create assistant message with response
+            # Format response with inline citations and sources section
+            # Uses markdown links since ChatKit annotations may not work with custom API
+            logger.info(f"[Schema ChatKit] Response text length: {len(response_text)}")
+            logger.info(f"[Schema ChatKit] Search sources collected: {len(search_sources)}")
+
+            # Format with inline links and sources footer
+            final_text = format_response_with_sources(response_text, search_sources)
+
+            logger.info(f"[Schema ChatKit] Formatted text length: {len(final_text)}")
+
+            # Create assistant message with formatted response
             msg_id = f"msg-{uuid.uuid4().hex[:12]}"
 
             assistant_msg = AssistantMessageItem(
                 id=msg_id,
                 thread_id=thread.id,
-                created_at=datetime.now().isoformat(),
+                created_at=datetime.now(),
                 type="assistant_message",
                 content=[AssistantMessageContent(
-                    type="output_text",
-                    text=response_text,
-                    annotations=[]
+                    text=final_text
                 )]
             )
 
