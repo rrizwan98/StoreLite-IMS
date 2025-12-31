@@ -70,6 +70,9 @@ class PostgreSQLChatKitStore(Store):
             if existing:
                 # Update existing thread
                 existing.updated_at = datetime.utcnow()
+                # Update title if provided
+                if hasattr(thread, 'title') and thread.title:
+                    existing.title = thread.title
                 if hasattr(thread, 'metadata') and thread.metadata:
                     existing.thread_metadata = thread.metadata
             else:
@@ -89,6 +92,7 @@ class PostgreSQLChatKitStore(Store):
                 db_thread = ChatKitThread(
                     id=thread.id,
                     user_id=self.user_id,
+                    title=thread.title if hasattr(thread, 'title') else None,
                     created_at=created_at_value,
                     thread_metadata=thread.metadata if hasattr(thread, 'metadata') else {},
                 )
@@ -117,6 +121,7 @@ class PostgreSQLChatKitStore(Store):
                 logger.debug(f"[ChatKitStore] Loaded existing thread: {thread_id}")
                 return ThreadMetadata(
                     id=db_thread.id,
+                    title=db_thread.title,  # Include title for history display
                     created_at=db_thread.created_at.isoformat() if db_thread.created_at else None,
                 )
 
@@ -162,18 +167,35 @@ class PostgreSQLChatKitStore(Store):
             await self.db.rollback()
 
     async def load_threads(self, limit: int, after: Optional[str], order: str, context: Any) -> Any:
-        """Load all threads for the current user."""
+        """Load all threads for the current user with pagination support."""
         try:
-            logger.info(f"[ChatKitStore] load_threads called: user_id={self.user_id}, limit={limit}, order={order}")
+            logger.info(f"[ChatKitStore] load_threads called: user_id={self.user_id}, limit={limit}, after={after}, order={order}")
 
+            # Build base query
             query = select(ChatKitThread).where(
                 ChatKitThread.user_id == self.user_id
-            ).order_by(
+            )
+
+            # Handle pagination with 'after' cursor
+            if after:
+                # Get the thread to use as cursor
+                cursor_result = await self.db.execute(
+                    select(ChatKitThread).where(ChatKitThread.id == after)
+                )
+                cursor_thread = cursor_result.scalar_one_or_none()
+                if cursor_thread:
+                    if order == "desc":
+                        query = query.where(ChatKitThread.updated_at < cursor_thread.updated_at)
+                    else:
+                        query = query.where(ChatKitThread.updated_at > cursor_thread.updated_at)
+
+            # Apply ordering and limit
+            query = query.order_by(
                 ChatKitThread.updated_at.desc() if order == "desc" else ChatKitThread.updated_at.asc()
             ).limit(limit + 1)  # Get one extra to check has_more
 
             result = await self.db.execute(query)
-            db_threads = result.scalars().all()
+            db_threads = list(result.scalars().all())
 
             logger.info(f"[ChatKitStore] Found {len(db_threads)} threads in database for user {self.user_id}")
 
@@ -183,17 +205,21 @@ class PostgreSQLChatKitStore(Store):
             threads = [
                 ThreadMetadata(
                     id=t.id,
+                    title=t.title,  # Include title for history display
                     created_at=t.created_at.isoformat() if t.created_at else None,
                 )
                 for t in threads_to_return
             ]
 
-            logger.info(f"[ChatKitStore] Returning {len(threads)} threads for user {self.user_id}")
-            return Page(data=threads, has_more=has_more)
+            # Calculate next cursor for pagination
+            next_after = threads_to_return[-1].id if has_more and threads_to_return else None
+
+            logger.info(f"[ChatKitStore] Returning {len(threads)} threads for user {self.user_id}, has_more={has_more}")
+            return Page(data=threads, has_more=has_more, after=next_after)
 
         except Exception as e:
             logger.error(f"[ChatKitStore] Error loading threads: {e}", exc_info=True)
-            return Page(data=[], has_more=False)
+            return Page(data=[], has_more=False, after=None)
 
     async def add_thread_item(self, thread_id: str, item: ThreadItem, context: Any) -> None:
         """Add a new item (message) to a thread."""
@@ -237,16 +263,29 @@ class PostgreSQLChatKitStore(Store):
         order: str,
         context: Any
     ) -> Any:
-        """Load all items (messages) from a thread."""
+        """Load all items (messages) from a thread with pagination support."""
         try:
+            # Build base query
             query = select(ChatKitThreadItem).where(
                 ChatKitThreadItem.thread_id == thread_id
-            ).order_by(
+            )
+
+            # Handle pagination with 'after' cursor
+            if after:
+                cursor_result = await self.db.execute(
+                    select(ChatKitThreadItem).where(ChatKitThreadItem.id == after)
+                )
+                cursor_item = cursor_result.scalar_one_or_none()
+                if cursor_item:
+                    query = query.where(ChatKitThreadItem.created_at > cursor_item.created_at)
+
+            # Apply ordering and limit
+            query = query.order_by(
                 ChatKitThreadItem.created_at.asc()  # Always chronological for chat
             ).limit(limit + 1)
 
             result = await self.db.execute(query)
-            db_items = result.scalars().all()
+            db_items = list(result.scalars().all())
 
             has_more = len(db_items) > limit
             items_to_return = db_items[:limit]
@@ -257,12 +296,15 @@ class PostgreSQLChatKitStore(Store):
                 if item:
                     items.append(item)
 
+            # Calculate next cursor for pagination
+            next_after = items_to_return[-1].id if has_more and items_to_return else None
+
             logger.debug(f"[ChatKitStore] Loaded {len(items)} items from thread {thread_id}")
-            return Page(data=items, has_more=has_more)
+            return Page(data=items, has_more=has_more, after=next_after)
 
         except Exception as e:
             logger.error(f"[ChatKitStore] Error loading items from thread {thread_id}: {e}")
-            return Page(data=[], has_more=False)
+            return Page(data=[], has_more=False, after=None)
 
     async def load_item(self, thread_id: str, item_id: str, context: Any) -> Optional[ThreadItem]:
         """Load a specific item from a thread."""

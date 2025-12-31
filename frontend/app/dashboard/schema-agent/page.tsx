@@ -339,6 +339,13 @@ export default function SchemaAgentPage() {
           },
           // Theme (ColorScheme or ThemeOption)
           theme: 'light',
+          // History configuration - enables the history sidebar
+          // Threads are stored in PostgreSQL via backend ChatKit store
+          history: {
+            enabled: true,        // Show history sidebar panel
+            showDelete: true,     // Allow deleting conversations
+            showRename: true,     // Allow renaming conversations
+          },
           // Header configuration (HeaderOption)
           header: {
             enabled: true,

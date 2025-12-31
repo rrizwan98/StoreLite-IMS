@@ -390,7 +390,16 @@ class SchemaAgentStore(Store):
 
     async def load_threads(self, limit: int, after: str | None, order: str, context: Any) -> Any:
         threads = list(self._threads.values())
-        return Page(data=threads[:limit], has_more=len(threads) > limit)
+        # Sort by created_at if available
+        threads_sorted = sorted(
+            threads,
+            key=lambda t: getattr(t, 'created_at', '') or '',
+            reverse=(order == "desc")
+        )
+        threads_to_return = threads_sorted[:limit]
+        has_more = len(threads_sorted) > limit
+        next_after = threads_to_return[-1].id if has_more and threads_to_return else None
+        return Page(data=threads_to_return, has_more=has_more, after=next_after)
 
     async def add_thread_item(self, thread_id: str, item: ThreadItem, context: Any) -> None:
         if thread_id not in self._items:
@@ -399,7 +408,10 @@ class SchemaAgentStore(Store):
 
     async def load_thread_items(self, thread_id: str, after: str | None, limit: int, order: str, context: Any) -> Any:
         items = self._items.get(thread_id, [])
-        return Page(data=items[:limit], has_more=len(items) > limit)
+        items_to_return = items[:limit]
+        has_more = len(items) > limit
+        next_after = items_to_return[-1].id if has_more and items_to_return and hasattr(items_to_return[-1], 'id') else None
+        return Page(data=items_to_return, has_more=has_more, after=next_after)
 
     async def load_item(self, thread_id: str, item_id: str, context: Any) -> ThreadItem | None:
         items = self._items.get(thread_id, [])
@@ -591,6 +603,23 @@ class SchemaChatKitServer(ChatKitServer):
 
             logger.info(f"[Schema ChatKit] Raw user message: {user_message[:100] if user_message else '(empty)'}...")
             logger.info(f"[Schema ChatKit] Found {len(attachments_list)} attachment(s) in message")
+
+            # Auto-generate title for new threads (first message)
+            # This enables the history panel to show meaningful conversation titles
+            if not thread.title and user_message:
+                # Generate title from first 50 chars of user message
+                title_text = user_message.strip()
+                # Remove any tool prefixes like [TOOL:GMAIL]
+                title_text = re.sub(r'\[TOOL:\w+\]\s*', '', title_text)
+                title_text = re.sub(r'\[FILE:[^\]]+\]\s*', '', title_text)
+                # Truncate to 50 chars with ellipsis if needed
+                if len(title_text) > 50:
+                    thread.title = title_text[:47] + "..."
+                else:
+                    thread.title = title_text if title_text else "New Conversation"
+                # Save the updated thread with title
+                await self.store.save_thread(thread, context)
+                logger.info(f"[Schema ChatKit] Auto-generated thread title: {thread.title}")
 
             # Check if tool prefix is present
             if '[TOOL:' in user_message:
@@ -2313,10 +2342,15 @@ async def chatkit_endpoint(
                     "X-Accel-Buffering": "no",
                 }
             )
+        elif hasattr(result, 'json') and isinstance(result.json, bytes):
+            # NonStreamingResult from ChatKit - has .json bytes attribute
+            return Response(content=result.json, media_type="application/json")
         elif hasattr(result, 'model_dump_json'):
             return Response(content=result.model_dump_json(), media_type="application/json")
         elif hasattr(result, 'model_dump'):
             return Response(content=json.dumps(result.model_dump()), media_type="application/json")
+        elif isinstance(result, bytes):
+            return Response(content=result, media_type="application/json")
         else:
             return Response(
                 content=json.dumps(result) if isinstance(result, dict) else str(result),
