@@ -542,6 +542,17 @@ class SchemaChatKitServer(ChatKitServer):
     def __init__(self, store: Store, attachment_store: AttachmentStore | None = None):
         super().__init__(store, attachment_store=attachment_store)
 
+    async def delete_thread(self, thread_id: str, context: Any) -> None:
+        """
+        Delete a thread from the store.
+
+        This method ensures thread deletion works properly by explicitly
+        delegating to the store's delete_thread method.
+        """
+        logger.info(f"[SchemaChatKitServer] delete_thread called for: {thread_id}")
+        await self.store.delete_thread(thread_id, context)
+        logger.info(f"[SchemaChatKitServer] Thread deleted successfully: {thread_id}")
+
     async def respond(
         self,
         thread: ThreadMetadata,
