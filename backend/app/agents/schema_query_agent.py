@@ -121,7 +121,62 @@ BEFORE doing anything else, check if the user's message starts with a prefix:
    This searches ALL files the user has uploaded via File Search feature.
    The response MUST include Sources section with citations from the files.
 
+5. [TOOL:ANALYTICS] - User wants data VISUALIZATION with charts/graphs
+   If YES: You MUST follow these STRICT rules:
+
+   **RESPONSE FORMAT (CRITICAL):**
+   - Keep text response SHORT and CONCISE (max 150 words)
+   - Use BULLET POINTS for key insights (3-5 max)
+   - Focus on INSIGHTS, not raw numbers
+
+   **RESPONSE STRUCTURE:**
+   ```
+   📊 **[Title]**
+
+   Key insights:
+   • [Top insight - what stands out]
+   • [Second insight - comparison/trend]
+   • [Third insight - recommendation if any]
+
+   <!--CHART_DATA
+   [{{"column1": value1, "column2": value2}}, ...]
+   -->
+   ```
+
+   **IMPORTANT - CHART DATA:**
+   You MUST include the raw data inside a hidden comment block:
+   <!--CHART_DATA
+   [actual JSON array from SQL results, e.g. {{"name": "Rice", "qty": 10}}]
+   -->
+   This data is used by the system to generate the chart.
+   The user won't see this comment block - only the chart.
+
+   **DO NOT:**
+   ❌ Show JSON data as visible text
+   ❌ Create large markdown tables
+   ❌ Write paragraphs explaining each data point
+
 Failure to use the selected tool is a critical error.
+
+############################################
+AUTO-ANALYTICS MODE (INTELLIGENT DETECTION)
+############################################
+**IMPORTANT:** This section ONLY applies when there is NO [TOOL:ANALYTICS] prefix!
+
+If [TOOL:ANALYTICS] prefix IS present:
+- Follow the concise response format above
+- DO NOT add the TIP message
+- The system will automatically generate a chart
+
+If NO [TOOL:ANALYTICS] prefix, but query seems chart-worthy:
+- Give full detailed response as normal
+- At the END, add this tip:
+  "💡 TIP: Select 'Use Analytics' tool to see this data as a visual chart!"
+
+Chart-worthy queries (when to suggest):
+- "trends", "comparison", "distribution", "over time"
+- Numeric data like sales, counts, amounts
+- "Show me sales by month", "Compare products", "Top 10..."
 
 ############################################
 CORE MISSION
@@ -1375,10 +1430,10 @@ AVAILABLE CONNECTOR TOOLS:
                     # Tool call output received
                     elif item_type == "tool_call_output_item":
                         output = getattr(item, 'output', '')
-                        
+
                         # Use last tool name if available
                         tool_name = last_tool_name or "tool"
-                        
+
                         # For google_search, send more output to capture URLs
                         if "google_search" in tool_name.lower():
                             # Send up to 2000 chars to capture Sources section with URLs
@@ -1386,12 +1441,19 @@ AVAILABLE CONNECTOR TOOLS:
                         else:
                             output_preview = str(output)[:200] + "..." if len(str(output)) > 200 else str(output)
 
-                        yield {
+                        # Build the event
+                        tool_event = {
                             "type": "tool_output",
                             "text": f"Response from: {tool_name}",
                             "tool_name": tool_name,
                             "output_preview": output_preview,
                         }
+
+                        # For SQL tools, include full output for chart generation
+                        if "execute" in tool_name.lower() or "query" in tool_name.lower():
+                            tool_event["full_output"] = output
+
+                        yield tool_event
 
                     # Message output (assistant's text response)
                     elif item_type == "message_output_item":

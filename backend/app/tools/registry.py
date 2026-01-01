@@ -55,8 +55,8 @@ SYSTEM_TOOLS: Dict[str, SystemTool] = {
     ),
     "analytics": SystemTool(
         id="analytics",
-        name="Analytics",
-        description="View sales and inventory analytics",
+        name="Use Analytics",
+        description="Visualize data with charts (bar, line, area graphs)",
         icon="chart",
         category="insights",
         auth_type="none",
