@@ -55,7 +55,7 @@ SYSTEM_TOOLS: Dict[str, SystemTool] = {
     ),
     "analytics": SystemTool(
         id="analytics",
-        name="Use Analytics",
+        name="Analytics",
         description="Visualize data with charts (bar, line, area graphs)",
         icon="chart",
         category="insights",
@@ -77,7 +77,7 @@ SYSTEM_TOOLS: Dict[str, SystemTool] = {
         id="google_search",
         name="Google Search",
         description="Search the web for real-time information, documentation, news, and current events",
-        icon="search",
+        icon="globe",
         category="utilities",
         auth_type="none",  # No user auth needed - uses server's GEMINI_API_KEY
         is_enabled=True,
@@ -87,7 +87,7 @@ SYSTEM_TOOLS: Dict[str, SystemTool] = {
         id="file_search",
         name="File Search",
         description="Search through your uploaded files (PDFs, documents, spreadsheets) using semantic search with citations",
-        icon="document",
+        icon="notebook",
         category="utilities",
         auth_type="none",  # Uses user's Gemini FileSearchStore
         is_enabled=True,
