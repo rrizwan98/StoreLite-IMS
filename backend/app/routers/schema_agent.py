@@ -1650,12 +1650,42 @@ class SchemaChatKitServer(ChatKitServer):
             logger.info(f"[Schema ChatKit] Response text length: {len(response_text)}")
             logger.info(f"[Schema ChatKit] Search sources collected: {len(search_sources)}")
 
+            # ============================================================================
+            # Analytics Mode: Extract CHART_DATA BEFORE sending response to user
+            # This ensures user never sees the raw <!--CHART_DATA [...] --> comment
+            # ============================================================================
+            if analytics_mode and not pending_chart_data and response_text:
+                try:
+                    import json as json_extractor
+                    logger.info("[Analytics] Extracting CHART_DATA before sending response")
+
+                    # Extract CHART_DATA comment block
+                    chart_data_match = re.search(r'<!--CHART_DATA\s*([\s\S]*?)\s*-->', response_text)
+                    if chart_data_match:
+                        json_str = chart_data_match.group(1).strip()
+                        logger.info(f"[Analytics] Found CHART_DATA block, length: {len(json_str)}")
+                        try:
+                            extracted_data = json_extractor.loads(json_str)
+                            if isinstance(extracted_data, list) and len(extracted_data) > 0:
+                                if isinstance(extracted_data[0], dict):
+                                    pending_chart_data = extracted_data
+                                    logger.info(f"[Analytics] Extracted {len(pending_chart_data)} rows from CHART_DATA block")
+                        except json_extractor.JSONDecodeError as e:
+                            logger.warning(f"[Analytics] Failed to parse CHART_DATA JSON: {e}")
+
+                        # ALWAYS remove CHART_DATA from response (even if parse fails)
+                        response_text = re.sub(r'<!--CHART_DATA\s*[\s\S]*?\s*-->', '', response_text).strip()
+                        logger.info(f"[Analytics] Removed CHART_DATA from response, new length: {len(response_text)}")
+
+                except Exception as extract_err:
+                    logger.warning(f"[Analytics] CHART_DATA extraction failed: {extract_err}")
+
             # Format with inline links and sources footer
             final_text = format_response_with_sources(response_text, search_sources)
 
             logger.info(f"[Schema ChatKit] Formatted text length: {len(final_text)}")
 
-            # Create assistant message with formatted response
+            # Create assistant message with formatted response (CHART_DATA already removed)
             msg_id = f"msg-{uuid.uuid4().hex[:12]}"
 
             assistant_msg = AssistantMessageItem(
@@ -1668,7 +1698,7 @@ class SchemaChatKitServer(ChatKitServer):
                 )]
             )
 
-            # Yield the final response
+            # Yield the final response (clean, without CHART_DATA)
             yield ThreadItemAddedEvent(type="thread.item.added", item=assistant_msg)
             yield ThreadItemDoneEvent(type="thread.item.done", item=assistant_msg)
 
@@ -1676,29 +1706,11 @@ class SchemaChatKitServer(ChatKitServer):
             # Analytics Mode: Stream Chart widget if data was captured
             # ============================================================================
             if analytics_mode:
-                # Fallback: Extract JSON array from response text if no data captured
+                # Secondary fallback: Try to find any JSON array in response if no CHART_DATA found
                 if not pending_chart_data and response_text:
                     try:
                         import json as json_extractor
-                        logger.info("[Analytics] Attempting fallback JSON extraction from response text")
-                        logger.info(f"[Analytics] Response text length: {len(response_text)}")
-
-                        # First try: Look for CHART_DATA comment block
-                        chart_data_match = re.search(r'<!--CHART_DATA\s*([\s\S]*?)\s*-->', response_text)
-                        if chart_data_match:
-                            json_str = chart_data_match.group(1).strip()
-                            logger.info(f"[Analytics] Found CHART_DATA block, length: {len(json_str)}")
-                            try:
-                                extracted_data = json_extractor.loads(json_str)
-                                if isinstance(extracted_data, list) and len(extracted_data) > 0:
-                                    if isinstance(extracted_data[0], dict):
-                                        pending_chart_data = extracted_data
-                                        logger.info(f"[Analytics] Extracted {len(pending_chart_data)} rows from CHART_DATA block")
-                                        # Remove the CHART_DATA block from response
-                                        response_text = re.sub(r'<!--CHART_DATA\s*[\s\S]*?\s*-->', '', response_text).strip()
-                                        final_text = format_response_with_sources(response_text, search_sources)
-                            except json_extractor.JSONDecodeError as e:
-                                logger.warning(f"[Analytics] Failed to parse CHART_DATA JSON: {e}")
+                        logger.info("[Analytics] Attempting secondary JSON extraction (no CHART_DATA found)")
 
                         # Second try: Find any JSON array in response
                         if not pending_chart_data:
