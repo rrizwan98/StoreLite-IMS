@@ -1128,6 +1128,63 @@ class SchemaChatKitServer(ChatKitServer):
 
                 return x_axis, y_columns
 
+            def _generate_chart_title(data: list, query: str) -> str:
+                """
+                Generate a SHORT professional chart title (2-3 words max).
+
+                Examples:
+                - "Sales Overview"
+                - "Inventory Summary"
+                - "Revenue Analysis"
+                - "Product Comparison"
+                """
+                query_lower = query.lower().replace("[tool:analytics]", "").strip()
+
+                # Detect chart type from query keywords
+                title_map = {
+                    # Sales related
+                    ("sale", "sold", "revenue", "earning"): "Sales Analysis",
+                    ("top", "best", "highest"): "Top Performers",
+                    ("low", "bottom", "lowest", "least"): "Low Performers",
+                    # Inventory related
+                    ("stock", "inventory", "quantity", "qty"): "Inventory Overview",
+                    ("item", "product"): "Product Summary",
+                    # Comparison
+                    ("compare", "comparison", "vs", "versus"): "Comparison Chart",
+                    # Trends
+                    ("trend", "growth", "over time", "monthly", "daily"): "Trend Analysis",
+                    # Financial
+                    ("price", "cost", "expense"): "Price Overview",
+                    ("profit", "margin"): "Profit Analysis",
+                    # Distribution
+                    ("distribution", "breakdown", "category"): "Distribution",
+                    # Bills/Orders
+                    ("bill", "order", "invoice"): "Orders Summary",
+                }
+
+                # Check query against title map
+                for keywords, title in title_map.items():
+                    if any(kw in query_lower for kw in keywords):
+                        return title
+
+                # Fallback: Generate from data columns
+                if data and len(data) > 0:
+                    first_row = data[0]
+                    columns = list(first_row.keys())
+
+                    # Common column patterns
+                    for col in columns:
+                        col_lower = col.lower()
+                        if "revenue" in col_lower or "total" in col_lower:
+                            return "Revenue Summary"
+                        if "quantity" in col_lower or "qty" in col_lower:
+                            return "Quantity Overview"
+                        if "name" in col_lower or "item" in col_lower:
+                            return "Items Overview"
+
+                # Ultimate fallback
+                return "Data Overview"
+
             def create_chart_widget(
                 data: list,
                 query: str,
@@ -1749,9 +1806,8 @@ class SchemaChatKitServer(ChatKitServer):
                     )
 
                     if chart_widget:
-                        # Generate dynamic title from query
-                        chart_title = user_message[:50] + "..." if len(user_message) > 50 else user_message
-                        chart_title = chart_title.replace("[TOOL:ANALYTICS]", "").strip()
+                        # Generate SHORT professional title (2-3 words max)
+                        chart_title = _generate_chart_title(pending_chart_data, user_message)
 
                         # Create a styled Card wrapper (full width, dashboard-style)
                         chart_card = Card(
