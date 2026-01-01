@@ -3,23 +3,23 @@
 /**
  * OAuth Callback Page
  *
- * Handles OAuth callback after user authorizes a connector (like Notion).
+ * Handles OAuth callback after user authorizes a connector (like Notion or Google Drive).
  *
  * Flow:
- * 1. User clicks "Connect Notion" in our app
- * 2. User is redirected to Notion's OAuth page
+ * 1. User clicks "Connect [Service]" in our app
+ * 2. User is redirected to service's OAuth page
  * 3. User authorizes access
- * 4. Notion redirects here with ?code=xxx&state=xxx
- * 5. We call backend /api/oauth/exchange to exchange code for token
+ * 4. Service redirects here with ?code=xxx&state=xxx
+ * 5. We call backend to exchange code for token
  * 6. Show success/error status
  */
 
 import { useEffect, useState, Suspense } from 'react';
-import { useSearchParams, useRouter } from 'next/navigation';
+import { useSearchParams, useRouter, usePathname } from 'next/navigation';
 import { CheckCircle, XCircle, Loader2, MessageSquare, Settings } from 'lucide-react';
 import { API_BASE_URL } from '@/lib/constants';
 import { getAccessToken } from '@/lib/auth-api';
-import { exchangeNotionCode } from '@/lib/connectors-api';
+import { exchangeNotionCode, exchangeGDriveCode } from '@/lib/connectors-api';
 
 function OAuthCallbackContent() {
   const searchParams = useSearchParams();

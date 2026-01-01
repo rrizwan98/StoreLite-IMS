@@ -16,10 +16,11 @@ Key Features:
 import logging
 import os
 import asyncio
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, AsyncIterator
 from datetime import datetime
 
-from agents import Agent, Runner
+from agents import Agent, Runner, ItemHelpers
+from agents.run import RunConfig
 from agents.mcp import MCPServerStdio
 from agents.extensions.models.litellm_model import LitellmModel
 from agents.extensions.memory import SQLAlchemySession
@@ -27,40 +28,53 @@ from agents.model_settings import ModelSettings
 
 from app.services.schema_discovery import format_schema_for_prompt
 from app.services.agent_session_service import create_user_session, AgentSessionManager
+from dotenv import load_dotenv
+
+load_dotenv()
 
 logger = logging.getLogger(__name__)
 
 # Version marker for debugging
-SCHEMA_AGENT_VERSION = "2.3.0-mcp-gmail-connectors"
-logger.info(f"[Schema Agent] Module loaded - Version {SCHEMA_AGENT_VERSION} (MCP + Gmail + User Connectors)")
+SCHEMA_AGENT_VERSION = "2.4.0-gmail-connector-subagent"
+logger.info(f"[Schema Agent] Module loaded - Version {SCHEMA_AGENT_VERSION} (MCP + User Connectors + Gmail as Sub-Agent)")
 
 
 # ============================================================================
 # Configuration
 # ============================================================================
 
+# LLM Provider Selection: "gemini" or "openai"
+# Set LLM_PROVIDER in .env to switch between models
+LLM_PROVIDER = os.getenv("LLM_PROVIDER", "gemini")  # default: gemini
+
+# API Keys
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-# Use Gemini 2.0 Flash which supports function calling well
-# gemini-2.0-flash-exp has better tool calling than lite version
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini/gemini-2.5-flash")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+
+# Model Names
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini/gemini-robotics-er-1.5-preview")
+OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-5.2-nano")
 
 
 def get_llm_model():
     """
-    Get the LLM model instance.
-    Uses Gemini via LiteLLM if GEMINI_API_KEY is set, otherwise falls back to OpenAI.
+    Get the LLM model based on LLM_PROVIDER setting.
+
+    Set LLM_PROVIDER in .env:
+      - "gemini" → Uses Gemini via LiteLLM
+      - "openai" → Uses OpenAI directly
     """
-    if GEMINI_API_KEY:
+    if LLM_PROVIDER == "openai":
+        # Use OpenAI model directly
+        logger.info(f"[Schema Agent] Using OpenAI model: {OPENAI_MODEL}")
+        return OPENAI_MODEL
+    else:
+        # Use Gemini via LiteLLM (default)
         logger.info(f"[Schema Agent] Using Gemini model: {GEMINI_MODEL}")
         return LitellmModel(
             model=GEMINI_MODEL,
             api_key=GEMINI_API_KEY,
         )
-    else:
-        # Fallback to OpenAI if no Gemini key
-        openai_model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
-        logger.info(f"[Schema Agent] Using OpenAI model: {openai_model}")
-        return openai_model
 
 
 # ============================================================================
@@ -82,16 +96,30 @@ def generate_schema_agent_prompt(schema_metadata: dict) -> str:
     return f"""You are a world-class database analyst and query assistant. Your job is to deeply understand user questions, execute precise SQL queries, and provide comprehensive, well-structured answers grounded in actual data.
 
 ############################################
-URGENT: CHECK FOR TOOL PREFIX FIRST
+URGENT: CHECK FOR MESSAGE PREFIX FIRST
 ############################################
-BEFORE doing anything else, check if the user's message starts with a tool prefix:
+BEFORE doing anything else, check if the user's message starts with a prefix:
 
-1. [TOOL:GMAIL] - User wants to send results via email
-   If YES: You MUST call the send_email tool after getting query results. This is NON-NEGOTIABLE.
+1. [FILE:uuid] - User has attached a file for analysis
+   If YES: Extract the file_id from the prefix (e.g., [FILE:abc-123-def] → file_id="abc-123-def")
 
-2. [TOOL:GOOGLE_SEARCH] - User wants to search the web
+   **For PDF files:** Call `pdf_read_text(file_id)` to read the ENTIRE document first
+   **For CSV/Excel:** Call `data_read(file_id)` to see columns and data
+   **For Images:** Call `image_get_info(file_id)` for dimensions
+
+   IMPORTANT: For PDFs, ALWAYS read the full document with pdf_read_text - NEVER ask for page numbers!
+
+2. [TOOL:GMAIL] - User wants to send results via email
+   If YES: You MUST call the gmail_connector tool after getting query results. This is NON-NEGOTIABLE.
+
+3. [TOOL:GOOGLE_SEARCH] - User wants to search the web
    If YES: You MUST call the google_search tool. This is NON-NEGOTIABLE.
    The response MUST include Sources section with clickable links.
+
+4. [TOOL:FILE_SEARCH] - User wants to search their uploaded files
+   If YES: You MUST call the file_search tool. This is NON-NEGOTIABLE.
+   This searches ALL files the user has uploaded via File Search feature.
+   The response MUST include Sources section with citations from the files.
 
 Failure to use the selected tool is a critical error.
 
@@ -103,54 +131,48 @@ Answer the user's data questions fully and helpfully with concrete results they 
 ############################################
 AUTONOMOUS DECISION MAKING (CRITICAL)
 ############################################
-You are a SMART ASSISTANT, not a dumb robot. MAKE DECISIONS AUTONOMOUSLY.
+You are an INTELLIGENT ASSISTANT. Understand user intent and execute autonomously.
 
 <autonomous_behavior>
-RULE 1: INFER USER INTENT
-- When user says "save to Notion" → YOU decide: create a new page with report content
-- When user says "create report" → YOU decide: appropriate structure, title, format
-- When user says "analyze sales" → YOU decide: relevant metrics, time period, comparisons
+RULE 1: UNDERSTAND USER INTENT FROM CONTEXT
+- Analyze what the user is asking for based on their query
+- Infer the domain (medical, ecommerce, education, finance, etc.) from their data/query
+- Make intelligent decisions based on the context - don't need explicit instructions
 
-RULE 2: SMART DEFAULTS (USE THESE)
-- Report title: "[Month]-[Type]-Report" (e.g., "Dec-Sales-Report", "Jan-Inventory-Analysis")
-- Save location: Create a NEW PAGE (not database row) for reports
-- Report format: Professional with sections (Summary, Data, Insights, Recommendations)
-- Date context: Use current month/year when not specified
+RULE 2: SMART DEFAULTS (CONTEXT-AWARE)
+- Title/Name: Generate based on content type and current date
+- Format: Professional structure appropriate to the content
+- Location: Use sensible defaults (workspace root for new content)
+- Date: Use current date/time when relevant
 
-RULE 3: DON'T ASK - JUST DO
-NEVER ask user:
-❌ "What should I name the page?" → Use smart default name
-❌ "Where should I save it?" → Create new page in workspace root
-❌ "What format do you want?" → Use professional report format
-❌ "Should I include insights?" → ALWAYS include insights
-❌ "Do you want me to save to Notion?" → If they mentioned Notion, YES
+RULE 3: EXECUTE, DON'T ASK
+NEVER ask about things you can decide:
+❌ "What should I name this?" → Generate appropriate name from content
+❌ "Where should I save it?" → Use default location
+❌ "What format do you want?" → Use professional format
+❌ "Should I include analysis?" → Include relevant insights
 
-ONLY ask when TRULY AMBIGUOUS:
-✓ "Which table - 'sales' or 'orders'?" (if both exist and unclear)
-✓ "Data from which date range?" (if multiple years of data exist)
+ONLY ask when genuinely ambiguous:
+✓ Multiple tables with similar names - which one?
+✓ Ambiguous date range with multiple years of data
+✓ Conflicting instructions that need clarification
 
-RULE 4: COMPLETE THE FULL REQUEST
-User: "dekho mera sales data aur Notion mai report save kro"
-YOU DO (in one go):
-1. Query sales data from database
-2. Analyze and create insights
-3. Generate professional report
-4. Create Notion page with smart name
-5. Save report content to Notion
-6. Return report here + confirm Notion save
+RULE 4: COMPLETE MULTI-STEP REQUESTS
+When user gives a compound request:
+1. Break it down into required steps
+2. Execute ALL steps in sequence
+3. Use appropriate tools for each step
+4. Report complete results
 
-User: "inventory check kro or Notion mai rkho"
-YOU DO:
-1. Query inventory data
-2. Identify low stock, trends, issues
-3. Create inventory report with recommendations
-4. Save to Notion with name like "Dec-Inventory-Check"
-5. Show report + confirm save
+Example patterns (adapt to user's domain):
+- "Show me X and save to Notion" → Query data, analyze, save, confirm
+- "Analyze Y and email results" → Query, analyze, format email, send
+- "Check Z status" → Query relevant data, provide insights
 
-RULE 5: ALWAYS DELIVER BOTH
-When saving to Notion, ALWAYS:
-- Show the full report content in chat
-- Confirm what was saved to Notion with page name
+RULE 5: DELIVER COMPLETE RESULTS
+- Show full results in chat
+- Confirm any external actions (saved to Notion, email sent, etc.)
+- Include relevant insights based on the data
 </autonomous_behavior>
 
 ############################################
@@ -171,9 +193,83 @@ AVAILABLE MCP TOOLS
 ############################################
 AVAILABLE FUNCTION TOOLS
 ############################################
-- `send_email`: Send query results or any content via user's connected Gmail
-- `check_email_status`: Check if user's Gmail is connected and ready
 - `google_search`: Search the web for real-time information, documentation, news, and current events
+- `file_search`: Search through user's uploaded files (PDFs, documents, spreadsheets) using semantic search with citations
+
+**PDF Document Tools:**
+- `pdf_read_text`: Read ENTIRE PDF content (all pages, all text, all tables)
+- `pdf_search_text`: Search for specific text in PDF with page locations
+- `pdf_get_info`: Get PDF metadata (page count, author, title)
+
+**Data File Tools (CSV/Excel):**
+- `data_read`: Read data file with columns, statistics, and sample rows
+- `data_filter`: Filter data by column conditions (equals, contains, greater_than, etc.)
+- `data_aggregate`: Calculate aggregations (sum, avg, count, min, max)
+
+**Image Tools:**
+- `image_get_info`: Get image dimensions, format, and metadata
+
+**General:**
+- `get_uploaded_file_info`: Check file status and type before processing
+
+############################################
+FILE UPLOAD ANALYSIS (CRITICAL - READ CAREFULLY)
+############################################
+When a message contains [FILE:uuid] or user mentions an uploaded file:
+
+<pdf_file_rules>
+**FOR PDF FILES - ALWAYS DO THIS:**
+1. FIRST: Call `pdf_read_text(file_id)` to read the ENTIRE document
+   - This extracts ALL text from ALL pages automatically
+   - You do NOT need to specify page numbers - it reads everything
+   - NEVER ask user for page numbers - just read the whole document
+
+2. THEN: Answer the user's question from the extracted text
+   - The text contains everything in the PDF
+   - Search through it to find what user is asking about
+
+3. IF user asks to find specific text: Use `pdf_search_text(file_id, "search term")`
+   - This searches the ENTIRE PDF and returns all matches with page locations
+
+**CRITICAL PDF RULES:**
+- NEVER ask "What page is this on?" - YOU read the document and find it
+- NEVER say "Could you specify the page?" - YOU search through all pages
+- ALWAYS call pdf_read_text FIRST before answering any PDF question
+- The pdf_read_text tool gives you the COMPLETE document text
+</pdf_file_rules>
+
+<csv_excel_rules>
+**FOR CSV/EXCEL FILES:**
+1. Call `data_read(file_id)` to see columns, statistics, and sample data
+2. Use `data_filter(file_id, column, operator, value)` to find specific rows
+3. Use `data_aggregate(file_id, column, operation)` for calculations
+</csv_excel_rules>
+
+<image_rules>
+**FOR IMAGE FILES:**
+1. Call `image_get_info(file_id)` to get dimensions and format
+</image_rules>
+
+<file_analysis_patterns>
+PATTERN: User uploads PDF and asks a question
+→ Call pdf_read_text(file_id) to get ALL document text
+→ Analyze the text to find the answer
+→ Provide complete answer with relevant quotes/data
+
+PATTERN: User asks to find something in PDF
+→ Call pdf_search_text(file_id, "search term") to find all occurrences
+→ Show matches with page numbers and context
+
+PATTERN: User uploads CSV/Excel
+→ Call data_read(file_id) to understand structure
+→ Use data_filter or data_aggregate as needed
+→ Provide insights with statistics
+
+PATTERN: Compare file with database
+→ Read file content first (appropriate tool for type)
+→ Query relevant database tables
+→ Compare and provide insights
+</file_analysis_patterns>
 
 ############################################
 CONNECTOR SUB-AGENTS (EXTERNAL INTEGRATIONS)
@@ -192,75 +288,61 @@ is available as a SINGLE TOOL that handles all operations for that service.
 ############################################
 NOTION CONNECTOR (notion_connector tool)
 ############################################
-If Notion is connected, you have the `notion_connector` tool. It's a SPECIALIZED AGENT that knows:
-- Notion terminology (Database = Table, Page = Row, Property = Column)
-- All Notion API operations (search, create, update, query)
-- Complex workflows (find parent → create database → add items)
+If Notion is connected, you have the `notion_connector` tool - a specialized agent for Notion operations.
 
 <how_to_use_notion_connector>
-HOW TO USE THE NOTION CONNECTOR:
+The Notion connector understands:
+- Notion terminology (Database = Table, Page = Row, Property = Column)
+- All Notion API operations (search, create, update, query)
+- Multi-step workflows automatically
 
-For REPORTS/DOCUMENTS (most common):
-- Create a NEW PAGE with the report content
-- Use rich text formatting (headers, bullets, tables)
-- Name it smartly: "[Month]-[Type]-Report"
+For DOCUMENTS/REPORTS:
+- Create a PAGE with formatted content
+- Use headers, bullets, tables as needed
 
-For DATA/ITEMS:
-- Create a DATABASE (table) with structured columns
+For STRUCTURED DATA:
+- Create a DATABASE with appropriate columns
 - Add items as rows
 
-JUST DESCRIBE THE GOAL - the Notion agent handles everything!
+Simply describe your goal - the connector handles the API details.
 </how_to_use_notion_connector>
 
-<notion_smart_usage>
-SMART NOTION PATTERNS:
+<notion_usage_patterns>
+USAGE PATTERNS (adapt to user's context):
 
-PATTERN 1: "Save report to Notion"
-→ Call notion_connector with:
-"Create a new page titled '[Smart-Name]' with this content:
-[Your formatted report with headers, sections, data tables]"
+PATTERN 1: Save content to Notion
+→ Call notion_connector describing what to save and the content
 
-PATTERN 2: "Analyze X and save to Notion"
-→ First: Query and analyze data
-→ Then: Create professional report
-→ Finally: Call notion_connector to create page with full report
+PATTERN 2: Analyze and save
+→ First: Query and analyze the user's data
+→ Then: Format results appropriately
+→ Finally: Call notion_connector to save
 
-PATTERN 3: "Track items in Notion"
-→ Call notion_connector with:
-"Create a database called '[Name]' with columns: [col1, col2, col3].
-Then add these items: [item1, item2, item3]"
+PATTERN 3: Track items
+→ Call notion_connector to create database with relevant columns
+→ Add items as needed
 
-AUTO-NAMING CONVENTION:
-- Sales report → "Dec-Sales-Report" or "2024-Q4-Sales-Analysis"
-- Inventory check → "Dec-Inventory-Status"
-- General analysis → "Dec-[Topic]-Report"
-</notion_smart_usage>
+Generate names based on content and current date - be contextually appropriate.
+</notion_usage_patterns>
 
 <notion_report_template>
-WHEN SAVING REPORTS TO NOTION, FORMAT LIKE THIS:
+STANDARD REPORT STRUCTURE (adapt sections based on content):
 
-# [Report Title]
+# [Title based on content]
 **Generated:** [Current Date]
-**Period:** [Time Period Analyzed]
+**Period:** [If applicable]
 
-## Executive Summary
-[2-3 bullet points with key findings]
+## Summary
+[Key findings relevant to the data]
 
-## Key Metrics
-| Metric | Value | Change |
-|--------|-------|--------|
-| ... | ... | ... |
+## Data
+[Tables, metrics, or content as appropriate]
 
-## Detailed Analysis
-[Data tables, trends, observations]
-
-## Insights & Recommendations
-1. [Insight 1 with recommendation]
-2. [Insight 2 with recommendation]
-3. [Insight 3 with recommendation]
+## Analysis & Insights
+[Observations and recommendations relevant to the context]
 
 ---
-*Report generated by AI Assistant*
+*Generated by AI Assistant*
 </notion_report_template>
 
 <tool_usage_rules>
@@ -270,52 +352,32 @@ WHEN SAVING REPORTS TO NOTION, FORMAT LIKE THIS:
   * What was found (data first!)
   * Key insights or patterns
   * Relevant context or implications
-- Use send_email when user explicitly asks to email/send results
-- If email fails due to not connected, inform user to connect Gmail in settings
+- Use gmail_connector when user explicitly asks to email/send results
+- If email fails due to Gmail not connected, inform user to connect Gmail via Connectors
 </tool_usage_rules>
 
 ############################################
-GMAIL TOOL ACTIVATION (IMPORTANT)
+GMAIL CONNECTOR ACTIVATION (IMPORTANT)
 ############################################
-<gmail_tool_rules>
-When message starts with [TOOL:GMAIL], the user has selected the Gmail tool:
+<gmail_connector_rules>
+When message starts with [TOOL:GMAIL], the user has selected the Gmail connector:
 1. Execute the query to get the requested data
-2. ALWAYS call send_email tool with the results - this is MANDATORY
-3. Format email body PROFESSIONALLY with:
+2. ALWAYS call gmail_connector tool with the results - this is MANDATORY
+3. The gmail_connector sub-agent handles all email operations:
+   - Sending emails (gmail_send)
+   - Checking status (gmail_status)
+   - Reading inbox (gmail_read_inbox)
+   - Searching emails (gmail_search)
+4. Format email body PROFESSIONALLY with:
    - Greeting: "Hello,"
    - Brief description of the data
-   - Data formatted in clean, readable tables (use ASCII tables, not markdown)
+   - Data formatted in clean, readable tables
    - Summary/insights section
-   - Sign-off: "Best regards,\nAI Data Assistant\nIMS Inventory System"
-4. Use descriptive email subject based on the query
+   - Sign-off: "Best regards,\nAI Data Assistant"
+5. Use descriptive email subject based on the query
 
-EMAIL FORMAT TEMPLATE:
-```
-Hello,
-
-Here is the data you requested:
-
-[QUERY DESCRIPTION]
-
-[DATA IN READABLE TABLE FORMAT]
-Example:
-+--------+------------+-----------+
-| Column | Column     | Column    |
-+--------+------------+-----------+
-| Value  | Value      | Value     |
-+--------+------------+-----------+
-
-Summary:
-- [Key insight 1]
-- [Key insight 2]
-
-Best regards,
-AI Data Assistant
-IMS Inventory System
-```
-
-CRITICAL: When [TOOL:GMAIL] is present, sending email is NOT optional - always send!
-</gmail_tool_rules>
+CRITICAL: When [TOOL:GMAIL] is present, sending email is NOT optional - always send via gmail_connector!
+</gmail_connector_rules>
 
 ############################################
 GOOGLE SEARCH TOOL (WEB GROUNDING)
@@ -364,42 +426,26 @@ When user gives MULTIPLE tasks in ONE message, you MUST:
 3. EXECUTE ALL tasks in sequence WITHOUT stopping to ask
 4. REPORT results of ALL tasks in a single response
 
-EXAMPLES:
-
-User: "mera sales data dekho aur Notion mai save kro"
-→ Task 1: Query sales data (execute_sql)
-→ Task 2: Analyze data and create insights
-→ Task 3: Generate professional report
-→ Task 4: Call notion_connector to create page "Dec-Sales-Report" with full content
-→ Task 5: Show report in chat + confirm Notion save
-→ ALL IN ONE GO!
-
-User: "Get my top 5 products and save them to Notion"
-→ Task 1: Query database for top 5 products
-→ Task 2: Format as report with analysis
-→ Task 3: Call notion_connector to create page with report
-→ Execute ALL, report: "Here's your Top 5 Products report: [report]. Saved to Notion as 'Dec-Top-Products'."
-
-User: "inventory check kro, koi low stock to nhi?"
-→ Task 1: Query inventory data
-→ Task 2: Identify low stock items
-→ Task 3: Create summary with recommendations
-→ If user mentioned Notion: Task 4: Auto-save to Notion
-→ Complete response with actionable insights
+EXECUTION PATTERN:
+User: "[Query request] and [Action request]"
+→ Step 1: Execute query using appropriate database tools
+→ Step 2: Process/analyze the results
+→ Step 3: Perform requested action (save, email, etc.)
+→ Step 4: Report complete results + confirm action
 
 NEVER:
 - Stop after first task and ask "what next?"
 - Say "I've done step 1, should I continue?"
 - Ask for confirmation between steps
-- Ask "where should I save?" or "what should I name it?"
+- Ask unnecessary clarifying questions
 - Leave tasks incomplete
 
 ALWAYS:
 - Complete the ENTIRE request in one go
-- Make smart decisions about names, formats, locations
+- Make intelligent decisions based on context
 - Chain tools as needed
 - Handle errors gracefully and continue with remaining tasks
-- Deliver results in chat AND save to external service if requested
+- Deliver results AND confirm any external actions
 </multi_task_spec>
 
 ############################################
@@ -578,7 +624,6 @@ class SchemaQueryAgent:
         schema_metadata: dict,
         read_only: bool = True,
         user_id: Optional[int] = None,
-        enable_gmail: bool = True,
         thread_id: Optional[str] = None,
         connector_tools: Optional[List[Any]] = None,
     ):
@@ -589,16 +634,14 @@ class SchemaQueryAgent:
             database_uri: PostgreSQL connection string for user's database
             schema_metadata: Discovered schema metadata dict
             read_only: Whether to use read-only mode (default: True)
-            user_id: User ID for tool context (needed for Gmail integration)
-            enable_gmail: Whether to enable Gmail tools (default: True)
+            user_id: User ID for tool context
             thread_id: Thread ID for ChatKit session (for persistent conversation)
-            connector_tools: Optional list of tools from user's MCP connectors
+            connector_tools: Optional list of tools from user's MCP connectors (Gmail, Notion, GDrive, etc.)
         """
         self.database_uri = database_uri
         self.schema_metadata = schema_metadata
         self.read_only = read_only
         self.user_id = user_id
-        self.enable_gmail = enable_gmail
         self.thread_id = thread_id
         self.connector_tools = connector_tools or []
 
@@ -632,7 +675,7 @@ class SchemaQueryAgent:
 
         logger.info(
             f"[Schema Agent] Created agent instance "
-            f"(read_only={read_only}, user_id={user_id}, gmail={enable_gmail}, "
+            f"(read_only={read_only}, user_id={user_id}, "
             f"thread={thread_id}, connectors={len(self.connector_tools)}, session={self._session_id})"
         )
 
@@ -738,7 +781,7 @@ class SchemaQueryAgent:
 
     async def query(
         self,
-        natural_query: str,
+        natural_query: str | List[Dict[str, Any]],
         thread_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
@@ -748,7 +791,9 @@ class SchemaQueryAgent:
         Uses PostgreSQL-backed session for persistent conversation history.
 
         Args:
-            natural_query: User's question in natural language
+            natural_query: User's question - can be:
+                - A simple string for text-only queries
+                - A list of input items for multi-modal queries (images, files)
             thread_id: Optional thread ID for ChatKit (for persistent conversation)
 
         Returns:
@@ -757,7 +802,13 @@ class SchemaQueryAgent:
         mcp_server = None
 
         try:
-            logger.info(f"[Schema Agent] Processing query: {natural_query[:50]}...")
+            # Log query info
+            if isinstance(natural_query, str):
+                query_preview = natural_query[:50]
+            else:
+                query_preview = "[Multi-modal input]"
+
+            logger.info(f"[Schema Agent] Processing query: {query_preview}...")
 
             # Use provided thread_id or instance thread_id
             effective_thread_id = thread_id or self.thread_id
@@ -826,16 +877,8 @@ IMPORTANT CONNECTOR TOOL RULES:
                 system_prompt = system_prompt + connector_tools_section
                 logger.info(f"[Schema Agent] Added {len(self._connector_tool_names)} connector tools to system prompt")
 
-            # Prepare function tools list (Gmail tools if enabled)
+            # Prepare function tools list
             function_tools = []
-            if self.enable_gmail and self.user_id:
-                try:
-                    from app.mcp_server.tools_gmail import GMAIL_TOOLS
-                    function_tools = list(GMAIL_TOOLS)
-                    self._function_tools = ["send_email", "check_email_status"]
-                    logger.info(f"[Schema Agent] Gmail tools enabled for user {self.user_id}")
-                except ImportError as e:
-                    logger.warning(f"[Schema Agent] Gmail tools not available: {e}")
 
             # Add Google Search tool (always available as System Tool)
             try:
@@ -845,6 +888,25 @@ IMPORTANT CONNECTOR TOOL RULES:
                 logger.info(f"[Schema Agent] Google Search tool enabled")
             except ImportError as e:
                 logger.warning(f"[Schema Agent] Google Search tool not available: {e}")
+
+            # Add File Analysis tools (Feature 012 - File Upload Processing)
+            try:
+                from app.mcp_server.tools_file_analysis import FILE_ANALYSIS_TOOLS, set_file_analysis_context
+                function_tools.extend(FILE_ANALYSIS_TOOLS)
+                self._function_tools.append("analyze_uploaded_file") if hasattr(self, '_function_tools') else None
+                self._function_tools.append("get_uploaded_file_info") if hasattr(self, '_function_tools') else None
+                logger.info(f"[Schema Agent] File Analysis tools enabled")
+            except ImportError as e:
+                logger.warning(f"[Schema Agent] File Analysis tools not available: {e}")
+
+            # Add Gemini File Search tool (Feature 013 - Semantic file search with RAG)
+            try:
+                from app.mcp_server.tools_file_search import FILE_SEARCH_TOOLS
+                function_tools.extend(FILE_SEARCH_TOOLS)
+                self._function_tools.append("file_search") if hasattr(self, '_function_tools') else None
+                logger.info(f"[Schema Agent] Gemini File Search tool enabled")
+            except ImportError as e:
+                logger.warning(f"[Schema Agent] Gemini File Search tool not available: {e}")
 
             # Add connector tools if available
             if self.connector_tools:
@@ -879,6 +941,21 @@ IMPORTANT CONNECTOR TOOL RULES:
             logger.info(f"[Schema Agent] Function tools available: {[t.name if hasattr(t, 'name') else str(t) for t in function_tools]}")
             logger.info(f"[Schema Agent] Session persistence: {'PostgreSQL' if session else 'In-memory'}")
 
+            # If using session memory + list inputs (multi-modal), Agents SDK requires a session_input_callback
+            # so it knows how to merge the new list with stored conversation history.
+            is_multimodal_input = isinstance(natural_query, list)
+            # Multimodal inputs can be very large (base64 images). Disable tracing to avoid 5MB trace payload errors.
+            run_config = RunConfig(tracing_disabled=True, trace_include_sensitive_data=False) if is_multimodal_input else None
+            if session and is_multimodal_input:
+                async def _merge_session_inputs(history_items: list, new_items: list):
+                    return history_items + new_items
+                run_config = RunConfig(
+                    session_input_callback=_merge_session_inputs,
+                    tracing_disabled=True,
+                    trace_include_sensitive_data=False,
+                )
+                logger.info("[Schema Agent] Multi-modal input detected - using session_input_callback for session memory")
+
             # Run the agent with session for persistent conversation history
             # Increased max_turns to 25 for complex multi-step operations (Notion workflows)
             logger.info(f"[Schema Agent] ═══════════════════════════════════════")
@@ -886,6 +963,7 @@ IMPORTANT CONNECTOR TOOL RULES:
             logger.info(f"[Schema Agent] Query: {natural_query}")
             logger.info(f"[Schema Agent] Tools count: {len(function_tools)}")
             logger.info(f"[Schema Agent] Max turns: 25")
+            logger.info(f"[Schema Agent] Session: {'enabled' if session else 'disabled'} (multimodal={is_multimodal_input})")
             logger.info(f"[Schema Agent] ═══════════════════════════════════════")
 
             result = await Runner.run(
@@ -893,6 +971,7 @@ IMPORTANT CONNECTOR TOOL RULES:
                 input=natural_query,
                 max_turns=25,  # Allow more iterations for complex multi-tool workflows
                 context=run_context,
+                run_config=run_config,
                 session=session,  # Use PostgreSQL-backed session for conversation memory
             )
 
@@ -900,28 +979,38 @@ IMPORTANT CONNECTOR TOOL RULES:
             logger.info(f"[Schema Agent] ═══════════════════════════════════════")
             logger.info(f"[Schema Agent] Run completed. Analyzing result...")
             logger.info(f"[Schema Agent] Result type: {type(result).__name__}")
-            logger.info(f"[Schema Agent] Result attributes: {dir(result)}")
 
             if hasattr(result, 'new_items'):
                 logger.info(f"[Schema Agent] New items count: {len(result.new_items)}")
                 for idx, item in enumerate(result.new_items):
-                    item_type = type(item).__name__
+                    item_type = getattr(item, 'type', type(item).__name__)
                     logger.info(f"[Schema Agent] Item {idx}: {item_type}")
                     if hasattr(item, 'raw_item'):
                         raw_str = str(item.raw_item)[:300]
                         logger.info(f"[Schema Agent] Raw item {idx}: {raw_str}...")
 
-            # Extract response with better fallback handling
+            # Extract response with comprehensive fallback handling
             response_text = ""
 
-            # Try final_output first
+            # Method 1: Try final_output first (works for most cases)
             if result.final_output:
                 response_text = str(result.final_output)
                 logger.info(f"[Schema Agent] Got response from final_output: {len(response_text)} chars")
 
-            # If empty, try to extract from new_items
+            # Method 2: Use ItemHelpers for message_output_item extraction
             if not response_text and hasattr(result, 'new_items'):
-                for item in result.new_items:
+                for item in reversed(result.new_items):  # Check from latest to earliest
+                    item_type = getattr(item, 'type', '')
+
+                    # Use ItemHelpers for message_output_item (recommended approach)
+                    if item_type == 'message_output_item':
+                        extracted = ItemHelpers.text_message_output(item)
+                        if extracted:
+                            response_text = extracted
+                            logger.info(f"[Schema Agent] Got response from ItemHelpers.text_message_output: {len(response_text)} chars")
+                            break
+
+                    # Fallback: Try direct content/text attributes
                     if hasattr(item, 'content') and item.content:
                         response_text = str(item.content)
                         logger.info(f"[Schema Agent] Got response from new_items.content: {len(response_text)} chars")
@@ -930,22 +1019,70 @@ IMPORTANT CONNECTOR TOOL RULES:
                         response_text = str(item.text)
                         logger.info(f"[Schema Agent] Got response from new_items.text: {len(response_text)} chars")
                         break
-                    elif hasattr(item, 'raw_item'):
-                        raw = item.raw_item
-                        if isinstance(raw, dict) and 'content' in raw:
-                            contents = raw.get('content', [])
-                            if isinstance(contents, list):
-                                for c in contents:
-                                    if isinstance(c, dict) and c.get('type') == 'text':
-                                        response_text = c.get('text', '')
-                                        if response_text:
-                                            logger.info(f"[Schema Agent] Got response from raw_item.content: {len(response_text)} chars")
-                                            break
 
-            # If still empty, provide a meaningful message
+            # Method 3: Deep extraction from raw_item for Gemini/LiteLLM responses
+            if not response_text and hasattr(result, 'new_items'):
+                for item in reversed(result.new_items):
+                    if hasattr(item, 'raw_item'):
+                        raw = item.raw_item
+
+                        # Handle dict format
+                        if isinstance(raw, dict):
+                            # Check for 'content' list (OpenAI format)
+                            if 'content' in raw:
+                                contents = raw.get('content', [])
+                                if isinstance(contents, list):
+                                    for c in contents:
+                                        if isinstance(c, dict) and c.get('type') == 'text':
+                                            response_text = c.get('text', '')
+                                            if response_text:
+                                                logger.info(f"[Schema Agent] Got response from raw_item.content[].text: {len(response_text)} chars")
+                                                break
+                                elif isinstance(contents, str) and contents:
+                                    response_text = contents
+                                    logger.info(f"[Schema Agent] Got response from raw_item.content (str): {len(response_text)} chars")
+                            # Check for direct 'text' field
+                            elif 'text' in raw and raw['text']:
+                                response_text = str(raw['text'])
+                                logger.info(f"[Schema Agent] Got response from raw_item.text: {len(response_text)} chars")
+                            # Check for 'message' field (some providers)
+                            elif 'message' in raw and raw['message']:
+                                msg = raw['message']
+                                if isinstance(msg, dict) and 'content' in msg:
+                                    response_text = str(msg['content'])
+                                else:
+                                    response_text = str(msg)
+                                logger.info(f"[Schema Agent] Got response from raw_item.message: {len(response_text)} chars")
+
+                        # Handle object with attributes
+                        elif hasattr(raw, 'content'):
+                            content = raw.content
+                            if isinstance(content, list):
+                                for c in content:
+                                    if hasattr(c, 'text') and c.text:
+                                        response_text = c.text
+                                        logger.info(f"[Schema Agent] Got response from raw_item.content[].text (obj): {len(response_text)} chars")
+                                        break
+                            elif isinstance(content, str) and content:
+                                response_text = content
+                                logger.info(f"[Schema Agent] Got response from raw_item.content (obj str): {len(response_text)} chars")
+                        elif hasattr(raw, 'text') and raw.text:
+                            response_text = raw.text
+                            logger.info(f"[Schema Agent] Got response from raw_item.text (obj): {len(response_text)} chars")
+
+                    if response_text:
+                        break
+
+            # If still empty, log detailed debug info and provide error message
             if not response_text:
-                logger.warning(f"[Schema Agent] No response text found in result!")
-                response_text = "I completed the requested operations. Please check the logs for details."
+                logger.error(f"[Schema Agent] CRITICAL: No response text found!")
+                logger.error(f"[Schema Agent] Result final_output: {result.final_output}")
+                if hasattr(result, 'new_items'):
+                    for idx, item in enumerate(result.new_items):
+                        logger.error(f"[Schema Agent] DEBUG Item {idx}: type={getattr(item, 'type', 'unknown')}, attrs={[a for a in dir(item) if not a.startswith('_')]}")
+                        if hasattr(item, 'raw_item'):
+                            logger.error(f"[Schema Agent] DEBUG Raw {idx}: {item.raw_item}")
+                response_text = "I'm sorry, I couldn't generate a proper response. Please try rephrasing your question or check the database connection."
 
             logger.info(f"[Schema Agent] Final output (first 300 chars): {response_text[:300]}...")
             logger.info(f"[Schema Agent] ═══════════════════════════════════════")
@@ -998,14 +1135,425 @@ IMPORTANT CONNECTOR TOOL RULES:
                 except Exception as e:
                     logger.warning(f"[Schema Agent] Error closing MCP server: {e}")
 
-    def _detect_visualization(self, response: str, query: str) -> Optional[Dict[str, str]]:
+    async def query_streamed(
+        self,
+        natural_query: str | List[Dict[str, Any]],
+        thread_id: Optional[str] = None,
+    ) -> AsyncIterator[Dict[str, Any]]:
+        """
+        Process a natural language query with streaming progress updates.
+
+        Yields progress events for each step (tool calls, outputs, thoughts, etc.)
+        for real-time UI feedback in ChatKit.
+
+        Args:
+            natural_query: User's question - can be:
+                - A simple string for text-only queries
+                - A list of input items for multi-modal queries (images, files)
+                  Format: [{"role": "user", "content": [{"type": "input_text", "text": "..."}, {"type": "input_image", "image_url": "data:..."}]}]
+            thread_id: Optional thread ID for ChatKit
+
+        Yields:
+            Dict with type and details for each streaming event
+        """
+        mcp_server = None
+
+        try:
+            # Log query info
+            if isinstance(natural_query, str):
+                query_preview = natural_query[:50]
+                is_multimodal = False
+            else:
+                # Multi-modal input - extract text preview
+                query_preview = "[Multi-modal input]"
+                is_multimodal = True
+                for item in natural_query:
+                    if isinstance(item, dict) and item.get("content"):
+                        for content in item["content"]:
+                            if isinstance(content, dict) and content.get("type") == "input_text":
+                                query_preview = content.get("text", "")[:50]
+                                break
+
+            logger.info(f"[Schema Agent] Processing streamed query: {query_preview}... (multimodal={is_multimodal})")
+
+            yield {"type": "progress", "text": "Analyzing your question..."}
+
+            effective_thread_id = thread_id or self.thread_id
+
+            # Get session
+            session = None
+            if self._session_manager:
+                try:
+                    session = self._session_manager.get_session(effective_thread_id)
+                    logger.info(f"[Schema Agent] Using PostgreSQL session")
+                except Exception as e:
+                    logger.warning(f"[Schema Agent] Session fallback: {e}")
+
+            access_mode = "restricted" if self.read_only else "unrestricted"
+
+            yield {"type": "progress", "text": "Connecting to database..."}
+
+            # Create fresh MCP server
+            mcp_server = MCPServerStdio(
+                name=f"postgres-mcp-stream-{datetime.now().strftime('%H%M%S%f')}",
+                params={
+                    "command": "postgres-mcp",
+                    "args": [self.database_uri, f"--access-mode={access_mode}"],
+                },
+                cache_tools_list=True,
+                client_session_timeout_seconds=300.0,
+            )
+
+            await mcp_server.__aenter__()
+
+            tools = await mcp_server.list_tools()
+            tool_names = [t.name for t in tools]
+            logger.info(f"[Schema Agent] MCP connected with tools: {tool_names}")
+
+            yield {"type": "progress", "text": f"Database connected. {len(tool_names)} tools available."}
+
+            # Generate system prompt
+            system_prompt = generate_schema_agent_prompt(self.schema_metadata)
+
+            # Add connector tools info
+            if self.connector_tools and self._connector_tool_names:
+                connector_tools_section = f"""
+
+############################################
+CONNECTED EXTERNAL SERVICES (MCP CONNECTORS)
+############################################
+AVAILABLE CONNECTOR TOOLS:
+{chr(10).join(f'- `{name}`' for name in self._connector_tool_names)}
+"""
+                system_prompt = system_prompt + connector_tools_section
+
+            # Prepare function tools
+            function_tools = []
+
+            # Add Google Search tool
+            try:
+                from app.mcp_server.tools_google_search import GOOGLE_SEARCH_TOOLS
+                function_tools.extend(GOOGLE_SEARCH_TOOLS)
+            except ImportError:
+                pass
+
+            # Add File Analysis tools (Feature 012)
+            try:
+                from app.mcp_server.tools_file_analysis import FILE_ANALYSIS_TOOLS
+                function_tools.extend(FILE_ANALYSIS_TOOLS)
+                logger.info(f"[Schema Agent Stream] File Analysis tools enabled")
+            except ImportError:
+                pass
+
+            # Add Gemini File Search tool (Feature 013)
+            try:
+                from app.mcp_server.tools_file_search import FILE_SEARCH_TOOLS
+                function_tools.extend(FILE_SEARCH_TOOLS)
+                logger.info(f"[Schema Agent Stream] Gemini File Search tool enabled")
+            except ImportError:
+                pass
+
+            if self.connector_tools:
+                function_tools.extend(self.connector_tools)
+                yield {"type": "progress", "text": f"Loaded {len(self.connector_tools)} connector tools."}
+
+            yield {"type": "progress", "text": "Initializing AI agent..."}
+
+            # Create agent
+            agent = Agent(
+                name="Schema Query Agent",
+                instructions=system_prompt,
+                model=get_llm_model(),
+                mcp_servers=[mcp_server],
+                tools=function_tools if function_tools else None,
+                model_settings=ModelSettings(tool_choice="auto"),
+            )
+
+            run_context = {"user_id": self.user_id} if self.user_id else {}
+
+            yield {"type": "progress", "text": "Processing your query..."}
+
+            # If using session memory + list inputs (multi-modal), Agents SDK requires a session_input_callback
+            # so it knows how to merge the new list with stored conversation history.
+            is_multimodal_input = isinstance(natural_query, list)
+            # Multimodal inputs can be very large (base64 images). Disable tracing to avoid 5MB trace payload errors.
+            run_config = RunConfig(tracing_disabled=True, trace_include_sensitive_data=False) if is_multimodal_input else None
+            if session and is_multimodal_input:
+                async def _merge_session_inputs(history_items: list, new_items: list):
+                    return history_items + new_items
+                run_config = RunConfig(
+                    session_input_callback=_merge_session_inputs,
+                    tracing_disabled=True,
+                    trace_include_sensitive_data=False,
+                )
+                logger.info("[Schema Agent Stream] Multi-modal input detected - using session_input_callback for session memory")
+            
+            # Run with streaming
+            result = Runner.run_streamed(
+                agent,
+                input=natural_query,
+                max_turns=25,
+                context=run_context,
+                run_config=run_config,
+                session=session,
+            )
+
+            response_text = ""
+            tool_calls_made = []
+
+            # Track last tool name for output matching
+            last_tool_name = ""
+
+            # Stream events from agent execution
+            async for event in result.stream_events():
+                event_type = getattr(event, 'type', 'unknown')
+                logger.info(f"[Schema Agent Stream] Event type: {event_type}")
+
+                # Handle run_item_stream_event - contains tool calls, outputs, messages
+                if event_type == "run_item_stream_event":
+                    item = event.item
+                    item_type = getattr(item, 'type', 'unknown')
+
+                    # Tool call started
+                    if item_type == "tool_call_item":
+                        # Try multiple ways to get tool name
+                        tool_name = None
+
+                        # Method 1: Direct 'name' attribute
+                        if hasattr(item, 'name') and item.name:
+                            tool_name = item.name
+
+                        # Method 2: Check raw_item for function call details
+                        if not tool_name and hasattr(item, 'raw_item'):
+                            raw = item.raw_item
+                            if isinstance(raw, dict):
+                                # Check for function name in various locations
+                                if 'name' in raw:
+                                    tool_name = raw['name']
+                                elif 'function' in raw and isinstance(raw['function'], dict):
+                                    tool_name = raw['function'].get('name')
+                                elif 'tool_call' in raw and isinstance(raw['tool_call'], dict):
+                                    tool_name = raw['tool_call'].get('name')
+                            elif hasattr(raw, 'name'):
+                                tool_name = raw.name
+                            elif hasattr(raw, 'function') and hasattr(raw.function, 'name'):
+                                tool_name = raw.function.name
+
+                        # Method 3: Check call_id pattern for MCP tools
+                        if not tool_name and hasattr(item, 'call_id'):
+                            call_id = item.call_id
+                            if call_id and '_' in str(call_id):
+                                # Sometimes call_id contains tool name
+                                tool_name = str(call_id).split('_')[0]
+
+                        # Fallback
+                        if not tool_name:
+                            tool_name = "database_tool"
+
+                        last_tool_name = tool_name
+                        tool_calls_made.append(tool_name)
+
+                        # Get arguments
+                        tool_args = getattr(item, 'arguments', '')
+                        if not tool_args and hasattr(item, 'raw_item'):
+                            raw = item.raw_item
+                            if isinstance(raw, dict):
+                                tool_args = raw.get('arguments', raw.get('input', ''))
+
+                        # Format tool call info
+                        args_preview = str(tool_args)[:100] + "..." if len(str(tool_args)) > 100 else str(tool_args)
+
+                        logger.info(f"[Schema Agent Stream] Tool call: {tool_name}, args: {args_preview}")
+
+                        yield {
+                            "type": "tool_call",
+                            "text": f"Calling tool: {tool_name}",
+                            "tool_name": tool_name,
+                            "arguments": args_preview,
+                        }
+
+                    # Tool call output received
+                    elif item_type == "tool_call_output_item":
+                        output = getattr(item, 'output', '')
+                        
+                        # Use last tool name if available
+                        tool_name = last_tool_name or "tool"
+                        
+                        # For google_search, send more output to capture URLs
+                        if "google_search" in tool_name.lower():
+                            # Send up to 2000 chars to capture Sources section with URLs
+                            output_preview = str(output)[:2000] if len(str(output)) > 2000 else str(output)
+                        else:
+                            output_preview = str(output)[:200] + "..." if len(str(output)) > 200 else str(output)
+
+                        yield {
+                            "type": "tool_output",
+                            "text": f"Response from: {tool_name}",
+                            "tool_name": tool_name,
+                            "output_preview": output_preview,
+                        }
+
+                    # Message output (assistant's text response)
+                    elif item_type == "message_output_item":
+                        # Use ItemHelpers to extract text
+                        text = ItemHelpers.text_message_output(item)
+                        if text:
+                            response_text = text
+
+                    # Reasoning/thinking item
+                    elif item_type == "reasoning_item":
+                        reasoning = getattr(item, 'content', '')
+                        if reasoning:
+                            yield {
+                                "type": "thinking",
+                                "text": f"Agent thinking: {str(reasoning)[:150]}...",
+                            }
+
+                # Handle agent updated event
+                elif event_type == "agent_updated_stream_event":
+                    new_agent = getattr(event, 'new_agent', None)
+                    if new_agent:
+                        agent_name = getattr(new_agent, 'name', 'Agent')
+                        yield {
+                            "type": "progress",
+                            "text": f"Switched to: {agent_name}",
+                        }
+
+                # Handle raw response streaming (for real-time token output)
+                elif event_type == "raw_response_event":
+                    # Check for text delta events for streaming text
+                    data = getattr(event, 'data', None)
+                    if data and hasattr(data, 'delta'):
+                        delta = data.delta
+                        if delta:
+                            yield {"type": "content_delta", "text": str(delta)}
+
+            # After streaming completes, extract final response
+            # Method 1: Try final_output first
+            if not response_text and result.final_output:
+                response_text = str(result.final_output)
+                logger.info(f"[Schema Agent Stream] Got response from final_output: {len(response_text)} chars")
+
+            # Method 2: Use ItemHelpers for message_output_item extraction
+            if not response_text and hasattr(result, 'new_items'):
+                for item in reversed(result.new_items):
+                    item_type = getattr(item, 'type', '')
+
+                    if item_type == 'message_output_item':
+                        extracted = ItemHelpers.text_message_output(item)
+                        if extracted:
+                            response_text = extracted
+                            logger.info(f"[Schema Agent Stream] Got response from ItemHelpers: {len(response_text)} chars")
+                            break
+
+                    if hasattr(item, 'content') and item.content:
+                        response_text = str(item.content)
+                        logger.info(f"[Schema Agent Stream] Got response from content: {len(response_text)} chars")
+                        break
+
+            # Method 3: Deep extraction from raw_item
+            if not response_text and hasattr(result, 'new_items'):
+                for item in reversed(result.new_items):
+                    if hasattr(item, 'raw_item'):
+                        raw = item.raw_item
+
+                        if isinstance(raw, dict):
+                            if 'content' in raw:
+                                contents = raw.get('content', [])
+                                if isinstance(contents, list):
+                                    for c in contents:
+                                        if isinstance(c, dict) and c.get('type') == 'text':
+                                            response_text = c.get('text', '')
+                                            if response_text:
+                                                break
+                                elif isinstance(contents, str) and contents:
+                                    response_text = contents
+                            elif 'text' in raw and raw['text']:
+                                response_text = str(raw['text'])
+                            elif 'message' in raw:
+                                msg = raw['message']
+                                if isinstance(msg, dict) and 'content' in msg:
+                                    response_text = str(msg['content'])
+                                elif msg:
+                                    response_text = str(msg)
+
+                        elif hasattr(raw, 'content'):
+                            content = raw.content
+                            if isinstance(content, list):
+                                for c in content:
+                                    if hasattr(c, 'text') and c.text:
+                                        response_text = c.text
+                                        break
+                            elif isinstance(content, str) and content:
+                                response_text = content
+                        elif hasattr(raw, 'text') and raw.text:
+                            response_text = raw.text
+
+                    if response_text:
+                        break
+
+            if not response_text:
+                logger.error(f"[Schema Agent Stream] CRITICAL: No response text found!")
+                response_text = "I'm sorry, I couldn't generate a proper response. Please try rephrasing your question."
+
+            # Add to history
+            self._conversation_history.append({"role": "user", "content": natural_query})
+            self._conversation_history.append({"role": "assistant", "content": response_text})
+
+            # Yield final response
+            visualization_hint = self._detect_visualization(response_text, natural_query)
+
+            yield {
+                "type": "complete",
+                "response": response_text,
+                "tools_used": tool_calls_made,
+                "visualization_hint": visualization_hint,
+            }
+
+        except Exception as e:
+            logger.error(f"[Schema Agent] Streamed query failed: {e}", exc_info=True)
+            yield {
+                "type": "error",
+                "text": f"Error: {str(e)}",
+                "response": f"I encountered an error: {str(e)}",
+            }
+        finally:
+            if mcp_server:
+                try:
+                    await mcp_server.__aexit__(None, None, None)
+                except Exception:
+                    pass
+
+    def _detect_visualization(self, response: Any, query: Any) -> Optional[Dict[str, str]]:
         """
         Detect if response data is suitable for visualization.
 
         Returns visualization hint dict or None.
         """
-        query_lower = query.lower()
-        response_lower = response.lower()
+        # query can be a string OR multi-modal list payload. Normalize to text.
+        query_text = ""
+        if isinstance(query, str):
+            query_text = query
+        elif isinstance(query, list):
+            # Possible shapes:
+            # - ChatKit/Agent multi-modal: [{"role": "user", "content": [{"type":"input_text","text":"..."}, ...]}]
+            # - Other list forms; we try best-effort extraction.
+            try:
+                for msg in query:
+                    if isinstance(msg, dict):
+                        content = msg.get("content")
+                        if isinstance(content, list):
+                            for part in content:
+                                if isinstance(part, dict) and part.get("type") == "input_text" and part.get("text"):
+                                    query_text = str(part["text"])
+                                    break
+                        if query_text:
+                            break
+            except Exception:
+                query_text = ""
+
+        query_lower = (query_text or "").lower()
+        response_lower = (response if isinstance(response, str) else str(response)).lower()
 
         # Keywords that suggest different chart types
         if any(word in query_lower for word in ["trend", "over time", "monthly", "daily", "weekly"]):
@@ -1081,7 +1629,6 @@ async def create_schema_query_agent(
     auto_initialize: bool = True,
     read_only: bool = True,
     user_id: Optional[int] = None,
-    enable_gmail: bool = True,
     thread_id: Optional[str] = None,
     connector_tools: Optional[List[Any]] = None,
 ) -> SchemaQueryAgent:
@@ -1093,10 +1640,9 @@ async def create_schema_query_agent(
         schema_metadata: Discovered schema metadata
         auto_initialize: Whether to initialize immediately
         read_only: Whether to use read-only mode
-        user_id: User ID for tool context (needed for Gmail integration)
-        enable_gmail: Whether to enable Gmail tools (default: True)
+        user_id: User ID for tool context
         thread_id: Thread ID for ChatKit session (for persistent conversation)
-        connector_tools: Optional list of tools from user's MCP connectors
+        connector_tools: Optional list of tools from user's MCP connectors (Gmail, Notion, GDrive, etc.)
 
     Returns:
         Initialized SchemaQueryAgent instance with PostgreSQL session support
@@ -1106,7 +1652,6 @@ async def create_schema_query_agent(
         schema_metadata=schema_metadata,
         read_only=read_only,
         user_id=user_id,
-        enable_gmail=enable_gmail,
         thread_id=thread_id,
         connector_tools=connector_tools,
     )

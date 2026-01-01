@@ -2,7 +2,7 @@
 Connector Sub-Agents Module.
 
 This module contains specialized sub-agents for external service connectors.
-Each connector (Notion, Slack, Google Docs, etc.) has its own dedicated agent
+Each connector (Notion, Gmail, Google Drive, etc.) has its own dedicated agent
 that handles all operations for that service.
 
 These sub-agents are used as tools by the main Schema Agent, providing:
@@ -14,21 +14,26 @@ These sub-agents are used as tools by the main Schema Agent, providing:
 Architecture:
     Schema Agent (Main)
     ├── Database tools (postgres-mcp)
-    ├── Gmail tool
     ├── Google Search tool
     └── Connector Sub-Agents (as tools)
         ├── NotionConnectorAgent
+        ├── GoogleDriveConnectorAgent
+        ├── GmailConnectorAgent
         ├── SlackConnectorAgent (future)
-        └── GoogleDocsConnectorAgent (future)
+        └── AirtableConnectorAgent (future)
 """
 
 from .base import BaseConnectorAgent
 from .notion_agent import NotionConnectorAgent
+from .gdrive_agent import GoogleDriveConnectorAgent
+from .gmail_agent import GmailConnectorAgent
 from .registry import ConnectorAgentRegistry, get_connector_agent_tools
 
 __all__ = [
     "BaseConnectorAgent",
     "NotionConnectorAgent",
+    "GoogleDriveConnectorAgent",
+    "GmailConnectorAgent",
     "ConnectorAgentRegistry",
     "get_connector_agent_tools",
 ]

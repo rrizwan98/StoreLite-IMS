@@ -24,6 +24,7 @@ const iconMap: Record<string, React.ReactNode> = {
   download: <Download className="h-4 w-4" />,
 };
 
+
 export default function ToolAttachButton({ onToolSelect, selectedTool }: ToolAttachButtonProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -74,8 +75,8 @@ export default function ToolAttachButton({ onToolSelect, selectedTool }: ToolAtt
 
   function handleSelectConnectorTool(connector: Connector, toolName?: string) {
     const prefix = toolName
-      ? `[TOOL:${connector.name}:${toolName}]`
-      : `[TOOL:${connector.name}]`;
+      ? `[TOOL:${connector.name.toUpperCase().replace(' ', '_')}]`
+      : `[TOOL:${connector.name.toUpperCase().replace(' ', '_')}]`;
     onToolSelect?.(prefix, toolName || connector.name);
     setIsOpen(false);
   }
@@ -187,7 +188,7 @@ export default function ToolAttachButton({ onToolSelect, selectedTool }: ToolAtt
                           <Server className="h-4 w-4" />
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-gray-700">{connector.name}</p>
+                          <p className="text-sm font-medium text-gray-700">Use {connector.name}</p>
                           <p className="text-xs text-gray-500">
                             {connector.tool_count} tool{connector.tool_count !== 1 ? 's' : ''}
                           </p>

@@ -32,19 +32,40 @@ from chatkit.server import (
     UserMessageItem,
     ThreadStreamEvent,
 )
+from chatkit.store import AttachmentStore
 from chatkit.types import (
     ThreadItemDoneEvent,
     ThreadItemAddedEvent,
+    ThreadItemUpdatedEvent,
     AssistantMessageItem,
     AssistantMessageContent,
     ProgressUpdateEvent,
     ErrorEvent,
     ErrorCode,
     Page,
+    ImageAttachment,
+    FileAttachment,
+    # WorkflowItem types for collapsible streaming progress display
+    WorkflowItem,
+    Workflow,
+    CustomTask,
+    SearchTask,
+    ThoughtTask,
+    URLSource,
+    CustomSummary,
+    DurationSummary,
+    # Workflow update event types
+    WorkflowTaskAdded,
+    WorkflowTaskUpdated,
+    # Annotation types for inline citations (like ChatGPT sources)
+    Annotation,
 )
+from chatkit.agents import ThreadItemConverter
+from openai.types.responses import ResponseInputImageParam, ResponseInputTextParam, ResponseInputFileParam
 
 from app.database import get_db
 from app.models import User, UserConnection
+from app.models import UserSettings, UploadedFile
 from app.routers.auth import get_current_user
 from app.services.schema_discovery import (
     test_connection,
@@ -68,6 +89,143 @@ from app.connector_agents import get_connector_agent_tools
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/schema-agent", tags=["schema-agent"])
+
+
+# ============================================================================
+# Custom ThreadItemConverter for File Attachments
+# ============================================================================
+
+class SchemaAgentThreadItemConverter(ThreadItemConverter):
+    """
+    Custom ThreadItemConverter that properly converts file attachments to model input.
+
+    This is required because:
+    1. ChatKit's default converter doesn't know how to read our file storage
+    2. Images need to be converted to base64 data URLs for the model to see them
+    3. PDFs need to be converted to base64 file params
+
+    This class reads file bytes from our storage and converts them to the proper
+    OpenAI ResponseInput format.
+    """
+
+    def __init__(self, db_session=None):
+        """Initialize with optional database session for file lookups."""
+        super().__init__()
+        self.db_session = db_session
+
+    async def attachment_to_message_content(self, attachment):
+        """
+        Convert attachment to model input content.
+
+        For images: Returns ResponseInputImageParam with base64 data URL
+        For PDFs: Returns ResponseInputFileParam with base64 file data
+        For other files: Returns ResponseInputTextParam with file info
+        """
+        import base64
+        import aiofiles
+        from pathlib import Path
+
+        attachment_id = getattr(attachment, 'id', None)
+        if not attachment_id:
+            logger.warning("[ThreadItemConverter] Attachment has no ID")
+            return None
+
+        logger.info(f"[ThreadItemConverter] Converting attachment: {attachment_id}")
+
+        # Read file bytes from storage
+        file_bytes = await self._read_file_bytes(attachment_id)
+
+        if file_bytes is None:
+            logger.warning(f"[ThreadItemConverter] Could not read file bytes for: {attachment_id}")
+            # Return text description as fallback
+            return ResponseInputTextParam(
+                type="input_text",
+                text=f"[Attached file: {getattr(attachment, 'name', 'unknown')} (could not read content)]"
+            )
+
+        mime_type = getattr(attachment, 'mime_type', 'application/octet-stream')
+        file_name = getattr(attachment, 'name', 'unknown')
+
+        # Check if it's an image attachment
+        if isinstance(attachment, ImageAttachment) or mime_type.startswith('image/'):
+            # Convert to base64 data URL for images
+            b64_content = base64.b64encode(file_bytes).decode('utf-8')
+            data_url = f"data:{mime_type};base64,{b64_content}"
+
+            logger.info(f"[ThreadItemConverter] Converted image to data URL ({len(file_bytes)} bytes)")
+
+            return ResponseInputImageParam(
+                type="input_image",
+                detail="auto",
+                image_url=data_url,
+            )
+
+        # Check if it's a PDF
+        elif mime_type == 'application/pdf':
+            b64_content = base64.b64encode(file_bytes).decode('utf-8')
+            data_url = f"data:{mime_type};base64,{b64_content}"
+
+            logger.info(f"[ThreadItemConverter] Converted PDF to file param ({len(file_bytes)} bytes)")
+
+            return ResponseInputFileParam(
+                type="input_file",
+                file_data=data_url,
+                filename=file_name,
+            )
+
+        # For other file types, return text description with content
+        else:
+            # For CSV/Excel, the processed_data already contains the content
+            # Just return a text description
+            logger.info(f"[ThreadItemConverter] File type {mime_type} - returning text description")
+
+            return ResponseInputTextParam(
+                type="input_text",
+                text=f"[Attached file: {file_name} ({mime_type})]"
+            )
+
+    async def _read_file_bytes(self, file_id: str) -> bytes | None:
+        """Read file bytes from storage using file ID."""
+        import aiofiles
+        from pathlib import Path
+
+        try:
+            # Look up file record from database
+            from app.database import async_session
+            from app.models import UploadedFile
+
+            # Use provided session or create new one
+            if self.db_session:
+                result = await self.db_session.execute(
+                    select(UploadedFile).where(UploadedFile.file_id == file_id)
+                )
+                file_record = result.scalar_one_or_none()
+            else:
+                async with async_session() as db:
+                    result = await db.execute(
+                        select(UploadedFile).where(UploadedFile.file_id == file_id)
+                    )
+                    file_record = result.scalar_one_or_none()
+
+            if not file_record:
+                logger.warning(f"[ThreadItemConverter] File not found in database: {file_id}")
+                return None
+
+            storage_path = Path(file_record.storage_path)
+            if not storage_path.exists():
+                logger.warning(f"[ThreadItemConverter] File not found on disk: {storage_path}")
+                return None
+
+            # Read file bytes
+            async with aiofiles.open(storage_path, 'rb') as f:
+                file_bytes = await f.read()
+
+            logger.info(f"[ThreadItemConverter] Read {len(file_bytes)} bytes from {storage_path}")
+            return file_bytes
+
+        except Exception as e:
+            logger.error(f"[ThreadItemConverter] Error reading file {file_id}: {e}")
+            return None
 
 security = HTTPBearer(auto_error=False)
 
@@ -232,7 +390,16 @@ class SchemaAgentStore(Store):
 
     async def load_threads(self, limit: int, after: str | None, order: str, context: Any) -> Any:
         threads = list(self._threads.values())
-        return Page(data=threads[:limit], has_more=len(threads) > limit)
+        # Sort by created_at if available
+        threads_sorted = sorted(
+            threads,
+            key=lambda t: getattr(t, 'created_at', '') or '',
+            reverse=(order == "desc")
+        )
+        threads_to_return = threads_sorted[:limit]
+        has_more = len(threads_sorted) > limit
+        next_after = threads_to_return[-1].id if has_more and threads_to_return else None
+        return Page(data=threads_to_return, has_more=has_more, after=next_after)
 
     async def add_thread_item(self, thread_id: str, item: ThreadItem, context: Any) -> None:
         if thread_id not in self._items:
@@ -241,7 +408,10 @@ class SchemaAgentStore(Store):
 
     async def load_thread_items(self, thread_id: str, after: str | None, limit: int, order: str, context: Any) -> Any:
         items = self._items.get(thread_id, [])
-        return Page(data=items[:limit], has_more=len(items) > limit)
+        items_to_return = items[:limit]
+        has_more = len(items) > limit
+        next_after = items_to_return[-1].id if has_more and items_to_return and hasattr(items_to_return[-1], 'id') else None
+        return Page(data=items_to_return, has_more=has_more, after=next_after)
 
     async def load_item(self, thread_id: str, item_id: str, context: Any) -> ThreadItem | None:
         items = self._items.get(thread_id, [])
@@ -270,18 +440,96 @@ class SchemaAgentStore(Store):
     async def save_attachment(self, attachment: Any, context: Any) -> None:
         if hasattr(attachment, 'id'):
             self._attachments[attachment.id] = attachment
+            logger.info(f"[Store] Saved attachment: {attachment.id}")
 
     async def load_attachment(self, attachment_id: str, context: Any) -> Any:
-        return self._attachments.get(attachment_id)
+        """
+        Load attachment by ID.
+
+        First checks in-memory cache, then falls back to database lookup
+        for attachments uploaded via /api/files/chatkit-upload endpoint.
+        """
+        # Check in-memory cache first
+        if attachment_id in self._attachments:
+            logger.info(f"[Store] Loaded attachment from cache: {attachment_id}")
+            return self._attachments[attachment_id]
+
+        # Fall back to database lookup for files uploaded via /api/files/chatkit-upload
+        try:
+            from app.database import async_session
+            from app.models import UploadedFile
+            from sqlalchemy import select
+            from chatkit.types import FileAttachment, ImageAttachment
+            import os
+
+            def _base_url_from_context(ctx: Any) -> str:
+                try:
+                    headers = (ctx or {}).get("headers") or {}
+                    host = headers.get("x-forwarded-host") or headers.get("host")
+                    scheme = headers.get("x-forwarded-proto") or "http"
+                    if host:
+                        return f"{scheme}://{host}"
+                except Exception:
+                    pass
+                return os.getenv("API_BASE_URL", "http://localhost:8000")
+
+            async with async_session() as db:
+                result = await db.execute(
+                    select(UploadedFile).where(UploadedFile.file_id == attachment_id)
+                )
+                file_record = result.scalar_one_or_none()
+
+                if file_record:
+                    logger.info(f"[Store] Loaded attachment from database: {attachment_id} ({file_record.file_type})")
+
+                    # Create proper ChatKit attachment object
+                    if file_record.file_type == 'image':
+                        # preview_url must be an absolute URL for Pydantic validation
+                        base_url = _base_url_from_context(context)
+                        attachment = ImageAttachment(
+                            id=file_record.file_id,
+                            name=file_record.file_name,
+                            mime_type=file_record.mime_type or 'application/octet-stream',
+                            preview_url=f"{base_url}/api/files/{file_record.file_id}/preview"
+                        )
+                    else:
+                        attachment = FileAttachment(
+                            id=file_record.file_id,
+                            name=file_record.file_name,
+                            mime_type=file_record.mime_type or 'application/octet-stream'
+                        )
+
+                    # Cache it for future lookups
+                    self._attachments[attachment_id] = attachment
+                    return attachment
+
+        except Exception as e:
+            logger.error(f"[Store] Failed to load attachment from database: {e}")
+
+        logger.warning(f"[Store] Attachment not found: {attachment_id}")
+        return None
 
     async def delete_attachment(self, attachment_id: str, context: Any) -> None:
         if attachment_id in self._attachments:
             del self._attachments[attachment_id]
+            logger.info(f"[Store] Deleted attachment from cache: {attachment_id}")
 
 
 # ============================================================================
 # ChatKit Server for Schema Agent
 # ============================================================================
+
+class SchemaNoopAttachmentStore(AttachmentStore):
+    """
+    ChatKit may call attachments.delete as part of its UI lifecycle (e.g. clearing composer state).
+    We already handle actual uploads via /api/files/chatkit-upload (direct upload strategy),
+    so we just need to *not crash* here. No-op keeps uploaded files available for analysis.
+    """
+
+    async def delete_attachment(self, attachment_id: str, context: Any) -> None:
+        logger.info(f"[Schema ChatKit] Attachment delete requested (noop): {attachment_id}")
+        return
+
 
 class SchemaChatKitServer(ChatKitServer):
     """
@@ -291,8 +539,8 @@ class SchemaChatKitServer(ChatKitServer):
     against user's database.
     """
 
-    def __init__(self, store: Store):
-        super().__init__(store)
+    def __init__(self, store: Store, attachment_store: AttachmentStore | None = None):
+        super().__init__(store, attachment_store=attachment_store)
 
     async def respond(
         self,
@@ -300,35 +548,105 @@ class SchemaChatKitServer(ChatKitServer):
         input_user_message: UserMessageItem | None,
         context: Any,
     ) -> AsyncIterator[ThreadStreamEvent]:
-        """Process user message using Schema Query Agent."""
+        """
+        Process user message using Schema Query Agent with streaming progress.
+
+        Yields detailed ProgressUpdateEvent for each step:
+        - Tool calls with names and arguments
+        - Tool outputs with previews
+        - Agent thinking/reasoning steps
+        - Final response
+
+        For image attachments, converts them to base64 data URLs and passes
+        them as multi-modal input to the agent.
+        """
         import time
 
         try:
             if input_user_message is None:
                 return
 
-            # Extract user message text
+            # ============================================================================
+            # Extract user message text from content AND attachments from attachments field
+            # UserMessageItem structure:
+            # - content: list[UserMessageTextContent | UserMessageTagContent] - text/tags
+            # - attachments: list[Attachment] - FileAttachment or ImageAttachment objects
+            # ============================================================================
             user_message = ""
-            if hasattr(input_user_message, 'content'):
-                for content in input_user_message.content:
-                    if hasattr(content, 'text'):
-                        user_message += content.text
+            attachments_list = []  # List of actual Attachment objects
 
-            # Log the raw message for debugging
-            logger.info(f"[Schema ChatKit] Raw user message: {user_message[:100]}...")
+            # Extract text from content array
+            if hasattr(input_user_message, 'content') and input_user_message.content:
+                logger.info(f"[Schema ChatKit] Content has {len(input_user_message.content)} items")
+                for idx, content_item in enumerate(input_user_message.content):
+                    content_type = getattr(content_item, 'type', None)
+                    # Extract text content
+                    if content_type == 'input_text' or hasattr(content_item, 'text'):
+                        text = getattr(content_item, 'text', '')
+                        if text:
+                            user_message += text
+                            logger.info(f"[Schema ChatKit] Extracted text: {text[:50]}...")
 
-            # Check if tool prefix is present (from frontend tool selection)
+            # Extract attachments from the dedicated attachments field (NOT content)
+            if hasattr(input_user_message, 'attachments') and input_user_message.attachments:
+                logger.info(f"[Schema ChatKit] Found {len(input_user_message.attachments)} attachment(s) in message!")
+                for idx, att in enumerate(input_user_message.attachments):
+                    att_id = getattr(att, 'id', None)
+                    att_name = getattr(att, 'name', 'unknown')
+                    att_type = getattr(att, 'type', 'file')
+                    att_mime = getattr(att, 'mime_type', 'application/octet-stream')
+                    logger.info(f"[Schema ChatKit] Attachment[{idx}]: id={att_id}, name={att_name}, type={att_type}, mime={att_mime}")
+                    if att_id:
+                        attachments_list.append(att)
+            else:
+                logger.info(f"[Schema ChatKit] No attachments field or empty attachments")
+
+            logger.info(f"[Schema ChatKit] Raw user message: {user_message[:100] if user_message else '(empty)'}...")
+            logger.info(f"[Schema ChatKit] Found {len(attachments_list)} attachment(s) in message")
+
+            # Auto-generate title for new threads (first message)
+            # This enables the history panel to show meaningful conversation titles
+            if not thread.title and user_message:
+                # Generate title from first 50 chars of user message
+                title_text = user_message.strip()
+                # Remove any tool prefixes like [TOOL:GMAIL]
+                title_text = re.sub(r'\[TOOL:\w+\]\s*', '', title_text)
+                title_text = re.sub(r'\[FILE:[^\]]+\]\s*', '', title_text)
+                # Truncate to 50 chars with ellipsis if needed
+                if len(title_text) > 50:
+                    thread.title = title_text[:47] + "..."
+                else:
+                    thread.title = title_text if title_text else "New Conversation"
+                # Save the updated thread with title
+                await self.store.save_thread(thread, context)
+                logger.info(f"[Schema ChatKit] Auto-generated thread title: {thread.title}")
+
+            # Check if tool prefix is present
             if '[TOOL:' in user_message:
                 logger.info(f"[Schema ChatKit] Tool prefix detected in message!")
 
-            # Get selected tool from context (set by chatkit_endpoint)
+            # Get selected tool from context
             selected_tool = context.get("selected_tool")
             if selected_tool:
                 logger.info(f"[Schema ChatKit] Tool from context: {selected_tool}")
-                # Prepend the tool instruction if not already in message
                 if f'[TOOL:{selected_tool.upper()}]' not in user_message:
                     user_message = f"[TOOL:{selected_tool.upper()}] {user_message}"
                     logger.info(f"[Schema ChatKit] Prepended tool prefix to message")
+
+            # Get attached file IDs from context AND from message attachments
+            # Merge both sources to ensure we capture all attachments
+            attachment_ids_from_message = [getattr(att, 'id', None) for att in attachments_list if getattr(att, 'id', None)]
+            attached_file_ids = list(set(
+                context.get("attached_file_ids", []) + attachment_ids_from_message
+            ))
+
+            if attached_file_ids:
+                logger.info(f"[Schema ChatKit] Total attached files: {len(attached_file_ids)} - {attached_file_ids}")
+                # Add file prefix for text-based agent processing (fallback)
+                file_prefix = " ".join([f"[FILE:{fid}]" for fid in attached_file_ids])
+                if not any(f"[FILE:" in user_message for _ in [1]):
+                    user_message = f"{file_prefix} {user_message}"
+                    logger.info(f"[Schema ChatKit] Prepended {len(attached_file_ids)} file reference(s) to message")
 
             # Get user_id and connection info from context
             user_id = context.get("user_id")
@@ -357,27 +675,16 @@ class SchemaChatKitServer(ChatKitServer):
 
             logger.info(f"[Schema ChatKit] Processing message for user {user_id}: {user_message[:50]}...")
 
-            # Track timing
             start_time = time.time()
-
-            # Show progress indicator using ProgressUpdateEvent (valid ThreadStreamEvent)
-            yield ProgressUpdateEvent(
-                type="progress_update",
-                text="Analyzing your question..."
-            )
-
-            # Get thread_id from ChatKit thread for session persistence
             thread_id = thread.id if thread else None
             logger.info(f"[Schema ChatKit] Thread ID for session: {thread_id}")
 
-            # Load ALL user's connector sub-agents as tools
-            # Each connector (Notion, Slack, etc.) becomes a single tool that handles all operations
+            # Load connector sub-agents as tools
             connector_tools = []
             db_session = context.get("db_session")
 
             if db_session:
                 try:
-                    # Load connector sub-agents for this user
                     logger.info(f"[Schema ChatKit] Loading connector sub-agents for user {user_id}")
                     connector_tools = await get_connector_agent_tools(
                         db_session,
@@ -385,34 +692,31 @@ class SchemaChatKitServer(ChatKitServer):
                     )
                     if connector_tools:
                         tool_names = [getattr(t, 'name', str(t)) for t in connector_tools]
-                        logger.info(f"[Schema ChatKit] Loaded {len(connector_tools)} connector sub-agent tools: {tool_names}")
-                    else:
-                        logger.info(f"[Schema ChatKit] No connector sub-agents found for user {user_id}")
+                        logger.info(f"[Schema ChatKit] Loaded {len(connector_tools)} connector tools: {tool_names}")
                 except Exception as e:
                     logger.warning(f"[Schema ChatKit] Failed to load connector sub-agents: {e}")
 
-            # Create a cache key - include connector count to invalidate when connectors change
+            # Create cache key
             connector_count = len(connector_tools)
             cache_key = f"{user_id}:connectors_{connector_count}"
 
-            # Get or create agent for this user (with connector tools if selected)
+            # Get or create agent
             if cache_key not in _agent_cache:
                 try:
                     yield ProgressUpdateEvent(
                         type="progress_update",
-                        text="Initializing AI agent..."
+                        text="Initializing AI agent with your database schema..."
                     )
                     agent = await create_schema_query_agent(
                         database_uri=database_uri,
                         schema_metadata=schema_metadata,
                         auto_initialize=True,
-                        user_id=user_id,  # Pass user_id for Gmail tool context
-                        enable_gmail=True,
-                        thread_id=thread_id,  # Pass thread_id for persistent session
-                        connector_tools=connector_tools,  # Pass connector tools
+                        user_id=user_id,
+                        thread_id=thread_id,
+                        connector_tools=connector_tools,
                     )
                     _agent_cache[cache_key] = agent
-                    logger.info(f"Created new Schema Query Agent for user {user_id} with Gmail + {len(connector_tools)} connector tools")
+                    logger.info(f"Created Schema Query Agent for user {user_id}")
                 except Exception as e:
                     logger.error(f"Failed to create agent for user {user_id}: {e}")
                     yield ErrorEvent(
@@ -425,50 +729,719 @@ class SchemaChatKitServer(ChatKitServer):
             else:
                 agent = _agent_cache[cache_key]
 
-            # Show query progress
-            yield ProgressUpdateEvent(
-                type="progress_update",
-                text="Processing your query..."
+            # Use streaming query for detailed progress updates
+            logger.info(f"[Schema ChatKit] Starting streamed agent query...")
+
+            # Set file analysis context for file tools (required for analyze_uploaded_file)
+            if attached_file_ids and db_session:
+                try:
+                    from app.mcp_server.tools_file_analysis import set_file_analysis_context, clear_file_analysis_context
+                    set_file_analysis_context(user_id, db_session)
+                    logger.info(f"[Schema ChatKit] File analysis context set for {len(attached_file_ids)} file(s)")
+                except ImportError as e:
+                    logger.warning(f"[Schema ChatKit] Could not set file analysis context: {e}")
+
+            # Set Gemini file search context (always set for file_search tool - Feature 013)
+            if db_session:
+                try:
+                    from app.mcp_server.tools_file_search import set_file_search_context
+                    set_file_search_context(user_id, db_session)
+                    logger.info(f"[Schema ChatKit] Gemini file search context set for user {user_id}")
+                except ImportError as e:
+                    logger.warning(f"[Schema ChatKit] Could not set Gemini file search context: {e}")
+
+            # ============================================================================
+            # Convert attachments to multi-modal input for the agent
+            # We use the attachments_list directly from UserMessageItem.attachments
+            # which contains the actual Attachment objects (ImageAttachment/FileAttachment)
+            # ============================================================================
+            multimodal_content = []
+
+            # Add text content
+            if user_message:
+                multimodal_content.append({
+                    "type": "input_text",
+                    "text": user_message
+                })
+
+            # Convert attachments (images, PDFs) to base64 for multi-modal input
+            # First try to use attachments from the message directly
+            # Fall back to looking up by file IDs from context if needed
+            attachments_to_convert = attachments_list.copy()  # Actual Attachment objects from message
+
+            # If we have file IDs from context but no attachments from message,
+            # try to load them from the store
+            if not attachments_to_convert and attached_file_ids:
+                logger.info(f"[Schema ChatKit] No attachments in message, loading {len(attached_file_ids)} from store...")
+                for file_id in attached_file_ids:
+                    try:
+                        attachment = await self.store.load_attachment(file_id, context)
+                        if attachment:
+                            attachments_to_convert.append(attachment)
+                    except Exception as e:
+                        logger.warning(f"[Schema ChatKit] Could not load attachment {file_id}: {e}")
+
+            if attachments_to_convert:
+                yield ProgressUpdateEvent(
+                    type="progress_update",
+                    text=f"Processing {len(attachments_to_convert)} attached file(s)..."
+                )
+
+                converter = SchemaAgentThreadItemConverter(db_session=db_session)
+
+                for attachment in attachments_to_convert:
+                    try:
+                        att_id = getattr(attachment, 'id', 'unknown')
+                        att_type = getattr(attachment, 'type', 'file')
+                        logger.info(f"[Schema ChatKit] Converting attachment: {att_id} (type: {att_type})")
+
+                        # Convert attachment to model input
+                        content_param = await converter.attachment_to_message_content(attachment)
+
+                        if content_param:
+                            # Convert Pydantic model to dict for agent input
+                            if hasattr(content_param, 'model_dump'):
+                                content_dict = content_param.model_dump()
+                            elif hasattr(content_param, 'dict'):
+                                content_dict = content_param.dict()
+                            else:
+                                content_dict = dict(content_param)
+
+                            multimodal_content.append(content_dict)
+                            logger.info(f"[Schema ChatKit] Added {content_dict.get('type', 'unknown')} content for {att_id}")
+
+                            # Show progress for image processing
+                            if content_dict.get('type') == 'input_image':
+                                yield ProgressUpdateEvent(
+                                    type="progress_update",
+                                    text="Image loaded and ready for analysis..."
+                                )
+                        else:
+                            logger.warning(f"[Schema ChatKit] Converter returned None for attachment: {att_id}")
+
+                    except Exception as e:
+                        att_id = getattr(attachment, 'id', 'unknown')
+                        logger.error(f"[Schema ChatKit] Error converting attachment {att_id}: {e}")
+
+            # Prepare agent input - either string or multi-modal list
+            if len(multimodal_content) > 1:
+                # Multi-modal input with images/files
+                agent_input = [{
+                    "role": "user",
+                    "content": multimodal_content
+                }]
+                logger.info(f"[Schema ChatKit] Using multi-modal input with {len(multimodal_content)} content items")
+            else:
+                # Simple text input
+                agent_input = user_message
+                logger.info(f"[Schema ChatKit] Using simple text input")
+
+            # ============================================================================
+            # WorkflowItem-based streaming with collapsible dropdown
+            # Shows real-time progress that user can expand/collapse after completion
+            # ============================================================================
+            response_text = ""
+            tools_used = []
+            workflow_tasks = []  # Track all tasks for the workflow
+            task_index = 0  # Current task index
+            workflow_id = f"workflow-{uuid.uuid4().hex[:12]}"
+            search_sources = []  # Track URLs from web search as dicts {url, title}
+            thoughts_content = []  # Track reasoning/thoughts
+
+            # Helper to get icon for tool type (using valid ChatKit icons)
+            # Valid icons: agent, analytics, atom, batch, bolt, book-open, book-closed, book-clock,
+            # bug, calendar, chart, check, check-circle, check-circle-filled, chevron-left, chevron-right,
+            # circle-question, compass, confetti, cube, desktop, document, dot, dots-horizontal, dots-vertical,
+            # empty-circle, external-link, globe, keys, lab, images, info, lifesaver, lightbulb, mail,
+            # map-pin, maps, mobile, name, notebook, notebook-pencil, page-blank, phone, play, plus,
+            # profile, profile-card, reload, star, star-filled, search, sparkle, sparkle-double,
+            # square-code, square-image, square-text, suitcase, settings-slider, user, wreath, write, write-alt, write-alt2
+            def get_tool_icon(tool_name: str) -> str:
+                if "execute_sql" in tool_name or "query" in tool_name.lower():
+                    return "analytics"
+                elif "notion" in tool_name.lower():
+                    return "notebook"
+                elif "gmail" in tool_name.lower():
+                    return "mail"
+                elif "google_search" in tool_name.lower():
+                    return "search"
+                elif "file" in tool_name.lower() or "upload" in tool_name.lower():
+                    return "document"
+                elif "list_tables" in tool_name or "list_objects" in tool_name:
+                    return "chart"
+                else:
+                    return "sparkle"
+
+            # Helper to get display title for tool
+            def get_tool_title(tool_name: str) -> str:
+                if "execute_sql" in tool_name:
+                    return "Executing SQL Query"
+                elif tool_name == "notion_connector":
+                    return "Connecting to Notion"
+                elif "notion" in tool_name.lower():
+                    notion_tool = tool_name.replace("notion-", "").replace("notion_", "")
+                    if "search" in notion_tool:
+                        return "Searching Notion"
+                    elif "create" in notion_tool and "page" in notion_tool:
+                        return "Creating Notion Page"
+                    elif "create" in notion_tool and "database" in notion_tool:
+                        return "Creating Notion Database"
+                    elif "update" in notion_tool:
+                        return "Updating Notion"
+                    elif "query" in notion_tool:
+                        return "Querying Notion Database"
+                    return f"Notion: {notion_tool}"
+                elif "gmail" in tool_name.lower() or "gmail_connector" in tool_name:
+                    return "Processing Email"
+                elif "google_search" in tool_name.lower():
+                    return "Searching the Web"
+                elif "file_search" in tool_name.lower():
+                    return "Searching Files"
+                elif "analyze_uploaded_file" in tool_name.lower():
+                    return "Analyzing File"
+                elif "get_uploaded_file_info" in tool_name.lower():
+                    return "Getting File Info"
+                elif "list_tables" in tool_name or "list_objects" in tool_name:
+                    return "Listing Tables"
+                elif "get_object_details" in tool_name:
+                    return "Getting Table Details"
+                else:
+                    return f"Using {tool_name}"
+
+            def format_response_with_sources(
+                response_text: str,
+                collected_urls: List[dict]
+            ) -> str:
+                """
+                Format response text with inline citations and a sources section.
+
+                Since ChatKit annotations may not work with custom API setup,
+                this formats sources directly in markdown for better display:
+                - Replaces domain mentions with clickable markdown links
+                - Adds a clean "📚 Sources" section at the end with all links
+
+                Example:
+                    Input: "Buy from Naheed.pk"
+                    Output: "Buy from [Naheed.pk](https://www.naheed.pk)"
+
+                Args:
+                    response_text: The full response text
+                    collected_urls: List of dicts with 'url' and 'title' from web search
+
+                Returns:
+                    Formatted response text with markdown links
+                """
+                import re as fmt_re
+                from urllib.parse import urlparse
+
+                seen_urls = set()
+                source_map = {}  # domain -> {url, title}
+                all_sources = []
+
+                # Extract existing markdown links from response: [Title](URL)
+                markdown_links = fmt_re.findall(r'\[([^\]]+)\]\((https?://[^\)]+)\)', response_text)
+                for title, url in markdown_links:
+                    if url not in seen_urls:
+                        seen_urls.add(url)
+                        try:
+                            domain = urlparse(url).netloc.replace('www.', '')
+                        except:
+                            domain = title[:30]
+                        all_sources.append({'url': url, 'title': title, 'domain': domain})
+                        source_map[domain.lower()] = {'url': url, 'title': title, 'domain': domain}
+                        short_domain = domain.split('.')[0].lower()
+                        if short_domain not in source_map:
+                            source_map[short_domain] = {'url': url, 'title': title, 'domain': domain}
+
+                # Extract plain text format: "- Daraz Pakistan: https://www.daraz.pk"
+                plain_links = fmt_re.findall(r'[-\*]\s*([^:\n]+):\s*(https?://[^\s\n]+)', response_text)
+                for title, url in plain_links:
+                    title = title.strip()
+                    url = url.strip()
+                    if url not in seen_urls:
+                        seen_urls.add(url)
+                        try:
+                            domain = urlparse(url).netloc.replace('www.', '')
+                        except:
+                            domain = title[:30]
+                        all_sources.append({'url': url, 'title': title, 'domain': domain})
+                        source_map[domain.lower()] = {'url': url, 'title': title, 'domain': domain}
+                        short_domain = domain.split('.')[0].lower()
+                        if short_domain not in source_map:
+                            source_map[short_domain] = {'url': url, 'title': title, 'domain': domain}
+                        # Map title words
+                        for word in title.lower().split():
+                            if len(word) > 3 and word not in source_map:
+                                source_map[word] = {'url': url, 'title': title, 'domain': domain}
+
+                # Add collected URLs from search tasks
+                for source in collected_urls:
+                    url = source.get('url', '')
+                    if url and url not in seen_urls:
+                        seen_urls.add(url)
+                        title = source.get('title', '')
+                        try:
+                            domain = urlparse(url).netloc.replace('www.', '')
+                        except:
+                            domain = 'source'
+                        if not title:
+                            title = domain
+                        all_sources.append({'url': url, 'title': title, 'domain': domain})
+                        source_map[domain.lower()] = {'url': url, 'title': title, 'domain': domain}
+                        short_domain = domain.split('.')[0].lower()
+                        if short_domain not in source_map:
+                            source_map[short_domain] = {'url': url, 'title': title, 'domain': domain}
+
+                # Remove existing Sources section
+                clean_text = response_text
+                sources_patterns = [
+                    r'\n\n(Sources?\s*\([^)]*\)\s*:?\s*\n[-\*].*?)$',
+                    r'\n\n(Sources?:?\s*\n[-\*].*?)$',
+                    r'\n\n(References?:?\s*\n[-\*].*?)$',
+                ]
+                for pattern in sources_patterns:
+                    match = fmt_re.search(pattern, response_text, fmt_re.DOTALL | fmt_re.IGNORECASE)
+                    if match:
+                        clean_text = response_text[:match.start()]
+                        break
+
+                # Remove standalone source URLs
+                clean_text = fmt_re.sub(
+                    r'\n[-\*]\s*[^:\n]+:\s*https?://[^\s\n]+',
+                    '',
+                    clean_text,
+                    flags=fmt_re.MULTILINE
+                )
+
+                # Don't add inline links (ChatKit doesn't render markdown links)
+                # Just keep domain mentions as-is in the text
+
+                # Add formatted sources section at the end if we have sources
+                # Use bare URLs which ChatKit may auto-link
+                if all_sources:
+                    clean_text = clean_text.strip()
+                    clean_text += "\n\n---\n\n**Sources:**\n"
+                    seen_in_footer = set()
+                    for i, source in enumerate(all_sources[:8], 1):  # Limit to 8 sources
+                        if source['url'] not in seen_in_footer:
+                            seen_in_footer.add(source['url'])
+                            title = source['title'][:40]
+                            # Format: [1] Title - URL (bare URL for auto-linking)
+                            clean_text += f"[{i}] {title}\n{source['url']}\n\n"
+
+                return clean_text.strip()
+
+            # Create initial workflow with first task (analyzing)
+            initial_task = CustomTask(
+                type="custom",
+                title="Analyzing Request",
+                content="Understanding your question and planning the approach...",
+                status_indicator="loading",
+                icon="search"
+            )
+            workflow_tasks.append(initial_task)
+
+            # Create workflow item (expanded while processing)
+            workflow = Workflow(
+                type="custom",
+                tasks=workflow_tasks.copy(),
+                expanded=True,
+                summary=None
             )
 
-            # Run agent query with thread_id for session persistence
-            logger.info(f"[Schema ChatKit] Running agent query...")
-            logger.info(f"[Schema ChatKit] User message: {user_message[:200]}...")
-            result = await agent.query(user_message, thread_id=thread_id)
-            logger.info(f"[Schema ChatKit] Agent query completed.")
-            logger.info(f"[Schema ChatKit] Result: {result}")
-            logger.info(f"[Schema ChatKit] Result keys: {list(result.keys()) if result else 'None'}")
+            workflow_item = WorkflowItem(
+                id=workflow_id,
+                thread_id=thread.id,
+                created_at=datetime.now(),
+                type="workflow",
+                workflow=workflow
+            )
 
-            # Get response with better fallback
-            response_text = result.get("response", "") if result else ""
+            # Emit workflow started
+            yield ThreadItemAddedEvent(type="thread.item.added", item=workflow_item)
+
+            async for event in agent.query_streamed(agent_input, thread_id=thread_id):
+                event_type = event.get("type", "unknown")
+
+                if event_type == "progress":
+                    # Update first task content
+                    progress_text = event.get("text", "Processing...")
+                    if workflow_tasks and workflow_tasks[0].status_indicator == "loading":
+                        workflow_tasks[0].content = progress_text
+                        yield ThreadItemUpdatedEvent(
+                            type="thread.item.updated",
+                            item_id=workflow_id,
+                            update=WorkflowTaskUpdated(
+                                type="workflow.task.updated",
+                                task_index=0,
+                                task=workflow_tasks[0]
+                            )
+                        )
+
+                elif event_type == "tool_call":
+                    # Tool is being called - add a new task with loading state
+                    tool_name = event.get("tool_name", "tool")
+                    args = event.get("arguments", "")
+                    tools_used.append(tool_name)
+
+                    # Mark previous task as complete if it was loading
+                    for t in workflow_tasks:
+                        if t.status_indicator == "loading":
+                            t.status_indicator = "complete"
+
+                    # Determine if this is a web search (use SearchTask)
+                    if "google_search" in tool_name.lower():
+                        # Extract search query from args (may be JSON)
+                        search_query = "searching..."
+                        if args:
+                            try:
+                                import json as json_parse
+                                args_dict = json_parse.loads(args) if isinstance(args, str) else args
+                                if isinstance(args_dict, dict):
+                                    search_query = args_dict.get("query", args_dict.get("q", str(args_dict)[:100]))
+                                else:
+                                    search_query = str(args_dict)[:100]
+                            except:
+                                # Not JSON, use as-is
+                                search_query = str(args)[:100]
+                        
+                        new_task = SearchTask(
+                            type="web_search",
+                            title=get_tool_title(tool_name),
+                            title_query=search_query,  # Show query in title
+                            queries=[search_query],
+                            sources=[],  # Will be populated on output
+                            status_indicator="loading"
+                        )
+                    else:
+                        # Regular CustomTask for other tools
+                        new_task = CustomTask(
+                            type="custom",
+                            title=get_tool_title(tool_name),
+                            content=f"Processing...",
+                            status_indicator="loading",
+                            icon=get_tool_icon(tool_name)
+                        )
+
+                    workflow_tasks.append(new_task)
+                    task_index = len(workflow_tasks) - 1
+
+                    # First update previous tasks that were loading to complete
+                    for prev_idx, prev_task in enumerate(workflow_tasks[:-1]):
+                        if hasattr(prev_task, 'status_indicator') and prev_task.status_indicator == "complete":
+                            yield ThreadItemUpdatedEvent(
+                                type="thread.item.updated",
+                                item_id=workflow_id,
+                                update=WorkflowTaskUpdated(
+                                    type="workflow.task.updated",
+                                    task_index=prev_idx,
+                                    task=prev_task
+                                )
+                            )
+
+                    # Add new task
+                    yield ThreadItemUpdatedEvent(
+                        type="thread.item.updated",
+                        item_id=workflow_id,
+                        update=WorkflowTaskAdded(
+                            type="workflow.task.added",
+                            task_index=task_index,
+                            task=new_task
+                        )
+                    )
+
+                    logger.info(f"[Schema ChatKit] Tool call: {tool_name} (task {task_index})")
+
+                elif event_type == "tool_output":
+                    # Tool returned a result - update task to complete
+                    tool_name = event.get("tool_name", "tool")
+                    output_preview = event.get("output_preview", "")
+
+                    # Find the task for this tool and update it
+                    for i, t in enumerate(workflow_tasks):
+                        if t.status_indicator == "loading":
+                            t.status_indicator = "complete"
+
+                            # For SearchTask, extract URLs with titles from markdown sources
+                            if isinstance(t, SearchTask) and "google_search" in tool_name.lower():
+                                import re as url_re
+
+                                # Try to extract markdown links: [Title](URL)
+                                markdown_links = url_re.findall(r'\[([^\]]+)\]\(([^\)]+)\)', output_preview)
+
+                                if markdown_links:
+                                    # Use title and URL from markdown
+                                    t.sources = [
+                                        URLSource(url=url[:200], title=title[:50])
+                                        for title, url in markdown_links[:5]
+                                        if url.startswith('http')
+                                    ]
+                                    # Store sources as dicts for annotation creation
+                                    search_sources.extend([
+                                        {'url': url, 'title': title}
+                                        for title, url in markdown_links[:5]
+                                        if url.startswith('http')
+                                    ])
+                                else:
+                                    # Fallback: just extract URLs
+                                    urls = url_re.findall(r'https?://[^\s\)\]\"\'\<\>]+', output_preview)
+                                    if urls:
+                                        # Try to get domain as title
+                                        t.sources = []
+                                        for j, u in enumerate(urls[:5]):
+                                            try:
+                                                from urllib.parse import urlparse
+                                                domain = urlparse(u).netloc
+                                                title = domain or f"Source {j+1}"
+                                                t.sources.append(URLSource(url=u[:200], title=title))
+                                                # Store source as dict for annotation creation
+                                                search_sources.append({'url': u, 'title': title})
+                                            except:
+                                                t.sources.append(URLSource(url=u[:200], title=f"Source {j+1}"))
+                                                search_sources.append({'url': u, 'title': f"Source {j+1}"})
+                            elif hasattr(t, 'content'):
+                                # Truncate output for display
+                                t.content = output_preview[:200] + "..." if len(output_preview) > 200 else output_preview
+                            break
+
+                    # Emit task update for the completed task
+                    for update_idx, update_task in enumerate(workflow_tasks):
+                        if update_task.status_indicator == "complete":
+                            yield ThreadItemUpdatedEvent(
+                                type="thread.item.updated",
+                                item_id=workflow_id,
+                                update=WorkflowTaskUpdated(
+                                    type="workflow.task.updated",
+                                    task_index=update_idx,
+                                    task=update_task
+                                )
+                            )
+                            break
+
+                    logger.info(f"[Schema ChatKit] Tool output from {tool_name}")
+
+                elif event_type == "thinking":
+                    # Agent reasoning/thinking - add ThoughtTask
+                    thinking_text = event.get("text", "")
+                    if thinking_text:
+                        # Extract the actual thought content (remove "Agent thinking:" prefix if present)
+                        thought_content = thinking_text.replace("Agent thinking:", "").strip()
+                        if thought_content:
+                            thoughts_content.append(thought_content)
+
+                            # Add or update ThoughtTask
+                            thought_task = ThoughtTask(
+                                type="thought",
+                                title="Reasoning",
+                                content=thought_content[:500]  # Limit content length
+                            )
+
+                            # Check if we already have a thought task, update it
+                            thought_exists = False
+                            for i, t in enumerate(workflow_tasks):
+                                if isinstance(t, ThoughtTask):
+                                    # Append to existing thoughts
+                                    workflow_tasks[i].content = "\n".join(thoughts_content)[:500]
+                                    thought_exists = True
+                                    break
+
+                            if not thought_exists:
+                                workflow_tasks.append(thought_task)
+                                yield ThreadItemUpdatedEvent(
+                                    type="thread.item.updated",
+                                    item_id=workflow_id,
+                                    update=WorkflowTaskAdded(
+                                        type="workflow.task.added",
+                                        task_index=len(workflow_tasks) - 1,
+                                        task=thought_task
+                                    )
+                                )
+                            else:
+                                # Update existing thought task
+                                for thought_idx, t in enumerate(workflow_tasks):
+                                    if isinstance(t, ThoughtTask):
+                                        yield ThreadItemUpdatedEvent(
+                                            type="thread.item.updated",
+                                            item_id=workflow_id,
+                                            update=WorkflowTaskUpdated(
+                                                type="workflow.task.updated",
+                                                task_index=thought_idx,
+                                                task=t
+                                            )
+                                        )
+                                        break
+
+                elif event_type == "content_delta":
+                    # Streaming content chunk - could update a "generating response" task
+                    pass
+
+                elif event_type == "complete":
+                    # Final response - mark all tasks complete
+                    response_text = event.get("response", "")
+                    tools_used = event.get("tools_used", tools_used)
+
+                    # Mark all tasks as complete
+                    for t in workflow_tasks:
+                        if hasattr(t, 'status_indicator'):
+                            t.status_indicator = "complete"
+
+                    # Add final "Done" task
+                    done_task = CustomTask(
+                        type="custom",
+                        title="Done",
+                        content=f"Completed {len(tools_used)} operation(s)",
+                        status_indicator="complete",
+                        icon="check"
+                    )
+                    workflow_tasks.append(done_task)
+
+                    # Calculate duration
+                    duration_seconds = int(time.time() - start_time)
+
+                    # Create summary for collapsed state (DurationSummary 'duration' is in SECONDS)
+                    summary = DurationSummary(
+                        duration=duration_seconds
+                    )
+
+                    # Add done task
+                    yield ThreadItemUpdatedEvent(
+                        type="thread.item.updated",
+                        item_id=workflow_id,
+                        update=WorkflowTaskAdded(
+                            type="workflow.task.added",
+                            task_index=len(workflow_tasks) - 1,
+                            task=done_task
+                        )
+                    )
+
+                    # Update workflow to collapsed state with summary
+                    workflow_item.workflow.tasks = workflow_tasks.copy()
+                    workflow_item.workflow.summary = summary
+                    workflow_item.workflow.expanded = False  # Collapse after completion
+
+                    yield ThreadItemDoneEvent(type="thread.item.done", item=workflow_item)
+
+                    logger.info(f"[Schema ChatKit] Query completed. Tools used: {tools_used}")
+
+                elif event_type == "error":
+                    # Error occurred
+                    error_text = event.get("text", "An error occurred")
+                    response_text = event.get("response", error_text)
+
+                    # Mark current tasks as failed and add error task
+                    for t in workflow_tasks:
+                        if hasattr(t, 'status_indicator') and t.status_indicator == "loading":
+                            t.status_indicator = "complete"  # Mark as done (no error state in ChatKit)
+
+                    error_task = CustomTask(
+                        type="custom",
+                        title="Error",
+                        content=error_text[:200],
+                        status_indicator="complete",
+                        icon="info"
+                    )
+                    workflow_tasks.append(error_task)
+
+                    # Add error task
+                    yield ThreadItemUpdatedEvent(
+                        type="thread.item.updated",
+                        item_id=workflow_id,
+                        update=WorkflowTaskAdded(
+                            type="workflow.task.added",
+                            task_index=len(workflow_tasks) - 1,
+                            task=error_task
+                        )
+                    )
+
+                    workflow_item.workflow.tasks = workflow_tasks.copy()
+                    workflow_item.workflow.expanded = False
+                    yield ThreadItemDoneEvent(type="thread.item.done", item=workflow_item)
+
+                    logger.error(f"[Schema ChatKit] Stream error: {error_text}")
+
+            # Fallback if no response was captured
             if not response_text:
-                logger.warning(f"[Schema ChatKit] Empty response from agent! Result: {result}")
-                response_text = "I processed your request but couldn't generate a response. Please check the backend logs for details."
+                logger.warning(f"[Schema ChatKit] No response from streaming! Using fallback.")
+                # Fallback to non-streaming query
+                result = await agent.query(user_message, thread_id=thread_id)
+                response_text = result.get("response", "") if result else ""
+                if not response_text:
+                    response_text = "I processed your request but couldn't generate a response."
 
-            logger.info(f"[Schema ChatKit] Response text length: {len(response_text)}")
+            # Clear file analysis context after use
+            if attached_file_ids:
+                try:
+                    from app.mcp_server.tools_file_analysis import clear_file_analysis_context
+                    clear_file_analysis_context()
+                    logger.info(f"[Schema ChatKit] File analysis context cleared")
+                except ImportError:
+                    pass
 
             # Calculate total time
             total_time = time.time() - start_time
-            logger.info(f"[Schema ChatKit] Query processed in {total_time:.1f}s")
+            logger.info(f"[Schema ChatKit] Query processed in {total_time:.1f}s with {len(tools_used)} tool calls")
 
-            # Create the assistant message with the response
+            # Format response with inline citations and sources section
+            # Uses markdown links since ChatKit annotations may not work with custom API
+            logger.info(f"[Schema ChatKit] Response text length: {len(response_text)}")
+            logger.info(f"[Schema ChatKit] Search sources collected: {len(search_sources)}")
+
+            # Format with inline links and sources footer
+            final_text = format_response_with_sources(response_text, search_sources)
+
+            logger.info(f"[Schema ChatKit] Formatted text length: {len(final_text)}")
+
+            # Create assistant message with formatted response
             msg_id = f"msg-{uuid.uuid4().hex[:12]}"
 
             assistant_msg = AssistantMessageItem(
                 id=msg_id,
                 thread_id=thread.id,
-                created_at=datetime.now().isoformat(),
+                created_at=datetime.now(),
                 type="assistant_message",
                 content=[AssistantMessageContent(
-                    type="output_text",
-                    text=response_text,
-                    annotations=[]
+                    text=final_text
                 )]
             )
 
-            # Yield the proper ThreadStreamEvent types
+            # Yield the final response
             yield ThreadItemAddedEvent(type="thread.item.added", item=assistant_msg)
             yield ThreadItemDoneEvent(type="thread.item.done", item=assistant_msg)
+
+            # If user chose delete_immediately, remove these attachments now (best-effort)
+            if attached_file_ids and db_session:
+                try:
+                    result = await db_session.execute(
+                        select(UserSettings).where(UserSettings.user_id == user_id)
+                    )
+                    settings = result.scalar_one_or_none()
+                    mode = settings.file_retention_mode if settings else "keep_24h"
+                    if mode == "delete_immediately":
+                        now = datetime.utcnow()
+                        res_files = await db_session.execute(
+                            select(UploadedFile).where(
+                                UploadedFile.user_id == user_id,
+                                UploadedFile.file_id.in_(attached_file_ids),
+                                UploadedFile.deleted_at.is_(None),
+                            )
+                        )
+                        files_to_delete = res_files.scalars().all()
+                        for f in files_to_delete:
+                            try:
+                                if f.storage_path:
+                                    from pathlib import Path
+                                    p = Path(f.storage_path)
+                                    if p.exists():
+                                        p.unlink()
+                            except Exception:
+                                pass
+                            f.status = "deleted"
+                            f.deleted_at = now
+                        if files_to_delete:
+                            await db_session.commit()
+                        logger.info(f"[Schema ChatKit] Deleted {len(files_to_delete)} attachment(s) after response (mode=delete_immediately)")
+                except Exception as e:
+                    logger.warning(f"[Schema ChatKit] Failed to delete attachments after response: {e}")
 
         except Exception as e:
             logger.error(f"[Schema ChatKit] Error: {e}", exc_info=True)
@@ -1099,12 +2072,11 @@ async def chat_with_agent(
                 database_uri=connection.database_uri,
                 schema_metadata=connection.schema_metadata,
                 auto_initialize=True,
-                user_id=user.id,  # Pass user_id for Gmail tool context
-                enable_gmail=True,
+                user_id=user.id,
                 thread_id=session_thread_id,  # Pass session_id for persistent conversation
             )
             _agent_cache[user.id] = agent
-            logger.info(f"Created new Schema Query Agent for user {user.id} with Gmail tools and PostgreSQL session")
+            logger.info(f"Created new Schema Query Agent for user {user.id} with PostgreSQL session")
         except Exception as e:
             logger.error(f"Failed to create agent for user {user.id}: {e}")
             return ChatResponse(
@@ -1208,11 +2180,12 @@ async def chatkit_endpoint(
         body = await request.body()
         logger.info(f"[Schema ChatKit] Request received from user {user.id}")
 
-        # Parse raw body to extract operation type, tool selection, and connector
+        # Parse raw body to extract operation type, tool selection, connector, and attachments
         selected_tool = None
         selected_connector_id = None
         selected_connector_url = None
         selected_connector_name = None
+        attached_file_ids = []  # List of attached file IDs from ChatKit
         operation = None
         try:
             body_str = body.decode('utf-8')
@@ -1235,6 +2208,26 @@ async def chatkit_endpoint(
                     selected_connector_url = metadata.get('selected_connector_url')
                     selected_connector_name = metadata.get('selected_connector_name')
                     logger.info(f"[Schema ChatKit] Connector from metadata: {selected_connector_name} ({selected_connector_id})")
+
+                # Check for attachments in ChatKit message format
+                # ChatKit sends attachments in user messages with structure: {type: 'file'|'image', id: 'file_id', ...}
+                if body_json.get('item') and isinstance(body_json['item'], dict):
+                    item = body_json['item']
+                    if item.get('content') and isinstance(item['content'], list):
+                        for content_part in item['content']:
+                            if isinstance(content_part, dict):
+                                # Check for attachments array in content
+                                if content_part.get('attachments'):
+                                    for attachment in content_part['attachments']:
+                                        if isinstance(attachment, dict) and attachment.get('id'):
+                                            attached_file_ids.append(attachment['id'])
+                                            logger.info(f"[Schema ChatKit] Found attachment: {attachment.get('id')} ({attachment.get('type', 'file')})")
+
+                # Also check for attached_file_id in metadata (legacy support)
+                if metadata.get('attached_file_id'):
+                    attached_file_ids.append(metadata['attached_file_id'])
+                    logger.info(f"[Schema ChatKit] File from metadata: {metadata['attached_file_id']}")
+
             except json.JSONDecodeError:
                 pass
 
@@ -1262,11 +2255,11 @@ async def chatkit_endpoint(
         # Create PostgreSQL-backed store for persistent history (always create for history operations)
         try:
             db_store = create_chatkit_store(db, user.id)
-            chatkit_server = SchemaChatKitServer(db_store)
+            chatkit_server = SchemaChatKitServer(db_store, attachment_store=SchemaNoopAttachmentStore())
             logger.info(f"[Schema ChatKit] Using PostgreSQL-backed store for user {user.id}")
         except Exception as store_error:
             logger.warning(f"[Schema ChatKit] Failed to create DB store, using fallback: {store_error}")
-            chatkit_server = SchemaChatKitServer(_fallback_store)
+            chatkit_server = SchemaChatKitServer(_fallback_store, attachment_store=SchemaNoopAttachmentStore())
 
         # For read-only history operations, we don't need database connection
         read_only_operations = ['threads.list', 'threads.get', 'threads.items', 'threads.delete']
@@ -1306,6 +2299,7 @@ async def chatkit_endpoint(
                 "selected_connector_id": selected_connector_id,
                 "selected_connector_url": selected_connector_url,
                 "selected_connector_name": selected_connector_name,
+                "attached_file_ids": attached_file_ids,  # Pass attached file IDs for file analysis
                 "db_session": db,  # Pass DB session for connector tools loading
             }
 
@@ -1313,6 +2307,8 @@ async def chatkit_endpoint(
                 logger.info(f"[Schema ChatKit] Passing tool '{selected_tool}' to agent context")
             if selected_connector_id:
                 logger.info(f"[Schema ChatKit] Passing connector '{selected_connector_name}' to agent context")
+            if attached_file_ids:
+                logger.info(f"[Schema ChatKit] Passing {len(attached_file_ids)} attached file(s) to agent context")
 
         # Process with ChatKit server
         result = await chatkit_server.process(body, context)
@@ -1346,10 +2342,15 @@ async def chatkit_endpoint(
                     "X-Accel-Buffering": "no",
                 }
             )
+        elif hasattr(result, 'json') and isinstance(result.json, bytes):
+            # NonStreamingResult from ChatKit - has .json bytes attribute
+            return Response(content=result.json, media_type="application/json")
         elif hasattr(result, 'model_dump_json'):
             return Response(content=result.model_dump_json(), media_type="application/json")
         elif hasattr(result, 'model_dump'):
             return Response(content=json.dumps(result.model_dump()), media_type="application/json")
+        elif isinstance(result, bytes):
+            return Response(content=result, media_type="application/json")
         else:
             return Response(
                 content=json.dumps(result) if isinstance(result, dict) else str(result),

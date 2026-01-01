@@ -1,9 +1,40 @@
-# Environment variables (never commit secrets)
+# ============================================
+# SECURITY: Environment & Secrets (CRITICAL)
+# ============================================
+# NEVER commit these files - they contain API keys, passwords, tokens
 .env
-.env.local
-.env.*.local
+.env.*
+!.env.example
+!.env.*.example
+*.env
+backend/.env
+backend/.env.*
+!backend/.env.example
+frontend/.env
+frontend/.env.*
+!frontend/.env.example
+!frontend/.env.local.example
 
+# Secret files
+*.pem
+*.key
+*.cert
+*.crt
+*secret*
+*credential*
+*password*
+!*example*
+!*template*
+
+# OAuth tokens and credentials
+*token*.json
+*credentials*.json
+oauth_tokens/
+.tokens/
+
+# ============================================
 # Python
+# ============================================
 __pycache__/
 *.py[cod]
 *$py.class
@@ -26,40 +57,91 @@ wheels/
 *.egg
 pip-log.txt
 pip-delete-this-directory.txt
-.venv
+.venv/
 venv/
 ENV/
 env/
-.vscode/
-.idea/
-*.swp
-*.swo
 
+# ============================================
 # Testing
+# ============================================
 .pytest_cache/
 .coverage
 htmlcov/
 .tox/
+.nox/
+coverage.xml
+*.cover
+.hypothesis/
 
+# ============================================
 # Database
+# ============================================
 *.db
 *.sqlite
 *.sqlite3
+*.sql.backup
 
-# IDE
+# ============================================
+# IDE & Editors
+# ============================================
 .vscode/
 .idea/
 *.sublime-workspace
 *.sublime-project
+*.swp
+*.swo
+*~
+.project
+.pydevproject
+.settings/
 
-# OS
+# ============================================
+# OS Generated
+# ============================================
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
 Thumbs.db
+desktop.ini
+nul
 
-# Project specific
+# ============================================
+# Node.js / Frontend
+# ============================================
 node_modules/
 .next/
 out/
-.env
-env
-backend\.env
+.nuxt/
+dist/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# ============================================
+# Logs
+# ============================================
+logs/
+*.log
+npm-debug.log*
+
+# ============================================
+# Build & Cache
+# ============================================
+.cache/
+.parcel-cache/
+.turbo/
+*.tsbuildinfo
+
+# ============================================
+# Temporary files
+# ============================================
+tmp/
+temp/
+*.tmp
+*.temp
+*.bak

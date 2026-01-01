@@ -87,7 +87,7 @@ class GoogleSearchService:
     def __init__(
         self,
         api_key: Optional[str] = None,
-        model: str = "gemini-2.5-flash"
+        model: str = "gemini-robotics-er-1.5-preview"
     ):
         """
         Initialize Google Search Service.

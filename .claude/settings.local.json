@@ -4,7 +4,9 @@
       "Bash(.specify/scripts/bash/check-prerequisites.sh:*)",
       "Bash(python -m pytest:*)",
       "Bash(python:*)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "mcp__context7__resolve-library-id",
+      "mcp__context7__get-library-docs"
     ],
     "deny": [],
     "ask": []

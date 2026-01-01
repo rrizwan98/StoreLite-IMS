@@ -27,7 +27,8 @@ export interface DiscoveredTool {
  */
 export interface Connector {
   id: number;
-  name: string;
+  name: string;          // Clean tool name (e.g., "Gmail", "Google Drive")
+  email?: string | null; // Connected account email (from backend)
   description?: string;
   server_url: string;
   auth_type: AuthType;
@@ -364,6 +365,132 @@ export async function getNotionStatus(): Promise<{
 export async function disconnectNotion(): Promise<{ success: boolean; message: string }> {
   return connectorsFetch('/api/notion-mcp/disconnect', {
     method: 'DELETE',
+  });
+}
+
+// ============================================================================
+// Google Drive MCP OAuth Functions
+// ============================================================================
+
+/**
+ * Response from Google Drive MCP connect
+ */
+export interface GDriveConnectResponse {
+  authorization_url: string;
+  state: string;
+}
+
+/**
+ * Start Google Drive OAuth flow
+ */
+export async function connectGoogleDrive(): Promise<GDriveConnectResponse> {
+  return connectorsFetch<GDriveConnectResponse>('/api/gdrive/connect', {
+    method: 'POST',
+  });
+}
+
+/**
+ * Exchange Google Drive OAuth code for token (called by callback page)
+ */
+export async function exchangeGDriveCode(
+  code: string,
+  state: string
+): Promise<{ success: boolean; connector_id?: number; connector_name?: string; email?: string; message?: string }> {
+  return connectorsFetch(`/api/gdrive/callback?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}`, {
+    method: 'POST',
+  });
+}
+
+/**
+ * Check Google Drive connection status
+ */
+export async function getGDriveStatus(): Promise<{
+  connected: boolean;
+  connector_id?: number;
+  connector_name?: string;
+  last_verified?: string;
+}> {
+  return connectorsFetch('/api/gdrive/status');
+}
+
+/**
+ * Disconnect Google Drive
+ */
+export async function disconnectGDrive(): Promise<{ success: boolean; message: string }> {
+  return connectorsFetch('/api/gdrive/disconnect', {
+    method: 'DELETE',
+  });
+}
+
+/**
+ * Refresh Google Drive access token
+ */
+export async function refreshGDriveToken(): Promise<{ success: boolean; message: string }> {
+  return connectorsFetch('/api/gdrive/refresh', {
+    method: 'POST',
+  });
+}
+
+// ============================================================================
+// Gmail MCP OAuth Functions
+// ============================================================================
+
+/**
+ * Response from Gmail MCP connect
+ */
+export interface GmailConnectResponse {
+  authorization_url: string;
+  state: string;
+}
+
+/**
+ * Start Gmail OAuth flow
+ */
+export async function connectGmail(): Promise<GmailConnectResponse> {
+  return connectorsFetch<GmailConnectResponse>('/api/gmail/connect', {
+    method: 'POST',
+  });
+}
+
+/**
+ * Exchange Gmail OAuth code for token (called by callback page)
+ */
+export async function exchangeGmailCode(
+  code: string,
+  state: string
+): Promise<{ success: boolean; connector_id?: number; connector_name?: string; email?: string; message?: string }> {
+  return connectorsFetch(`/api/gmail/callback?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}`, {
+    method: 'POST',
+  });
+}
+
+/**
+ * Check Gmail connection status
+ */
+export async function getGmailStatus(): Promise<{
+  connected: boolean;
+  connector_id?: number;
+  connector_name?: string;
+  last_verified?: string;
+}> {
+  return connectorsFetch('/api/gmail/status');
+}
+
+/**
+ * Disconnect Gmail
+ */
+export async function disconnectGmail(): Promise<{ success: boolean; message: string }> {
+  return connectorsFetch('/api/gmail/disconnect', {
+    method: 'DELETE',
+  });
+}
+
+/**
+ * Refresh Gmail access token
+ */
+export async function refreshGmailToken(): Promise<{ success: boolean; message: string }> {
+  return connectorsFetch('/api/gmail/refresh', {
+    method: 'POST',
   });
 }
 

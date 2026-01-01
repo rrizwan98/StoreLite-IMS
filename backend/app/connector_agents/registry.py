@@ -15,6 +15,8 @@ from app.models import UserMCPConnection
 from app.connectors.encryption import decrypt_credentials
 from .base import BaseConnectorAgent
 from .notion_agent import NotionConnectorAgent
+from .gdrive_agent import GoogleDriveConnectorAgent
+from .gmail_agent import GmailConnectorAgent
 
 logger = logging.getLogger(__name__)
 
@@ -30,18 +32,24 @@ class ConnectorAgentRegistry:
     # Map connector types to agent classes
     AGENT_CLASSES: Dict[str, Type[BaseConnectorAgent]] = {
         "notion": NotionConnectorAgent,
+        "google_drive": GoogleDriveConnectorAgent,
+        "gdrive": GoogleDriveConnectorAgent,  # Alias
+        "gmail": GmailConnectorAgent,
         # Future connectors:
         # "slack": SlackConnectorAgent,
-        # "google_docs": GoogleDocsConnectorAgent,
         # "airtable": AirtableConnectorAgent,
     }
 
     # URL patterns to detect connector type
     URL_PATTERNS: Dict[str, str] = {
         "notion": "notion",
+        "gdrive": "google_drive",
+        "google-drive": "google_drive",
+        "google_drive": "google_drive",
+        "gmail": "gmail",
+        "mail": "gmail",
         "slack": "slack",
         "airtable": "airtable",
-        "google": "google",
     }
 
     def __init__(self):
@@ -214,14 +222,16 @@ async def get_connector_agent_tools(
     logger.info(f"[ConnectorRegistry] Loading connector agent tools for user {user_id}")
 
     tools = []
+    seen_connector_types = set()  # Track types to avoid duplicate tools
 
     try:
         # Query active and verified connectors for this user
+        # Order by id desc to get most recent first
         query = select(UserMCPConnection).where(
             UserMCPConnection.user_id == user_id,
             UserMCPConnection.is_active == True,
             UserMCPConnection.is_verified == True,
-        )
+        ).order_by(UserMCPConnection.id.desc())
         result = await db.execute(query)
         connectors = result.scalars().all()
 
@@ -234,6 +244,13 @@ async def get_connector_agent_tools(
             if not connector_type:
                 logger.info(
                     f"[ConnectorRegistry] Could not detect type for connector: {connector.name}"
+                )
+                continue
+
+            # Skip if we already have a tool for this connector type (avoid duplicates)
+            if connector_type in seen_connector_types:
+                logger.info(
+                    f"[ConnectorRegistry] Skipping duplicate {connector_type} connector: {connector.name} (id={connector.id})"
                 )
                 continue
 
@@ -268,6 +285,7 @@ async def get_connector_agent_tools(
                     tool = agent.as_tool(is_enabled=True)
                     if tool:
                         tools.append(tool)
+                        seen_connector_types.add(connector_type)  # Mark type as seen
                         logger.info(
                             f"[ConnectorRegistry] Added {connector_type} sub-agent tool: "
                             f"{agent.TOOL_NAME}"
