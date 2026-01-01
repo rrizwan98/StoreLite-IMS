@@ -1,65 +1,266 @@
-# ChatKit Theming (Official Options Only)
+# Theming Reference
 
-Style ChatKit using ONLY official configuration options and CSS.
+> Guide for theming OpenAI ChatKit using official CSS variables and configuration.
 
-## ⚠️ CRITICAL: Theme is a String, NOT Object
+---
 
-```javascript
-// ✅ CORRECT: theme is a string literal
+## Theme Configuration
+
+### Basic Theme Setting
+
+```typescript
 chatkit.setOptions({
-  theme: 'light',  // 'light' | 'dark' | 'auto'
+  theme: 'light',  // 'light' or 'dark'
+});
+```
+
+### System Theme (Auto)
+
+```typescript
+// Detect system preference
+const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+
+chatkit.setOptions({
+  theme: prefersDark ? 'dark' : 'light',
 });
 
-// ❌ WRONG: theme as object causes "Invalid input" error
-chatkit.setOptions({
-  theme: {
-    colorScheme: 'light',  // This won't work!
-  },
+// Listen for changes
+window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+  chatkit.setOptions({
+    theme: e.matches ? 'dark' : 'light',
+  });
 });
 ```
 
 ---
 
-## Theme Options
+## CSS Variables (Official)
 
-| Value | Description |
-|-------|-------------|
-| `'light'` | Light theme with white background |
-| `'dark'` | Dark theme with dark background |
-| `'auto'` | Follows system preference |
+ChatKit exposes CSS variables for customization. Override these in your CSS:
+
+### Color Variables
+
+```css
+openai-chatkit {
+  /* Primary colors */
+  --chatkit-primary: #0066ff;
+  --chatkit-primary-hover: #0052cc;
+
+  /* Background colors */
+  --chatkit-bg: #ffffff;
+  --chatkit-bg-secondary: #f5f5f5;
+  --chatkit-bg-tertiary: #eeeeee;
+
+  /* Text colors */
+  --chatkit-text: #1a1a1a;
+  --chatkit-text-secondary: #666666;
+  --chatkit-text-muted: #999999;
+
+  /* Border colors */
+  --chatkit-border: #e0e0e0;
+  --chatkit-border-focus: #0066ff;
+
+  /* Message colors */
+  --chatkit-user-message-bg: #0066ff;
+  --chatkit-user-message-text: #ffffff;
+  --chatkit-assistant-message-bg: #f5f5f5;
+  --chatkit-assistant-message-text: #1a1a1a;
+
+  /* Status colors */
+  --chatkit-success: #00cc66;
+  --chatkit-error: #ff3333;
+  --chatkit-warning: #ffcc00;
+}
+```
+
+### Dark Theme Override
+
+```css
+openai-chatkit[data-theme="dark"] {
+  --chatkit-bg: #1a1a1a;
+  --chatkit-bg-secondary: #2a2a2a;
+  --chatkit-bg-tertiary: #333333;
+
+  --chatkit-text: #ffffff;
+  --chatkit-text-secondary: #cccccc;
+  --chatkit-text-muted: #888888;
+
+  --chatkit-border: #444444;
+
+  --chatkit-assistant-message-bg: #2a2a2a;
+  --chatkit-assistant-message-text: #ffffff;
+}
+```
 
 ---
 
 ## Container Styling
 
-Style the container around ChatKit, NOT ChatKit internals:
+### Floating Widget
 
 ```css
-/* Style the container, not internal ChatKit elements */
 .chatkit-container {
   position: fixed;
   bottom: 24px;
   right: 24px;
-  width: 400px;
+  width: 384px;       /* 96 * 4 = 384px (w-96 in Tailwind) */
   height: 500px;
   border-radius: 12px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
   overflow: hidden;
+  z-index: 50;
 }
 
-.chatkit-container openai-chatkit {
+openai-chatkit {
   width: 100%;
   height: 100%;
   display: block;
 }
 ```
 
----
-
-## Responsive Sizing
+### Full Page
 
 ```css
-/* Mobile */
+.chatkit-fullpage {
+  width: 100vw;
+  height: 100vh;
+}
+```
+
+### Sidebar
+
+```css
+.chatkit-sidebar {
+  position: fixed;
+  right: 0;
+  top: 0;
+  width: 400px;
+  height: 100vh;
+  border-left: 1px solid var(--chatkit-border);
+}
+```
+
+---
+
+## Brand Customization
+
+### Custom Primary Color
+
+```css
+openai-chatkit {
+  --chatkit-primary: #6366f1;         /* Indigo */
+  --chatkit-primary-hover: #4f46e5;
+  --chatkit-user-message-bg: #6366f1;
+}
+```
+
+### Custom Font
+
+```css
+openai-chatkit {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+```
+
+### Custom Border Radius
+
+```css
+openai-chatkit {
+  --chatkit-radius: 8px;
+  --chatkit-radius-lg: 12px;
+  --chatkit-radius-full: 9999px;
+}
+```
+
+---
+
+## Component-Specific Styling
+
+### Header
+
+```css
+openai-chatkit::part(header) {
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  color: white;
+}
+```
+
+### Composer (Input Area)
+
+```css
+openai-chatkit::part(composer) {
+  border-top: 1px solid var(--chatkit-border);
+  padding: 12px 16px;
+}
+
+openai-chatkit::part(composer-input) {
+  border-radius: 8px;
+  border: 1px solid var(--chatkit-border);
+}
+```
+
+### Messages
+
+```css
+openai-chatkit::part(message-user) {
+  background: var(--chatkit-user-message-bg);
+  color: var(--chatkit-user-message-text);
+  border-radius: 12px 12px 4px 12px;
+}
+
+openai-chatkit::part(message-assistant) {
+  background: var(--chatkit-assistant-message-bg);
+  color: var(--chatkit-assistant-message-text);
+  border-radius: 12px 12px 12px 4px;
+}
+```
+
+### Start Screen
+
+```css
+openai-chatkit::part(start-screen) {
+  text-align: center;
+  padding: 32px;
+}
+
+openai-chatkit::part(start-greeting) {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin-bottom: 16px;
+}
+
+openai-chatkit::part(prompt-button) {
+  background: var(--chatkit-bg-secondary);
+  border: 1px solid var(--chatkit-border);
+  border-radius: 8px;
+  padding: 8px 16px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+openai-chatkit::part(prompt-button):hover {
+  background: var(--chatkit-bg-tertiary);
+}
+```
+
+### Disclaimer
+
+```css
+openai-chatkit::part(disclaimer) {
+  font-size: 0.75rem;
+  color: var(--chatkit-text-muted);
+  text-align: center;
+  padding: 8px;
+}
+```
+
+---
+
+## Responsive Design
+
+### Mobile Optimization
+
+```css
 @media (max-width: 640px) {
   .chatkit-container {
     position: fixed;
@@ -69,242 +270,165 @@ Style the container around ChatKit, NOT ChatKit internals:
     border-radius: 0;
   }
 }
+```
 
-/* Tablet */
+### Tablet
+
+```css
 @media (min-width: 641px) and (max-width: 1024px) {
   .chatkit-container {
-    width: 350px;
-    height: 450px;
-  }
-}
-
-/* Desktop */
-@media (min-width: 1025px) {
-  .chatkit-container {
-    width: 400px;
-    height: 500px;
+    width: 420px;
+    height: 600px;
   }
 }
 ```
 
 ---
 
-## Embedding Layouts
+## Animation Customization
 
-### Floating Widget (Bottom Right)
+```css
+openai-chatkit {
+  /* Message animation */
+  --chatkit-message-animation: fadeIn 0.2s ease-out;
 
-```html
-<button id="chat-toggle" class="chat-button">💬</button>
+  /* Loading indicator */
+  --chatkit-loading-animation: pulse 1.5s infinite;
 
-<div id="chat-container" class="chatkit-container hidden">
-  <openai-chatkit id="chatkit"></openai-chatkit>
-</div>
+  /* Transition speed */
+  --chatkit-transition: 0.2s ease;
+}
 
-<style>
-  .chat-button {
-    position: fixed;
-    bottom: 24px;
-    right: 24px;
-    width: 56px;
-    height: 56px;
-    border-radius: 50%;
-    background: #2563EB;
-    color: white;
-    border: none;
-    font-size: 24px;
-    cursor: pointer;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-    z-index: 1000;
-  }
-  
-  .chatkit-container {
-    position: fixed;
-    bottom: 96px;
-    right: 24px;
-    width: 400px;
-    height: 500px;
-    border-radius: 12px;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
-    overflow: hidden;
-    background: white;
-    z-index: 1000;
-  }
-  
-  .chatkit-container.hidden {
-    display: none;
-  }
-  
-  .chatkit-container openai-chatkit {
-    width: 100%;
-    height: 100%;
-    display: block;
-  }
-</style>
-
-<script>
-  document.getElementById('chat-toggle').onclick = () => {
-    document.getElementById('chat-container').classList.toggle('hidden');
-  };
-</script>
-```
-
-### Sidebar Layout
-
-```html
-<div class="app-layout">
-  <main class="content">
-    <!-- Your app content -->
-  </main>
-  <aside class="chat-sidebar">
-    <openai-chatkit id="chatkit"></openai-chatkit>
-  </aside>
-</div>
-
-<style>
-  .app-layout {
-    display: flex;
-    height: 100vh;
-  }
-  
-  .content {
-    flex: 1;
-    overflow: auto;
-  }
-  
-  .chat-sidebar {
-    width: 400px;
-    border-left: 1px solid #e5e7eb;
-    background: white;
-  }
-  
-  .chat-sidebar openai-chatkit {
-    width: 100%;
-    height: 100%;
-    display: block;
-  }
-</style>
-```
-
-### Fullscreen Modal
-
-```html
-<div id="chat-modal" class="modal hidden">
-  <div class="modal-content">
-    <button class="close-btn" onclick="closeModal()">&times;</button>
-    <openai-chatkit id="chatkit"></openai-chatkit>
-  </div>
-</div>
-
-<style>
-  .modal {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.5);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 1000;
-  }
-  
-  .modal.hidden {
-    display: none;
-  }
-  
-  .modal-content {
-    background: white;
-    border-radius: 12px;
-    width: 600px;
-    height: 80vh;
-    max-width: 90vw;
-    position: relative;
-    overflow: hidden;
-  }
-  
-  .modal-content openai-chatkit {
-    width: 100%;
-    height: 100%;
-    display: block;
-  }
-  
-  .close-btn {
-    position: absolute;
-    top: 8px;
-    right: 8px;
-    z-index: 10;
-    background: rgba(0, 0, 0, 0.1);
-    border: none;
-    border-radius: 50%;
-    width: 32px;
-    height: 32px;
-    font-size: 20px;
-    cursor: pointer;
-  }
-</style>
-
-<script>
-  function openModal() {
-    document.getElementById('chat-modal').classList.remove('hidden');
-  }
-  function closeModal() {
-    document.getElementById('chat-modal').classList.add('hidden');
-  }
-</script>
-```
-
----
-
-## Next.js / React Styling
-
-```tsx
-'use client';
-
-export default function ChatKitWidget() {
-  const [isOpen, setIsOpen] = useState(false);
-  
-  return (
-    <>
-      {/* Toggle Button */}
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full 
-                   bg-blue-600 hover:bg-blue-700 text-white shadow-lg
-                   flex items-center justify-center transition-colors"
-      >
-        {isOpen ? '✕' : '💬'}
-      </button>
-
-      {/* ChatKit Container */}
-      {isOpen && (
-        <div className="fixed bottom-24 right-6 z-50 w-96 h-[500px] 
-                        rounded-xl shadow-2xl border overflow-hidden bg-white">
-          <openai-chatkit
-            ref={chatkitRef as any}
-            style={{ 
-              width: '100%', 
-              height: '100%',
-              display: 'block',
-            }}
-          />
-        </div>
-      )}
-    </>
-  );
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 ```
 
 ---
 
-## DO NOT
+## Toggle Button Styling
 
-❌ Override internal ChatKit styles with `!important`
-❌ Use browser dev tools to find and override internal classes
-❌ Inject custom CSS into ChatKit shadow DOM
-❌ Replace ChatKit components with custom implementations
-❌ Use `theme: { colorScheme: '...' }` object format
+The toggle button is NOT part of ChatKit - style it yourself:
 
-## DO
+```css
+.chatkit-toggle {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: #0066ff;
+  color: white;
+  border: none;
+  box-shadow: 0 4px 12px rgba(0, 102, 255, 0.4);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.2s, box-shadow 0.2s;
+  z-index: 50;
+}
 
-✅ Use `theme: 'light'` | `'dark'` | `'auto'` string format
-✅ Style the container element around ChatKit
-✅ Use media queries on container for responsiveness
-✅ Set width/height on the `<openai-chatkit>` element itself
+.chatkit-toggle:hover {
+  transform: scale(1.05);
+  box-shadow: 0 6px 16px rgba(0, 102, 255, 0.5);
+}
+
+.chatkit-toggle:active {
+  transform: scale(0.95);
+}
+```
+
+---
+
+## Theme Presets
+
+### Modern Blue
+
+```css
+openai-chatkit {
+  --chatkit-primary: #3b82f6;
+  --chatkit-primary-hover: #2563eb;
+  --chatkit-user-message-bg: #3b82f6;
+  --chatkit-radius: 12px;
+}
+```
+
+### Elegant Purple
+
+```css
+openai-chatkit {
+  --chatkit-primary: #8b5cf6;
+  --chatkit-primary-hover: #7c3aed;
+  --chatkit-user-message-bg: #8b5cf6;
+}
+```
+
+### Professional Gray
+
+```css
+openai-chatkit {
+  --chatkit-primary: #374151;
+  --chatkit-primary-hover: #1f2937;
+  --chatkit-user-message-bg: #374151;
+}
+```
+
+### Vibrant Gradient
+
+```css
+openai-chatkit::part(header) {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+```
+
+---
+
+## Important Rules
+
+1. **Use CSS variables** - Never target internal ChatKit classes directly
+2. **Use ::part()** - For component-specific styling where supported
+3. **Avoid !important** - Work with the cascade, not against it
+4. **Test both themes** - Ensure customizations work in light and dark
+5. **Mobile first** - Test responsive behavior thoroughly
+6. **Respect defaults** - Only override what's necessary
+
+---
+
+## Common Mistakes
+
+### DON'T: Target internal elements
+
+```css
+/* BAD - Internal structure may change */
+.chatkit-message-bubble { ... }
+```
+
+### DO: Use CSS variables
+
+```css
+/* GOOD - Stable API */
+openai-chatkit {
+  --chatkit-user-message-bg: #6366f1;
+}
+```
+
+### DON'T: Override everything
+
+```css
+/* BAD - Heavy-handed */
+openai-chatkit * {
+  font-family: Arial !important;
+}
+```
+
+### DO: Target specific parts
+
+```css
+/* GOOD - Surgical */
+openai-chatkit {
+  font-family: 'Inter', sans-serif;
+}
+```
