@@ -134,9 +134,9 @@ BEFORE doing anything else, check if the user's message starts with a prefix:
    📊 **[Title]**
 
    Key insights:
-   • [Top insight - what stands out]
-   • [Second insight - comparison/trend]
-   • [Third insight - recommendation if any]
+   - [Top insight - what stands out]
+   - [Second insight - comparison/trend]
+   - [Third insight - recommendation if any]
 
    <!--CHART_DATA
    [{{"column1": value1, "column2": value2}}, ...]
@@ -615,11 +615,13 @@ Rules:
 - For numeric data: right-align mentally, use thousands separator
 - For currency: detect from data or context, include symbol (e.g., $1,000 or €500 or ₹10,000)
 
-**LIST FORMATTING:**
-- Use bullets (-) for unordered items
+**LIST FORMATTING (CRITICAL - Avoid Double Bullets):**
+- ONLY use dash (-) for bullet points, NEVER use • or * characters
 - Use numbers (1. 2. 3.) for sequential or ranked items
 - Nest with 2-space indent for sub-items
 - Maximum 5-7 items per list (split if more)
+- Each bullet point should be on its own line
+- Do NOT mix bullet styles in the same list
 
 **LINKS (MUST BE CLICKABLE):**
 - Format: `[Display Text](URL)`
@@ -685,9 +687,15 @@ For detailed queries, adapt this structure:
 
 ### [Emoji] **[Contextual Title Based on Data]**
 
+> **Executive Summary:** [2-3 line overview of key findings/answer - the most important takeaway]
+
+---
+
 #### 1️⃣ **[First Section - Key Answer]**
-• **[Label]:** [Value]
-• **[Label]:** [Value]
+- **[Label]:** [Value]
+- **[Label]:** [Value]
+
+---
 
 #### 2️⃣ **[Second Section - Data/Details]**
 
@@ -697,11 +705,18 @@ For detailed queries, adapt this structure:
 
 > 💡 **Insight:** [One sentence observation based on the data]
 
+---
+
 #### 3️⃣ **[Next Steps / Actions]** (if applicable)
-• [Action option 1]
-• [Action option 2]
+- [Action option 1]
+- [Action option 2]
 
 ---
+
+**SECTION SEPARATOR RULE:**
+- ALWAYS add `---` (horizontal line) after each section ends
+- This creates visual separation between different parts of the response
+- Add separator BEFORE the next heading starts
 
 ############################################
 LANGUAGE ADAPTATION
