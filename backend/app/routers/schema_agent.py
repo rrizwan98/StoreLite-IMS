@@ -31,6 +31,7 @@ from chatkit.server import (
     ThreadItem,
     UserMessageItem,
     ThreadStreamEvent,
+    stream_widget,  # For streaming Chart widgets
 )
 from chatkit.store import AttachmentStore
 from chatkit.types import (
@@ -61,6 +62,8 @@ from chatkit.types import (
     Annotation,
 )
 from chatkit.agents import ThreadItemConverter
+# Chart widgets for analytics visualization
+from chatkit.widgets import Chart, BarSeries, LineSeries, AreaSeries, Card, Box, Text, Title
 from openai.types.responses import ResponseInputImageParam, ResponseInputTextParam, ResponseInputFileParam
 
 from app.database import get_db
@@ -541,6 +544,17 @@ class SchemaChatKitServer(ChatKitServer):
 
     def __init__(self, store: Store, attachment_store: AttachmentStore | None = None):
         super().__init__(store, attachment_store=attachment_store)
+
+    async def delete_thread(self, thread_id: str, context: Any) -> None:
+        """
+        Delete a thread from the store.
+
+        This method ensures thread deletion works properly by explicitly
+        delegating to the store's delete_thread method.
+        """
+        logger.info(f"[SchemaChatKitServer] delete_thread called for: {thread_id}")
+        await self.store.delete_thread(thread_id, context)
+        logger.info(f"[SchemaChatKitServer] Thread deleted successfully: {thread_id}")
 
     async def respond(
         self,
@@ -1031,6 +1045,254 @@ class SchemaChatKitServer(ChatKitServer):
 
                 return clean_text.strip()
 
+            # ============================================================================
+            # Analytics Chart Generation Helper Functions
+            # ============================================================================
+
+            def detect_chart_type(query: str, data: list) -> str:
+                """
+                Detect the best chart type based on query keywords and data structure.
+
+                Args:
+                    query: User's query text
+                    data: Query result data
+
+                Returns:
+                    Chart type: 'bar', 'line', or 'area'
+                """
+                query_lower = query.lower()
+
+                # Time-series indicators → Line chart
+                time_keywords = [
+                    "trend", "over time", "monthly", "daily", "weekly", "yearly",
+                    "growth", "history", "timeline", "progression", "change",
+                    "date", "month", "year", "quarter", "period"
+                ]
+                if any(keyword in query_lower for keyword in time_keywords):
+                    return "line"
+
+                # Volume/cumulative indicators → Area chart
+                area_keywords = [
+                    "volume", "cumulative", "total over", "accumulated",
+                    "stacked", "filled", "area"
+                ]
+                if any(keyword in query_lower for keyword in area_keywords):
+                    return "area"
+
+                # Default to bar chart for comparisons
+                return "bar"
+
+            def detect_chart_columns(data: list) -> tuple:
+                """
+                Detect X-axis (category) and Y-axis (numeric) columns from data.
+
+                Args:
+                    data: List of dictionaries (query results)
+
+                Returns:
+                    Tuple of (x_axis_column, y_axis_columns)
+                """
+                if not data or len(data) == 0:
+                    return None, []
+
+                first_row = data[0]
+                x_axis = None
+                y_columns = []
+
+                for key, value in first_row.items():
+                    key_lower = key.lower()
+
+                    # Detect X-axis (category/label column)
+                    if x_axis is None:
+                        if any(t in key_lower for t in ["date", "time", "month", "year", "day", "week", "name", "label", "category", "product", "item", "type"]):
+                            x_axis = key
+                            continue
+
+                    # Detect Y-axis (numeric columns)
+                    if isinstance(value, (int, float)):
+                        y_columns.append(key)
+                    elif isinstance(value, str):
+                        # Try to parse as number
+                        try:
+                            clean_val = value.replace(",", "").replace("$", "").replace("%", "")
+                            float(clean_val)
+                            y_columns.append(key)
+                        except (ValueError, AttributeError):
+                            # Not numeric, could be X-axis if not set
+                            if x_axis is None:
+                                x_axis = key
+
+                # Fallback: first column as X-axis
+                if x_axis is None and len(first_row) > 0:
+                    x_axis = list(first_row.keys())[0]
+
+                return x_axis, y_columns
+
+            def _generate_chart_title(data: list, query: str) -> str:
+                """
+                Generate a SHORT professional chart title (2-3 words max).
+
+                Examples:
+                - "Sales Overview"
+                - "Inventory Summary"
+                - "Revenue Analysis"
+                - "Product Comparison"
+                """
+                query_lower = query.lower().replace("[tool:analytics]", "").strip()
+
+                # Detect chart type from query keywords
+                title_map = {
+                    # Sales related
+                    ("sale", "sold", "revenue", "earning"): "Sales Analysis",
+                    ("top", "best", "highest"): "Top Performers",
+                    ("low", "bottom", "lowest", "least"): "Low Performers",
+                    # Inventory related
+                    ("stock", "inventory", "quantity", "qty"): "Inventory Overview",
+                    ("item", "product"): "Product Summary",
+                    # Comparison
+                    ("compare", "comparison", "vs", "versus"): "Comparison Chart",
+                    # Trends
+                    ("trend", "growth", "over time", "monthly", "daily"): "Trend Analysis",
+                    # Financial
+                    ("price", "cost", "expense"): "Price Overview",
+                    ("profit", "margin"): "Profit Analysis",
+                    # Distribution
+                    ("distribution", "breakdown", "category"): "Distribution",
+                    # Bills/Orders
+                    ("bill", "order", "invoice"): "Orders Summary",
+                }
+
+                # Check query against title map
+                for keywords, title in title_map.items():
+                    if any(kw in query_lower for kw in keywords):
+                        return title
+
+                # Fallback: Generate from data columns
+                if data and len(data) > 0:
+                    first_row = data[0]
+                    columns = list(first_row.keys())
+
+                    # Common column patterns
+                    for col in columns:
+                        col_lower = col.lower()
+                        if "revenue" in col_lower or "total" in col_lower:
+                            return "Revenue Summary"
+                        if "quantity" in col_lower or "qty" in col_lower:
+                            return "Quantity Overview"
+                        if "name" in col_lower or "item" in col_lower:
+                            return "Items Overview"
+
+                # Ultimate fallback
+                return "Data Overview"
+
+            def create_chart_widget(
+                data: list,
+                query: str,
+                chart_type: str = None,
+                title: str = None
+            ) -> Chart:
+                """
+                Create a ChatKit Chart widget from query results.
+
+                Args:
+                    data: Query result data (list of dicts)
+                    query: User's query for context
+                    chart_type: Override chart type (auto-detected if None)
+                    title: Chart title (generated if None)
+
+                Returns:
+                    Chart widget ready for streaming
+                """
+                # Auto-detect chart type if not specified
+                if chart_type is None:
+                    chart_type = detect_chart_type(query, data)
+
+                # Detect columns
+                x_axis, y_columns = detect_chart_columns(data)
+
+                if not x_axis or not y_columns:
+                    logger.warning("[Analytics] Could not detect chart columns")
+                    return None
+
+                # Limit data to 20 rows for readability
+                chart_data = data[:20]
+
+                # Build series configuration
+                colors = ["blue", "green", "red", "purple", "orange", "yellow", "pink"]
+                series_list = []
+
+                for idx, col in enumerate(y_columns[:3]):  # Max 3 series
+                    if chart_type == "bar":
+                        series_list.append(BarSeries(
+                            type="bar",
+                            dataKey=col,
+                            label=col.replace("_", " ").title(),
+                            color=colors[idx % len(colors)]
+                        ))
+                    elif chart_type == "line":
+                        series_list.append(LineSeries(
+                            type="line",
+                            dataKey=col,
+                            label=col.replace("_", " ").title(),
+                            color=colors[idx % len(colors)],
+                            curveType="natural"
+                        ))
+                    elif chart_type == "area":
+                        series_list.append(AreaSeries(
+                            type="area",
+                            dataKey=col,
+                            label=col.replace("_", " ").title(),
+                            color=colors[idx % len(colors)],
+                            curveType="natural"
+                        ))
+
+                # Generate title if not provided
+                if title is None:
+                    title = f"Analysis: {query[:40]}..." if len(query) > 40 else f"Analysis: {query}"
+
+                # Create Chart widget (full-screen responsive with proper spacing)
+                chart = Chart(
+                    data=chart_data,
+                    series=series_list,
+                    xAxis=x_axis,
+                    showLegend=len(series_list) > 1,
+                    showTooltip=True,
+                    showYAxis=True,
+                    # Bar spacing for better visual density
+                    barGap=4,  # Gap between bars in same category
+                    barCategoryGap=24,  # Gap between categories (wider for readability)
+                    # Responsive sizing
+                    height="55vh",  # 55% of viewport height
+                    minHeight=480,
+                    width="100%",
+                    # Aspect ratio for consistent look
+                    aspectRatio="16/9",
+                )
+
+                logger.info(f"[Analytics] Created {chart_type} chart with {len(chart_data)} rows, x={x_axis}, y={y_columns[:3]}")
+
+                return chart
+
+            # Flag to track if analytics mode is active
+            # Check both the message AND the context for analytics tool selection
+            analytics_mode = "[TOOL:ANALYTICS]" in user_message.upper()
+
+            # Also check context in case frontend sends it differently
+            context_tool = context.get("selected_tool", "")
+            if context_tool and context_tool.lower() == "analytics":
+                analytics_mode = True
+                # Make sure the prefix is in the message for the agent
+                if "[TOOL:ANALYTICS]" not in user_message.upper():
+                    user_message = f"[TOOL:ANALYTICS] {user_message}"
+
+            if analytics_mode:
+                logger.info("[Analytics] Analytics mode activated via tool selection")
+                logger.info(f"[Analytics] User message with prefix: {user_message[:100]}...")
+                # DON'T remove the prefix - agent needs to see it for concise response format
+
+            # Variable to store chart data for later rendering
+            pending_chart_data = None
+
             # Create initial workflow with first task (analyzing)
             initial_task = CustomTask(
                 type="custom",
@@ -1157,6 +1419,13 @@ class SchemaChatKitServer(ChatKitServer):
                     tool_name = event.get("tool_name", "tool")
                     output_preview = event.get("output_preview", "")
 
+                    # Debug logging for analytics mode
+                    if analytics_mode:
+                        logger.info(f"[Analytics DEBUG] Tool output received: tool_name={tool_name}")
+                        logger.info(f"[Analytics DEBUG] Event keys: {list(event.keys())}")
+                        has_full = "full_output" in event
+                        logger.info(f"[Analytics DEBUG] Has full_output: {has_full}")
+
                     # Find the task for this tool and update it
                     for i, t in enumerate(workflow_tasks):
                         if t.status_indicator == "loading":
@@ -1219,6 +1488,58 @@ class SchemaChatKitServer(ChatKitServer):
                             break
 
                     logger.info(f"[Schema ChatKit] Tool output from {tool_name}")
+
+                    # ============================================================================
+                    # Analytics Mode: Capture SQL query results for chart generation
+                    # ============================================================================
+                    # In analytics mode, capture ALL tool outputs that might contain data
+                    if analytics_mode:
+                        logger.info(f"[Analytics DEBUG] Capturing tool output: tool_name={tool_name}")
+                        logger.info(f"[Analytics DEBUG] output_preview (first 200 chars): {output_preview[:200] if output_preview else 'None'}")
+
+                    # Check various tool name patterns that might contain SQL results
+                    is_sql_tool = any(kw in tool_name.lower() for kw in ["execute", "query", "sql", "select", "schema", "list", "get"])
+
+                    if analytics_mode and is_sql_tool:
+                        try:
+                            # Get full output from event (added by schema_query_agent.py)
+                            full_output = event.get("full_output", "")
+                            logger.info(f"[Analytics] Tool output type: {type(full_output)}, length: {len(str(full_output))}")
+
+                            # If no full_output, try output_preview as fallback
+                            if not full_output and output_preview:
+                                logger.info(f"[Analytics] Trying output_preview as fallback, length: {len(output_preview)}")
+                                full_output = output_preview
+
+                            if full_output:
+                                if isinstance(full_output, str):
+                                    # Try to parse as JSON
+                                    import json as json_parser
+                                    try:
+                                        parsed = json_parser.loads(full_output)
+                                        if isinstance(parsed, dict):
+                                            # Check for common keys: rows, data, results
+                                            chart_rows = parsed.get("rows", parsed.get("data", parsed.get("results", [])))
+                                            if isinstance(chart_rows, list) and len(chart_rows) > 0:
+                                                pending_chart_data = chart_rows
+                                                logger.info(f"[Analytics] Captured {len(chart_rows)} rows from parsed dict")
+                                        elif isinstance(parsed, list) and len(parsed) > 0:
+                                            pending_chart_data = parsed
+                                            logger.info(f"[Analytics] Captured {len(parsed)} rows from parsed list")
+                                    except json_parser.JSONDecodeError:
+                                        logger.debug("[Analytics] Could not parse full_output as JSON")
+                                elif isinstance(full_output, dict):
+                                    chart_rows = full_output.get("rows", full_output.get("data", full_output.get("results", [])))
+                                    if isinstance(chart_rows, list) and len(chart_rows) > 0:
+                                        pending_chart_data = chart_rows
+                                        logger.info(f"[Analytics] Captured {len(chart_rows)} rows from dict output")
+                                elif isinstance(full_output, list) and len(full_output) > 0:
+                                    pending_chart_data = full_output
+                                    logger.info(f"[Analytics] Captured {len(full_output)} rows from list output")
+                            else:
+                                logger.warning("[Analytics] full_output is empty or not present")
+                        except Exception as chart_err:
+                            logger.warning(f"[Analytics] Error capturing chart data: {chart_err}")
 
                 elif event_type == "thinking":
                     # Agent reasoning/thinking - add ThoughtTask
@@ -1386,12 +1707,42 @@ class SchemaChatKitServer(ChatKitServer):
             logger.info(f"[Schema ChatKit] Response text length: {len(response_text)}")
             logger.info(f"[Schema ChatKit] Search sources collected: {len(search_sources)}")
 
+            # ============================================================================
+            # Analytics Mode: Extract CHART_DATA BEFORE sending response to user
+            # This ensures user never sees the raw <!--CHART_DATA [...] --> comment
+            # ============================================================================
+            if analytics_mode and not pending_chart_data and response_text:
+                try:
+                    import json as json_extractor
+                    logger.info("[Analytics] Extracting CHART_DATA before sending response")
+
+                    # Extract CHART_DATA comment block
+                    chart_data_match = re.search(r'<!--CHART_DATA\s*([\s\S]*?)\s*-->', response_text)
+                    if chart_data_match:
+                        json_str = chart_data_match.group(1).strip()
+                        logger.info(f"[Analytics] Found CHART_DATA block, length: {len(json_str)}")
+                        try:
+                            extracted_data = json_extractor.loads(json_str)
+                            if isinstance(extracted_data, list) and len(extracted_data) > 0:
+                                if isinstance(extracted_data[0], dict):
+                                    pending_chart_data = extracted_data
+                                    logger.info(f"[Analytics] Extracted {len(pending_chart_data)} rows from CHART_DATA block")
+                        except json_extractor.JSONDecodeError as e:
+                            logger.warning(f"[Analytics] Failed to parse CHART_DATA JSON: {e}")
+
+                        # ALWAYS remove CHART_DATA from response (even if parse fails)
+                        response_text = re.sub(r'<!--CHART_DATA\s*[\s\S]*?\s*-->', '', response_text).strip()
+                        logger.info(f"[Analytics] Removed CHART_DATA from response, new length: {len(response_text)}")
+
+                except Exception as extract_err:
+                    logger.warning(f"[Analytics] CHART_DATA extraction failed: {extract_err}")
+
             # Format with inline links and sources footer
             final_text = format_response_with_sources(response_text, search_sources)
 
             logger.info(f"[Schema ChatKit] Formatted text length: {len(final_text)}")
 
-            # Create assistant message with formatted response
+            # Create assistant message with formatted response (CHART_DATA already removed)
             msg_id = f"msg-{uuid.uuid4().hex[:12]}"
 
             assistant_msg = AssistantMessageItem(
@@ -1404,9 +1755,103 @@ class SchemaChatKitServer(ChatKitServer):
                 )]
             )
 
-            # Yield the final response
+            # Yield the final response (clean, without CHART_DATA)
             yield ThreadItemAddedEvent(type="thread.item.added", item=assistant_msg)
             yield ThreadItemDoneEvent(type="thread.item.done", item=assistant_msg)
+
+            # ============================================================================
+            # Analytics Mode: Stream Chart widget if data was captured
+            # ============================================================================
+            if analytics_mode:
+                # Secondary fallback: Try to find any JSON array in response if no CHART_DATA found
+                if not pending_chart_data and response_text:
+                    try:
+                        import json as json_extractor
+                        logger.info("[Analytics] Attempting secondary JSON extraction (no CHART_DATA found)")
+
+                        # Second try: Find any JSON array in response
+                        if not pending_chart_data:
+                            json_patterns = [
+                                r'\[\s*\{[^\[\]]*\}(?:\s*,\s*\{[^\[\]]*\})*\s*\]',  # Simple array
+                                r'\[[\s\S]*?\{[\s\S]*?\}[\s\S]*?\]',  # Permissive
+                            ]
+
+                            for pattern in json_patterns:
+                                json_match = re.search(pattern, response_text)
+                                if json_match:
+                                    json_str = json_match.group(0)
+                                    try:
+                                        extracted_data = json_extractor.loads(json_str)
+                                        if isinstance(extracted_data, list) and len(extracted_data) > 0:
+                                            if isinstance(extracted_data[0], dict):
+                                                pending_chart_data = extracted_data
+                                                logger.info(f"[Analytics] Extracted {len(pending_chart_data)} rows from response (fallback)")
+                                                break
+                                    except json_extractor.JSONDecodeError:
+                                        continue
+                    except Exception as extract_err:
+                        logger.warning(f"[Analytics] Fallback extraction failed: {extract_err}")
+
+            if analytics_mode and pending_chart_data:
+                try:
+                    logger.info(f"[Analytics] Generating chart from {len(pending_chart_data)} data rows")
+                    logger.info(f"[Analytics] Sample data: {pending_chart_data[0] if pending_chart_data else 'None'}")
+
+                    # Create chart widget
+                    chart_widget = create_chart_widget(
+                        data=pending_chart_data,
+                        query=user_message,
+                        chart_type=None,  # Auto-detect
+                        title=None  # Auto-generate
+                    )
+
+                    if chart_widget:
+                        # Generate SHORT professional title (2-3 words max)
+                        chart_title = _generate_chart_title(pending_chart_data, user_message)
+
+                        # Create a styled Card wrapper (full width, dashboard-style)
+                        chart_card = Card(
+                            children=[
+                                # Title with spacing
+                                Box(
+                                    children=[
+                                        Title(value=f"📊 {chart_title}")
+                                    ],
+                                    padding=4,
+                                ),
+                                # Chart container with proper padding
+                                Box(
+                                    children=[chart_widget],
+                                    padding=4,
+                                    width="100%",
+                                    minHeight=500,
+                                )
+                            ],
+                            size="full",  # Full width card
+                            padding=4,
+                            background="surface-elevated",  # Slightly elevated for depth
+                        )
+
+                        # Stream the chart widget using ChatKit's stream_widget function
+                        logger.info("[Analytics] Streaming chart widget...")
+                        async for widget_event in stream_widget(
+                            thread,
+                            chart_card,
+                            copy_text=f"Chart: {chart_title}",
+                            generate_id=lambda item_type: self.store.generate_item_id(
+                                item_type, thread, context
+                            ),
+                        ):
+                            yield widget_event
+
+                        logger.info("[Analytics] Chart widget streamed successfully")
+                    else:
+                        logger.warning("[Analytics] Could not create chart from data")
+
+                except Exception as chart_err:
+                    logger.error(f"[Analytics] Error streaming chart: {chart_err}", exc_info=True)
+            elif analytics_mode:
+                logger.warning("[Analytics] Analytics mode active but no chart data found. Response length: %d", len(response_text))
 
             # If user chose delete_immediately, remove these attachments now (best-effort)
             if attached_file_ids and db_session:

@@ -1,379 +1,602 @@
-# Backend Integration (ChatKit Server Protocol)
+# Backend Integration Reference
 
-Connect ChatKit frontend to your Python backend using the official `chatkit.server` SDK.
+> Complete guide for integrating ChatKit with FastAPI backend using ChatKit Python SDK.
 
-## ⚠️ CRITICAL: Use Official ChatKit Server Protocol
+---
 
-The ChatKit SDK provides `ChatKitServer` and `Store` classes. You MUST use these - no custom implementations!
-
-## Installation
-
-```bash
-pip install chatkit fastapi uvicorn
-```
-
-## Architecture
+## Architecture Overview
 
 ```
-ChatKit Frontend (CDN) ←→ FastAPI Backend ←→ ChatKitServer + Store ←→ Your AI Agent
-```
-
-## Project Structure
-
-```
-backend/
-├── main.py                    # FastAPI app entry
-├── routers/
-│   └── chatkit_server.py      # ChatKit protocol endpoint
-├── agents/
-│   └── your_agent.py          # Your AI agent
-└── requirements.txt
-```
-
-## Requirements
-
-```txt
-fastapi>=0.109.0
-uvicorn>=0.27.0
-chatkit>=0.1.0
-python-dotenv>=1.0.0
+┌─────────────────────────────────────────────────────────────────┐
+│                        FastAPI Backend                          │
+├─────────────────────────────────────────────────────────────────┤
+│  POST /chatkit                                                   │
+│  ├── Parse request body                                          │
+│  ├── Create PostgreSQLChatKitStore(db, user_id)                 │
+│  ├── Create MyChatKitServer(store)                              │
+│  ├── Build context {user_id, headers, db_session, ...}          │
+│  ├── result = await server.process(body, context)               │
+│  └── Return StreamingResponse or JSON Response                  │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Complete Working Backend Implementation
-
-### Step 1: Store Implementation
-
-**CRITICAL:** All Store methods MUST have `context: Any` parameter!
+## Required Imports
 
 ```python
-# routers/chatkit_server.py
-from typing import Any
-from chatkit.server import Store, ThreadMetadata, ThreadItem
-from chatkit.types import Page
-
-class SimpleStore(Store):
-    """In-memory store for ChatKit threads and messages.
-    
-    CRITICAL: All methods MUST include 'context: Any' parameter!
-    """
-    
-    def __init__(self):
-        self._threads: dict[str, ThreadMetadata] = {}
-        self._items: dict[str, list[ThreadItem]] = {}
-        self._attachments: dict[str, Any] = {}
-    
-    # ✅ CORRECT: Has context parameter
-    def generate_thread_id(self, context: Any) -> str:
-        import uuid
-        return f"thread-{uuid.uuid4().hex[:12]}"
-    
-    # ✅ CORRECT: Has context parameter
-    def generate_item_id(self, item_type: str, thread: ThreadMetadata, context: Any) -> str:
-        import uuid
-        return f"{item_type}-{uuid.uuid4().hex[:12]}"
-    
-    # ✅ CORRECT: Has context parameter
-    async def save_thread(self, thread: ThreadMetadata, context: Any) -> None:
-        self._threads[thread.id] = thread
-        if thread.id not in self._items:
-            self._items[thread.id] = []
-    
-    async def load_thread(self, thread_id: str, context: Any) -> ThreadMetadata | None:
-        return self._threads.get(thread_id)
-    
-    async def delete_thread(self, thread_id: str, context: Any) -> None:
-        self._threads.pop(thread_id, None)
-        self._items.pop(thread_id, None)
-    
-    async def load_threads(self, limit: int, after: str | None, order: str, context: Any) -> Any:
-        threads = list(self._threads.values())
-        return Page(data=threads[:limit], has_more=len(threads) > limit)
-    
-    async def add_thread_item(self, thread_id: str, item: ThreadItem, context: Any) -> None:
-        if thread_id not in self._items:
-            self._items[thread_id] = []
-        self._items[thread_id].append(item)
-    
-    async def load_thread_items(self, thread_id: str, after: str | None, limit: int, order: str, context: Any) -> Any:
-        items = self._items.get(thread_id, [])
-        return Page(data=items[:limit], has_more=len(items) > limit)
-    
-    async def load_item(self, thread_id: str, item_id: str, context: Any) -> ThreadItem | None:
-        for item in self._items.get(thread_id, []):
-            if hasattr(item, 'id') and item.id == item_id:
-                return item
-        return None
-    
-    async def save_item(self, thread_id: str, item: ThreadItem, context: Any) -> None:
-        if thread_id not in self._items:
-            self._items[thread_id] = []
-        items = self._items[thread_id]
-        for i, existing in enumerate(items):
-            if hasattr(existing, 'id') and hasattr(item, 'id') and existing.id == item.id:
-                items[i] = item
-                return
-        items.append(item)
-    
-    async def delete_thread_item(self, thread_id: str, item_id: str, context: Any) -> None:
-        if thread_id in self._items:
-            self._items[thread_id] = [
-                item for item in self._items[thread_id]
-                if not (hasattr(item, 'id') and item.id == item_id)
-            ]
-    
-    async def save_attachment(self, attachment: Any, context: Any) -> None:
-        if hasattr(attachment, 'id'):
-            self._attachments[attachment.id] = attachment
-    
-    async def load_attachment(self, attachment_id: str, context: Any) -> Any:
-        return self._attachments.get(attachment_id)
-    
-    async def delete_attachment(self, attachment_id: str, context: Any) -> None:
-        self._attachments.pop(attachment_id, None)
-```
-
-### Step 2: ChatKitServer Implementation
-
-**CRITICAL:**
-- `respond()` method signature: `input_user_message` can be `None`
-- `AssistantMessageItem` has NO `status` field
-- Must yield correct event sequence
-
-```python
-from datetime import datetime
-from typing import AsyncIterator
-from chatkit.server import ChatKitServer, Store, ThreadMetadata, UserMessageItem, ThreadStreamEvent
+# ChatKit SDK imports
+from chatkit.server import (
+    ChatKitServer,
+    Store,
+    ThreadMetadata,
+    ThreadItem,
+    UserMessageItem,
+    ThreadStreamEvent,
+)
+from chatkit.store import AttachmentStore
 from chatkit.types import (
-    AssistantMessageContentPartTextDelta,
-    AssistantMessageContentPartDone,
+    # Thread events
     ThreadItemDoneEvent,
     ThreadItemAddedEvent,
+    ThreadItemUpdatedEvent,
+    # Message types
     AssistantMessageItem,
     AssistantMessageContent,
+    UserMessageTextContent,
+    # Progress events
+    ProgressUpdateEvent,
+    ErrorEvent,
+    ErrorCode,
+    # Pagination
+    Page,
+    # Attachments
+    ImageAttachment,
+    FileAttachment,
+    # WorkflowItem types (for streaming progress)
+    WorkflowItem,
+    Workflow,
+    CustomTask,
+    SearchTask,
+    ThoughtTask,
+    URLSource,
+    DurationSummary,
+    # Workflow update events
+    WorkflowTaskAdded,
+    WorkflowTaskUpdated,
 )
 
+# FastAPI imports
+from fastapi import APIRouter, Request, Depends, Response
+from fastapi.responses import StreamingResponse, JSONResponse
+from sqlalchemy.ext.asyncio import AsyncSession
+```
+
+---
+
+## ChatKitServer Implementation
+
+### Basic Structure
+
+```python
 class MyChatKitServer(ChatKitServer):
-    """ChatKit server that connects to your AI agent."""
-    
-    def __init__(self, store: Store):
-        super().__init__(store)
-        self._agent = None  # Initialize your agent here
-    
+    """
+    Custom ChatKit Server for your agent integration.
+
+    Extends ChatKitServer to:
+    - Process user messages with your agent
+    - Stream progress updates (WorkflowItem)
+    - Return formatted responses
+    """
+
+    def __init__(self, store: Store, attachment_store: AttachmentStore | None = None):
+        super().__init__(store, attachment_store=attachment_store)
+
+    async def delete_thread(self, thread_id: str, context: Any) -> None:
+        """Ensure thread deletion works properly."""
+        await self.store.delete_thread(thread_id, context)
+
     async def respond(
         self,
         thread: ThreadMetadata,
-        input_user_message: UserMessageItem | None,  # ⚠️ Can be None!
+        input_user_message: UserMessageItem | None,
         context: Any,
     ) -> AsyncIterator[ThreadStreamEvent]:
         """
         Process user message and yield streaming response events.
-        
-        CRITICAL Event Sequence (in order):
-        1. AssistantMessageContentPartTextDelta - Stream text content
-        2. AssistantMessageContentPartDone - Signal content complete
-        3. ThreadItemAddedEvent - Announce new message item
-        4. ThreadItemDoneEvent - Signal message complete
+
+        Args:
+            thread: Thread metadata (id, title, created_at)
+            input_user_message: User's message with content and attachments
+            context: Custom context (user_id, db_session, etc.)
+
+        Yields:
+            ThreadStreamEvent: Streaming events for ChatKit UI
         """
-        import uuid
-        
-        # Handle None input
+        # Implementation here...
+```
+
+### Complete respond() Method
+
+```python
+async def respond(
+    self,
+    thread: ThreadMetadata,
+    input_user_message: UserMessageItem | None,
+    context: Any,
+) -> AsyncIterator[ThreadStreamEvent]:
+    import time
+    import uuid
+    from datetime import datetime
+
+    try:
         if input_user_message is None:
             return
-        
-        # Extract user message text
+
+        # ============================================
+        # Step 1: Extract user message text
+        # ============================================
         user_message = ""
-        if hasattr(input_user_message, 'content'):
-            for content in input_user_message.content:
-                if hasattr(content, 'text'):
-                    user_message += content.text
-        
-        # Process with your agent
-        # response_text = await self._agent.process(user_message)
-        response_text = f"You said: {user_message}"  # Replace with real agent
-        
+        attachments_list = []
+
+        if hasattr(input_user_message, 'content') and input_user_message.content:
+            for content_item in input_user_message.content:
+                if hasattr(content_item, 'text'):
+                    user_message += content_item.text
+
+        if hasattr(input_user_message, 'attachments') and input_user_message.attachments:
+            for att in input_user_message.attachments:
+                if getattr(att, 'id', None):
+                    attachments_list.append(att)
+
+        # ============================================
+        # Step 2: Auto-generate thread title
+        # ============================================
+        if not thread.title and user_message:
+            title_text = user_message.strip()
+            # Remove any tool prefixes
+            title_text = re.sub(r'\[TOOL:\w+\]\s*', '', title_text)
+            if len(title_text) > 50:
+                thread.title = title_text[:47] + "..."
+            else:
+                thread.title = title_text if title_text else "New Conversation"
+            await self.store.save_thread(thread, context)
+
+        # ============================================
+        # Step 3: Get context data
+        # ============================================
+        user_id = context.get("user_id")
+        db_session = context.get("db_session")
+
+        if not user_id:
+            yield ErrorEvent(
+                type="error",
+                code=ErrorCode.INVALID_REQUEST,
+                message="User not authenticated",
+                allow_retry=False
+            )
+            return
+
+        # ============================================
+        # Step 4: Initialize WorkflowItem for progress
+        # ============================================
+        start_time = time.time()
+        workflow_id = f"workflow-{uuid.uuid4().hex[:12]}"
+        workflow_tasks = []
+        tools_used = []
+
+        initial_task = CustomTask(
+            type="custom",
+            title="Analyzing Request",
+            content="Understanding your question...",
+            status_indicator="loading",
+            icon="search"
+        )
+        workflow_tasks.append(initial_task)
+
+        workflow_item = WorkflowItem(
+            id=workflow_id,
+            thread_id=thread.id,
+            created_at=datetime.now(),
+            type="workflow",
+            workflow=Workflow(
+                type="custom",
+                tasks=workflow_tasks.copy(),
+                expanded=True,
+                summary=None
+            )
+        )
+
+        yield ThreadItemAddedEvent(type="thread.item.added", item=workflow_item)
+
+        # ============================================
+        # Step 5: Process with your agent (streaming)
+        # ============================================
+        response_text = ""
+
+        async for event in your_agent.query_streamed(user_message):
+            event_type = event.get("type")
+
+            if event_type == "progress":
+                # Update current task content
+                if workflow_tasks and workflow_tasks[0].status_indicator == "loading":
+                    workflow_tasks[0].content = event.get("text", "Processing...")
+                    yield ThreadItemUpdatedEvent(
+                        type="thread.item.updated",
+                        item_id=workflow_id,
+                        update=WorkflowTaskUpdated(
+                            type="workflow.task.updated",
+                            task_index=0,
+                            task=workflow_tasks[0]
+                        )
+                    )
+
+            elif event_type == "tool_call":
+                tool_name = event.get("tool_name", "tool")
+                tools_used.append(tool_name)
+
+                # Mark previous tasks as complete
+                for t in workflow_tasks:
+                    if t.status_indicator == "loading":
+                        t.status_indicator = "complete"
+
+                # Add new task
+                new_task = CustomTask(
+                    type="custom",
+                    title=f"Using {tool_name}",
+                    content="Processing...",
+                    status_indicator="loading",
+                    icon=get_tool_icon(tool_name)
+                )
+                workflow_tasks.append(new_task)
+
+                yield ThreadItemUpdatedEvent(
+                    type="thread.item.updated",
+                    item_id=workflow_id,
+                    update=WorkflowTaskAdded(
+                        type="workflow.task.added",
+                        task_index=len(workflow_tasks) - 1,
+                        task=new_task
+                    )
+                )
+
+            elif event_type == "tool_output":
+                # Mark current task as complete
+                for i, t in enumerate(workflow_tasks):
+                    if t.status_indicator == "loading":
+                        t.status_indicator = "complete"
+                        t.content = event.get("output_preview", "")[:200]
+                        yield ThreadItemUpdatedEvent(
+                            type="thread.item.updated",
+                            item_id=workflow_id,
+                            update=WorkflowTaskUpdated(
+                                type="workflow.task.updated",
+                                task_index=i,
+                                task=t
+                            )
+                        )
+                        break
+
+            elif event_type == "complete":
+                response_text = event.get("response", "")
+
+                # Mark all tasks complete
+                for t in workflow_tasks:
+                    if hasattr(t, 'status_indicator'):
+                        t.status_indicator = "complete"
+
+                # Add "Done" task
+                done_task = CustomTask(
+                    type="custom",
+                    title="Done",
+                    content=f"Completed {len(tools_used)} operation(s)",
+                    status_indicator="complete",
+                    icon="check"
+                )
+                workflow_tasks.append(done_task)
+
+                yield ThreadItemUpdatedEvent(
+                    type="thread.item.updated",
+                    item_id=workflow_id,
+                    update=WorkflowTaskAdded(
+                        type="workflow.task.added",
+                        task_index=len(workflow_tasks) - 1,
+                        task=done_task
+                    )
+                )
+
+                # Collapse workflow with summary
+                duration_seconds = int(time.time() - start_time)
+                workflow_item.workflow.tasks = workflow_tasks.copy()
+                workflow_item.workflow.summary = DurationSummary(duration=duration_seconds)
+                workflow_item.workflow.expanded = False
+
+                yield ThreadItemDoneEvent(type="thread.item.done", item=workflow_item)
+
+            elif event_type == "error":
+                error_text = event.get("text", "An error occurred")
+                response_text = error_text
+
+                error_task = CustomTask(
+                    type="custom",
+                    title="Error",
+                    content=error_text[:200],
+                    status_indicator="complete",
+                    icon="info"
+                )
+                workflow_tasks.append(error_task)
+
+                workflow_item.workflow.tasks = workflow_tasks.copy()
+                workflow_item.workflow.expanded = False
+                yield ThreadItemDoneEvent(type="thread.item.done", item=workflow_item)
+
+        # ============================================
+        # Step 6: Emit final assistant message
+        # ============================================
+        if not response_text:
+            response_text = "I processed your request but couldn't generate a response."
+
         msg_id = f"msg-{uuid.uuid4().hex[:12]}"
-        
-        # 1. Stream text delta
-        yield AssistantMessageContentPartTextDelta(
-            type="assistant_message.content_part.text_delta",
-            content_index=0,
-            delta=response_text
-        )
-        
-        # 2. Content part done
-        content = AssistantMessageContent(
-            type="output_text",
-            text=response_text,
-            annotations=[]
-        )
-        yield AssistantMessageContentPartDone(
-            type="assistant_message.content_part.done",
-            content_index=0,
-            content=content
-        )
-        
-        # 3. Create message item (⚠️ NO status field!)
         assistant_msg = AssistantMessageItem(
             id=msg_id,
             thread_id=thread.id,
-            created_at=datetime.now().isoformat(),
+            created_at=datetime.now(),
             type="assistant_message",
-            content=[content]
-            # ❌ NO status field here!
+            content=[AssistantMessageContent(text=response_text)]
         )
+
         yield ThreadItemAddedEvent(type="thread.item.added", item=assistant_msg)
-        
-        # 4. Message done
         yield ThreadItemDoneEvent(type="thread.item.done", item=assistant_msg)
+
+    except Exception as e:
+        yield ErrorEvent(
+            type="error",
+            code=ErrorCode.STREAM_ERROR,
+            message=f"Error: {str(e)}",
+            allow_retry=True
+        )
 ```
 
-### Step 3: FastAPI Endpoint
+---
 
-**CRITICAL:** Do NOT double-wrap SSE events! ChatKit SDK already formats them.
+## FastAPI Endpoint
 
 ```python
-import json
-import logging
-from fastapi import APIRouter, Request
-from fastapi.responses import StreamingResponse, JSONResponse
-from starlette.responses import Response
-
-logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/agent", tags=["chatkit"])
-
-# Global instances
-_store = SimpleStore()
-_server = MyChatKitServer(_store)
-
-
 @router.post("/chatkit")
-async def chatkit_endpoint(request: Request):
-    """Main ChatKit endpoint - handles all ChatKit protocol requests."""
+async def chatkit_endpoint(
+    request: Request,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+) -> Response:
+    """
+    ChatKit-compatible endpoint for agent integration.
+
+    Handles:
+    - threads.list: List all threads for history panel
+    - threads.get: Get single thread
+    - threads.delete: Delete thread
+    - threads.create: Create new thread
+    - respond: Process user message
+    """
     try:
         body = await request.body()
-        context = {"headers": dict(request.headers)}
-        
-        result = await _server.process(body, context)
-        
-        # Handle streaming result
+
+        # Parse operation type
+        operation = None
+        try:
+            body_json = json.loads(body.decode('utf-8'))
+            operation = body_json.get('op')
+        except:
+            pass
+
+        # Create PostgreSQL-backed store
+        store = create_chatkit_store(db, user.id)
+        server = MyChatKitServer(store, attachment_store=NoopAttachmentStore())
+
+        # Build context
+        context = {
+            "headers": dict(request.headers),
+            "user_id": user.id,
+            "db_session": db,
+            # Add your project-specific context...
+        }
+
+        # Process with ChatKit server
+        result = await server.process(body, context)
+
+        # Handle streaming vs non-streaming response
         if hasattr(result, '__aiter__'):
             async def generate():
-                async for event in result:
-                    # ⚠️ CRITICAL: Events are already SSE formatted!
-                    # Do NOT wrap with another 'data:' prefix!
-                    if isinstance(event, bytes):
-                        yield event  # Already formatted as: data: {...}\n\n
-                    elif isinstance(event, str):
-                        yield event.encode('utf-8')
-                    elif hasattr(event, 'model_dump_json'):
-                        yield f"data: {event.model_dump_json()}\n\n".encode('utf-8')
-                    else:
-                        yield f"data: {json.dumps(event)}\n\n".encode('utf-8')
-            
+                try:
+                    async for event in result:
+                        if isinstance(event, bytes):
+                            yield event
+                        elif isinstance(event, str):
+                            yield event.encode('utf-8')
+                        elif hasattr(event, 'model_dump_json'):
+                            yield f"data: {event.model_dump_json()}\n\n".encode('utf-8')
+                        else:
+                            yield f"data: {json.dumps(event)}\n\n".encode('utf-8')
+                except Exception as e:
+                    yield f"data: {json.dumps({'type': 'error', 'error': str(e)})}\n\n".encode('utf-8')
+
             return StreamingResponse(
                 generate(),
                 media_type="text/event-stream",
                 headers={
                     "Cache-Control": "no-cache",
                     "Connection": "keep-alive",
-                    "X-Accel-Buffering": "no",  # Disable nginx buffering
+                    "X-Accel-Buffering": "no",
                 }
             )
-        
-        # Handle non-streaming result
-        if hasattr(result, 'model_dump_json'):
-            return Response(content=result.model_dump_json(), media_type="application/json")
-        return Response(content=json.dumps(result), media_type="application/json")
-        
+        elif hasattr(result, 'json'):
+            return Response(content=result.json, media_type="application/json")
+        else:
+            return Response(content=json.dumps(result), media_type="application/json")
+
     except Exception as e:
-        logger.error(f"ChatKit error: {e}", exc_info=True)
         return JSONResponse(content={"error": str(e)}, status_code=500)
-
-
-@router.get("/chatkit/health")
-async def chatkit_health():
-    """Health check endpoint."""
-    return {"status": "ok", "service": "ChatKit Server"}
 ```
 
-### Step 4: Main FastAPI App
+---
+
+## Noop Attachment Store
+
+When using direct upload strategy (uploading files to your own endpoint first), use a no-op attachment store:
 
 ```python
-# main.py
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from routers import chatkit_server
+class NoopAttachmentStore(AttachmentStore):
+    """
+    No-op attachment store for direct upload strategy.
 
-app = FastAPI(title="ChatKit Backend")
+    ChatKit may call attachments.delete during UI lifecycle.
+    We handle uploads via separate /upload endpoint.
+    """
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["http://localhost:3000"],  # Your frontend URL
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-app.include_router(chatkit_server.router)
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    async def delete_attachment(self, attachment_id: str, context: Any) -> None:
+        # Do nothing - files managed separately
+        return
 ```
 
 ---
 
-## Common Errors and Fixes
+## Request/Response Flow
 
-### Error: `got unexpected argument 'context'`
+### 1. Thread List (History Panel)
 
-**Cause:** Store methods missing `context` parameter.
+**Request:**
+```json
+{"op": "threads.list", "limit": 20, "order": "desc"}
+```
 
-**Fix:** Add `context: Any` to ALL Store methods.
+**Response (from store.load_threads):**
+```json
+{
+  "data": [
+    {"id": "thread-abc123", "title": "Help with inventory", "created_at": "2024-01-01T..."},
+    {"id": "thread-def456", "title": "Create report", "created_at": "2024-01-02T..."}
+  ],
+  "has_more": false,
+  "after": null
+}
+```
 
-### Error: AssistantMessageItem validation error
+### 2. Thread Delete
 
-**Cause:** Adding `status` field to AssistantMessageItem.
+**Request:**
+```json
+{"op": "threads.delete", "thread_id": "thread-abc123"}
+```
 
-**Fix:** Remove `status` field - it doesn't exist in the schema.
+**Response:**
+```json
+{"success": true}
+```
 
-### Error: UI resets after sending message
+### 3. Respond (Chat Message)
 
-**Cause:** SSE events are double-wrapped with `data:` prefix.
+**Request:**
+```json
+{
+  "op": "respond",
+  "thread_id": "thread-abc123",
+  "item": {
+    "type": "user_message",
+    "content": [{"type": "input_text", "text": "Hello, help me!"}],
+    "attachments": []
+  }
+}
+```
 
-**Fix:** Don't wrap events that are already bytes - yield them directly.
+**Response (SSE Stream):**
+```
+data: {"type": "thread.item.added", "item": {...WorkflowItem...}}
 
-### Error: No response received
+data: {"type": "thread.item.updated", "item_id": "workflow-xxx", "update": {...}}
 
-**Cause:** Wrong event sequence or missing events.
+data: {"type": "thread.item.done", "item": {...WorkflowItem...}}
 
-**Fix:** Yield all 4 events in order:
-1. `AssistantMessageContentPartTextDelta`
-2. `AssistantMessageContentPartDone`
-3. `ThreadItemAddedEvent`
-4. `ThreadItemDoneEvent`
+data: {"type": "thread.item.added", "item": {...AssistantMessageItem...}}
+
+data: {"type": "thread.item.done", "item": {...AssistantMessageItem...}}
+```
 
 ---
 
-## Frontend Connection
+## Helper Functions
 
-```javascript
-// In your frontend ChatKit setup
-chatkit.setOptions({
-  api: {
-    url: 'http://localhost:8000/agent/chatkit',
-    domainKey: '',  // Empty for localhost
-    fetch: async (url, options) => {
-      const body = options.body ? JSON.parse(options.body) : {};
-      body.session_id = sessionId;  // Add session if needed
-      return fetch(url, {
-        ...options,
-        body: JSON.stringify(body),
-        headers: { ...options.headers, 'Content-Type': 'application/json' },
-      });
-    },
-  },
-});
+### Tool Icon Mapping
+
+```python
+def get_tool_icon(tool_name: str) -> str:
+    """Get ChatKit icon for tool type."""
+    if "sql" in tool_name.lower() or "query" in tool_name.lower():
+        return "analytics"
+    elif "search" in tool_name.lower():
+        return "search"
+    elif "mail" in tool_name.lower() or "email" in tool_name.lower():
+        return "mail"
+    elif "file" in tool_name.lower():
+        return "document"
+    elif "notion" in tool_name.lower():
+        return "notebook"
+    else:
+        return "sparkle"
+```
+
+### Tool Title Mapping
+
+```python
+def get_tool_title(tool_name: str) -> str:
+    """Get display title for tool."""
+    mappings = {
+        "execute_sql": "Executing SQL Query",
+        "google_search": "Searching the Web",
+        "gmail_connector": "Processing Email",
+        "notion_connector": "Connecting to Notion",
+        "file_search": "Searching Files",
+    }
+    return mappings.get(tool_name, f"Using {tool_name}")
+```
+
+---
+
+## Error Handling
+
+```python
+# For validation errors
+yield ErrorEvent(
+    type="error",
+    code=ErrorCode.INVALID_REQUEST,
+    message="Missing required field",
+    allow_retry=False
+)
+
+# For transient errors (can retry)
+yield ErrorEvent(
+    type="error",
+    code=ErrorCode.STREAM_ERROR,
+    message="Connection timeout",
+    allow_retry=True
+)
+
+# For rate limiting
+yield ErrorEvent(
+    type="error",
+    code=ErrorCode.RATE_LIMIT,
+    message="Too many requests",
+    allow_retry=True
+)
+```
+
+---
+
+## Dependencies
+
+```
+chatkit>=0.1.0
+fastapi>=0.100.0
+sqlalchemy[asyncio]>=2.0.0
+asyncpg>=0.28.0
+pydantic>=2.0.0
 ```

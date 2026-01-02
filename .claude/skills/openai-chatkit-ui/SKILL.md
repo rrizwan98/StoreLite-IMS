@@ -1,760 +1,465 @@
----
-name: openai-chatkit-ui
-description: >
-  Connect AI agents to frontend UI using OpenAI ChatKit SDK with CUSTOM BACKEND (FastAPI).
-  This skill is for Custom ChatKit (your own backend), NOT Managed ChatKit (OpenAI Agent ID).
-  Use when: integrating ChatKit with FastAPI, adding chat UI to existing apps, connecting
-  ChatKit to custom AI agents. CRITICAL: Use pure official ChatKit web component from CDN.
-  Backend uses chatkit.server.ChatKitServer Python SDK. NO custom UI code.
-  Triggers: ChatKit, chat UI, agent UI, embed chat, FastAPI chat, custom backend chat.
----
+# OpenAI ChatKit UI Skill
 
-# OpenAI ChatKit UI Integration (Custom Backend)
-
-Connect your **FastAPI backend** to ChatKit frontend using **Custom ChatKit** approach.
-
-> ⚠️ **This skill is for Custom ChatKit with your own backend (FastAPI).**
-> For Managed ChatKit with OpenAI Agent ID, see: https://platform.openai.com/docs/guides/chatkit
-
-## Two ChatKit Approaches - Know the Difference!
-
-| Approach | When to Use | Backend | Docs |
-|----------|-------------|---------|------|
-| **Managed ChatKit** | Using OpenAI Agent Builder | OpenAI hosted (needs Agent ID) | [Managed Guide](https://platform.openai.com/docs/guides/chatkit) |
-| **Custom ChatKit** | Using your own backend (FastAPI, etc.) | Your server + ChatKitServer SDK | [Custom Guide](https://platform.openai.com/docs/guides/custom-chatkit) |
-
-### ⚠️ This Skill is for CUSTOM ChatKit (FastAPI Backend)
-
-If you need **Managed ChatKit** with OpenAI Agent ID, use the starter template:
-```bash
-git clone https://github.com/openai/openai-chatkit-starter-app
-cd openai-chatkit-starter-app/managed-chatkit
-```
-
-**For Custom ChatKit (this skill):**
-- DO NOT clone the starter template
-- Follow the patterns in this skill
-- Use `chatkit.server.ChatKitServer` Python SDK
-- Connect to your FastAPI backend
-
-**Template Structure:**
-```
-openai-chatkit-starter-app/
-├── chatkit/                    # Self-hosted ChatKit (use this)
-│   ├── frontend/               # Next.js frontend with ChatKit
-│   └── backend/                # Python FastAPI backend
-└── managed-chatkit/            # Managed (OpenAI hosted) version
-```
-
-## Critical Rules (MUST FOLLOW)
-
-1. **🚨 CUSTOM BACKEND** - This skill is for Custom ChatKit with FastAPI backend (NOT OpenAI Agent ID)
-2. **CDN ONLY** - Load ChatKit from CDN, never `npm install @openai/chatkit` (it's only types!)
-3. **PURE CHATKIT** - Use only official `<openai-chatkit>` web component
-4. **NO CUSTOM UI** - Never write custom chat UI code
-5. **CORRECT CDN URL** - Use exactly: `https://cdn.platform.openai.com/deployments/chatkit/chatkit.js`
-6. **CHATKIT SERVER SDK** - Backend must use `chatkit.server.ChatKitServer` and `Store` classes
-
-## Official Documentation & Resources
-
-| Resource | URL | Notes |
-|----------|-----|-------|
-| **Custom ChatKit Guide** | https://platform.openai.com/docs/guides/custom-chatkit | **USE THIS** (our approach) |
-| Managed ChatKit Docs | https://platform.openai.com/docs/guides/chatkit | For OpenAI Agent ID (NOT us) |
-| Starter Template | https://github.com/openai/openai-chatkit-starter-app | For Managed only, NOT Custom |
-| ChatKit Python SDK | `pip install chatkit` | For backend ChatKitServer |
-
-## Architecture Overview
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    FRONTEND (Next.js/React)                 │
-│  ┌───────────────────────────────────────────────────────┐  │
-│  │    <openai-chatkit> Web Component (from CDN)          │  │
-│  │    Loaded via: cdn.platform.openai.com/...            │  │
-│  │    Configured via: element.setOptions({...})          │  │
-│  └───────────────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              │ HTTP POST (SSE Streaming)
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│                  BACKEND (Python FastAPI)                   │
-│  ┌─────────────────────────────────────────────────────────┐│
-│  │  ChatKitServer (from chatkit.server)                    ││
-│  │  ├── Store: Thread/Item persistence                     ││
-│  │  ├── respond(): Process messages, yield events         ││
-│  │  └── process(): Handle ChatKit protocol                ││
-│  └─────────────────────────────────────────────────────────┘│
-│                              │                               │
-│                              ▼                               │
-│                    ┌─────────────────┐                       │
-│                    │  Your AI Agent  │                       │
-│                    │  (OpenAI, etc)  │                       │
-│                    └─────────────────┘                       │
-└─────────────────────────────────────────────────────────────┘
-```
+> **Purpose**: Integrate official OpenAI ChatKit web component into any project with pure vanilla JS, persistent PostgreSQL-backed history, and streaming WorkflowItem progress display.
 
 ---
 
-## 🚨 COMMON ERRORS AND FIXES
+## Overview
 
-### Error 1: `@openai/chatkit` npm package doesn't work
+This skill provides a complete, reusable pattern for implementing OpenAI ChatKit in any project. It covers:
 
-**Problem:** Installing `@openai/chatkit` via npm and trying to import it fails.
-
-**Cause:** The npm package ONLY contains TypeScript type definitions, NOT the actual web component code.
-
-**Fix:** Load ChatKit from CDN only:
-```html
-<script src="https://cdn.platform.openai.com/deployments/chatkit/chatkit.js"></script>
-```
+1. **Frontend**: Pure `<openai-chatkit>` web component (NO React wrapper, NO custom UI)
+2. **Backend**: FastAPI + ChatKit Python SDK with streaming responses
+3. **Database**: PostgreSQL-backed persistent thread/message storage
+4. **Streaming**: WorkflowItem-based progress display with collapsible dropdowns
+5. **History**: Auto-generated titles, thread management, user-scoped data
 
 ---
 
-### Error 2: `window.openai.ChatKit` is undefined
+## Critical Rules
 
-**Problem:** After loading CDN script, `window.openai` or `window.openai.ChatKit` is undefined.
+### Frontend Rules (MUST FOLLOW)
 
-**Cause:** The CDN script does NOT expose a global `window.openai` object. It registers a custom element instead.
+| Rule | Description |
+|------|-------------|
+| Use ONLY `<openai-chatkit>` | Pure vanilla JS web component from OpenAI CDN |
+| Load from CDN | `https://cdn.platform.openai.com/deployments/chatkit/chatkit.js` |
+| Configure via `setOptions()` | All configuration through official API only |
+| Theme via CSS variables | Official ChatKit CSS variables only |
+| NO `@openai/chatkit-react` | Never use React wrapper |
+| NO custom chat UI | Never write custom message bubbles, inputs, etc. |
+| NO style overrides | Never override internal ChatKit styles |
 
-**Fix:** Check for custom element registration, not global object:
-```javascript
-// WRONG - window.openai.ChatKit doesn't exist
-if (window.openai?.ChatKit) { ... }
+### Backend Rules (MUST FOLLOW)
 
-// CORRECT - Check custom element registration
-await customElements.whenDefined('openai-chatkit');
-// OR
-if (customElements.get('openai-chatkit')) { ... }
-```
-
----
-
-### Error 3: Next.js "Event handlers cannot be passed to Client Component props"
-
-**Problem:** Using `onLoad`/`onError` on `<Script>` in a Server Component throws this error.
-
-**Cause:** In Next.js App Router, `layout.tsx` is a Server Component. Event handlers require Client Components.
-
-**Fix:** Create a Client Component wrapper:
-```tsx
-// components/ChatKitWidget.tsx
-'use client';  // <-- REQUIRED
-
-import Script from 'next/script';
-
-export default function ChatKitWidget() {
-  return (
-    <Script
-      src="https://cdn.platform.openai.com/deployments/chatkit/chatkit.js"
-      strategy="afterInteractive"
-      onLoad={() => console.log('ChatKit loaded')}
-      onError={(e) => console.error('ChatKit failed:', e)}
-    />
-  );
-}
-```
+| Rule | Description |
+|------|-------------|
+| Use `chatkit.server.ChatKitServer` | Extend this class for custom agent integration |
+| Use `chatkit.server.Store` | Implement this interface for persistence |
+| Use SSE streaming | Return `StreamingResponse` with `text/event-stream` |
+| User-scoped data | Always filter threads/messages by `user_id` |
+| Auto-generate titles | Create thread title from first message |
 
 ---
 
-### Error 4: ChatKit shows but doesn't respond / UI resets
+## Tech Stack
 
-**Problem:** Messages sent but no response, or UI resets after sending.
-
-**Cause:** Backend SSE streaming format is incorrect. ChatKit expects specific event format.
-
-**Fix:** Backend must NOT double-wrap SSE events. The `chatkit.server` SDK already formats events as `data: {...}\n\n`:
-```python
-# WRONG - Double wrapping
-async for event in result:
-    yield f"data: {event}\n\n".encode()  # Creates: data: b'data: {...}\n\n'
-
-# CORRECT - Events are already formatted
-async for event in result:
-    if isinstance(event, bytes):
-        yield event  # Already: data: {...}\n\n
-    elif isinstance(event, str):
-        yield event.encode('utf-8')
-```
+| Component | Technology | Package/Source |
+|-----------|------------|----------------|
+| Frontend | Pure `<openai-chatkit>` | CDN script |
+| Backend | FastAPI + ChatKit Python SDK | `chatkit` |
+| Database | PostgreSQL | `asyncpg`, `sqlalchemy` |
+| Streaming | Server-Sent Events (SSE) | FastAPI `StreamingResponse` |
+| Agent | OpenAI Agents SDK | `openai-agents` |
 
 ---
 
-### Error 5: Backend `Store` methods missing `context` parameter
+## Reference Files
 
-**Problem:** `TypeError: method() got unexpected argument 'context'`
+When implementing ChatKit, read the relevant reference files:
 
-**Cause:** All `Store` abstract methods require a `context` parameter.
-
-**Fix:** Add `context: Any` to ALL Store methods:
-```python
-# WRONG
-async def save_thread(self, thread: ThreadMetadata) -> None:
-
-# CORRECT
-async def save_thread(self, thread: ThreadMetadata, context: Any) -> None:
-```
+| If the task involves... | Read this file |
+|------------------------|----------------|
+| Backend server setup, FastAPI, ChatKitServer | `references/backend-integration.md` |
+| Frontend widget, setOptions, events | `references/frontend-widget.md` |
+| Streaming responses, WorkflowItem, progress | `references/streaming-workflow.md` |
+| Thread/message persistence, PostgreSQL | `references/history-persistence.md` |
+| CSS theming, colors, styles | `references/theming.md` |
+| Event listeners, API methods | `references/events-api.md` |
 
 ---
 
-### Error 6: `AssistantMessageItem` validation error
+## Quick Start Implementation
 
-**Problem:** `status` field causes validation error.
-
-**Cause:** `AssistantMessageItem` schema does NOT have a `status` field.
-
-**Fix:** Remove `status` from AssistantMessageItem:
-```python
-# WRONG
-AssistantMessageItem(
-    id=msg_id,
-    type="assistant_message",
-    status="completed",  # <-- NOT VALID
-    content=[...]
-)
-
-# CORRECT
-AssistantMessageItem(
-    id=msg_id,
-    thread_id=thread.id,
-    created_at=datetime.now().isoformat(),
-    type="assistant_message",
-    content=[AssistantMessageContent(
-        type="output_text",
-        text=response_text,
-        annotations=[]
-    )]
-)
-```
-
----
-
-### Error 7: `setOptions` invalid format
-
-**Problem:** `FatalAppError: ChatKit.create(): ✖ Invalid input`
-
-**Cause:** Incorrect structure for `setOptions` configuration.
-
-**Fix:** Use correct format per ChatKit type definitions:
-```javascript
-element.setOptions({
-  // API config (required for custom backend)
-  api: {
-    url: 'http://localhost:8000/agent/chatkit',
-    domainKey: '',  // Empty string for localhost development
-    fetch: async (url, options) => { ... }  // Optional custom fetch
-  },
-  
-  // Theme: string literal, NOT object
-  theme: 'light',  // 'light' | 'dark' | 'auto'
-  
-  // Header config
-  header: {
-    enabled: true,
-    title: {
-      enabled: true,
-      text: 'AI Assistant',  // <-- Use 'text', not 'content'
-    },
-  },
-  
-  // Start screen prompts: use 'label' and 'prompt'
-  startScreen: {
-    greeting: 'Hello! How can I help?',
-    prompts: [
-      { label: 'Help', prompt: 'Help me get started' },  // <-- 'label' not 'text'
-    ],
-  },
-  
-  // Composer
-  composer: {
-    placeholder: 'Type your message...',
-  },
-  
-  // Disclaimer
-  disclaimer: {
-    text: 'AI may make mistakes.',
-  },
-});
-```
-
----
-
-## Installation
-
-### Backend (Python)
-
-```bash
-pip install chatkit fastapi uvicorn
-```
-
-### Frontend
-
-**NO npm install needed for ChatKit itself!** Only load from CDN.
-
-If using Next.js:
-```bash
-npm install next react react-dom
-```
-
----
-
-## Complete Working Frontend (Next.js)
+### 1. Frontend Widget
 
 ```tsx
-// components/ChatKitWidget.tsx
-'use client';
+// Pure OpenAI ChatKit SDK Integration
+// NO React wrapper - vanilla JS web component only
 
-import { useEffect, useState, useRef } from 'react';
 import Script from 'next/script';
-
-// Session ID generator
-const generateSessionId = (): string => {
-  return `session-${Date.now()}-${Math.random().toString(36).substring(2, 15)}`;
-};
 
 export default function ChatKitWidget() {
   const [isOpen, setIsOpen] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
   const chatkitRef = useRef<HTMLElement | null>(null);
-  const configuredRef = useRef(false);
-  
-  // Persist session ID
-  const [sessionId] = useState(() => {
-    if (typeof window !== 'undefined') {
-      let id = sessionStorage.getItem('chatkit-session-id');
-      if (!id) {
-        id = generateSessionId();
-        sessionStorage.setItem('chatkit-session-id', id);
-      }
-      return id;
-    }
-    return generateSessionId();
-  });
 
-  // Configure ChatKit when ready
   useEffect(() => {
-    if (!isOpen || !isLoaded || configuredRef.current) return;
+    if (!isOpen || !isLoaded) return;
 
-    const initChatKit = () => {
-      const chatkit = chatkitRef.current as any;
-      if (!chatkit || typeof chatkit.setOptions !== 'function') {
-        setTimeout(initChatKit, 100);
-        return;
-      }
+    const chatkit = chatkitRef.current as any;
+    if (!chatkit?.setOptions) return;
 
-      configuredRef.current = true;
-
-      chatkit.setOptions({
-        api: {
-          url: 'http://localhost:8000/agent/chatkit',  // Your backend URL
-          domainKey: '',
-          fetch: async (url: string, options: RequestInit) => {
-            const body = options.body ? JSON.parse(options.body as string) : {};
-            body.session_id = sessionId;
-            return fetch(url, {
-              ...options,
-              body: JSON.stringify(body),
-              headers: { ...options.headers, 'Content-Type': 'application/json' },
-            });
-          },
+    chatkit.setOptions({
+      api: {
+        url: `${API_BASE_URL}/agent/chatkit`,
+        domainKey: '',
+        fetch: async (url, options) => {
+          const body = JSON.parse(options.body as string);
+          body.session_id = sessionId;
+          return fetch(url, { ...options, body: JSON.stringify(body) });
         },
-        theme: 'light',
-        header: {
-          enabled: true,
-          title: { enabled: true, text: 'AI Assistant' },
-        },
-        startScreen: {
-          greeting: 'Hello! How can I help you?',
-          prompts: [
-            { label: 'Get Started', prompt: 'Help me get started' },
-          ],
-        },
-        composer: { placeholder: 'Type your message...' },
-        disclaimer: { text: 'AI may make mistakes.' },
-      });
-
-      // Event listeners
-      chatkit.addEventListener('chatkit.message', (e: CustomEvent) => {
-        console.log('Message:', e.detail);
-      });
-      chatkit.addEventListener('chatkit.error', (e: CustomEvent) => {
-        console.error('Error:', e.detail);
-      });
-    };
-
-    setTimeout(initChatKit, 300);
-  }, [isOpen, isLoaded, sessionId]);
-
-  // Reset config when closed
-  useEffect(() => {
-    if (!isOpen) configuredRef.current = false;
-  }, [isOpen]);
-
-  const handleScriptLoad = () => {
-    const checkElement = () => {
-      if (customElements.get('openai-chatkit')) {
-        setIsLoaded(true);
-      } else {
-        setTimeout(checkElement, 100);
-      }
-    };
-    checkElement();
-  };
+      },
+      theme: 'light',
+      header: { enabled: true, title: { text: 'AI Assistant' } },
+      startScreen: {
+        greeting: 'Hello! How can I help?',
+        prompts: [{ label: 'Help', prompt: 'Help me get started' }],
+      },
+      composer: { placeholder: 'Type your message...' },
+      disclaimer: { text: 'AI may make mistakes.' },
+    });
+  }, [isOpen, isLoaded]);
 
   return (
     <>
-      {/* CDN Script - CORRECT URL */}
       <Script
         src="https://cdn.platform.openai.com/deployments/chatkit/chatkit.js"
-        strategy="afterInteractive"
-        onLoad={handleScriptLoad}
-        onError={(e) => console.error('ChatKit load failed:', e)}
+        onLoad={() => setIsLoaded(true)}
       />
-
-      {/* Toggle Button */}
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full shadow-lg 
-                   bg-blue-600 hover:bg-blue-700 text-white"
-        aria-label={isOpen ? 'Close chat' : 'Open chat'}
-      >
-        {isOpen ? '✕' : '💬'}
-      </button>
-
-      {/* ChatKit Container */}
       {isOpen && (
-        <div className="fixed bottom-24 right-6 z-50 w-96 h-[500px] rounded-xl 
-                        shadow-2xl border overflow-hidden bg-white">
-          {isLoaded ? (
-            <openai-chatkit
-              ref={chatkitRef as any}
-              id="my-chatkit"
-              style={{ width: '100%', height: '100%', display: 'block' }}
-            />
-          ) : (
-            <div className="flex items-center justify-center h-full">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
-            </div>
-          )}
-        </div>
+        <openai-chatkit ref={chatkitRef} style={{ width: '100%', height: '100%' }} />
       )}
     </>
   );
 }
+```
 
-// Type declaration for custom element
-declare global {
-  namespace JSX {
-    interface IntrinsicElements {
-      'openai-chatkit': React.DetailedHTMLProps<
-        React.HTMLAttributes<HTMLElement> & { id?: string },
-        HTMLElement
-      >;
-    }
+### 2. Backend ChatKit Server
+
+```python
+from chatkit.server import ChatKitServer, Store, ThreadMetadata, ThreadItem
+from chatkit.types import (
+    ThreadItemDoneEvent, ThreadItemAddedEvent, ThreadItemUpdatedEvent,
+    AssistantMessageItem, AssistantMessageContent,
+    WorkflowItem, Workflow, CustomTask, SearchTask,
+    WorkflowTaskAdded, WorkflowTaskUpdated, DurationSummary,
+)
+
+class MyChatKitServer(ChatKitServer):
+    async def respond(
+        self,
+        thread: ThreadMetadata,
+        input_user_message: UserMessageItem | None,
+        context: Any,
+    ) -> AsyncIterator[ThreadStreamEvent]:
+        # Extract user message
+        user_message = ""
+        if input_user_message and input_user_message.content:
+            for content_item in input_user_message.content:
+                if hasattr(content_item, 'text'):
+                    user_message += content_item.text
+
+        # Auto-generate thread title
+        if not thread.title and user_message:
+            thread.title = user_message[:47] + "..." if len(user_message) > 50 else user_message
+            await self.store.save_thread(thread, context)
+
+        # Create WorkflowItem for progress display
+        workflow_id = f"workflow-{uuid.uuid4().hex[:12]}"
+        initial_task = CustomTask(
+            type="custom",
+            title="Analyzing Request",
+            content="Processing your question...",
+            status_indicator="loading",
+            icon="search"
+        )
+
+        workflow_item = WorkflowItem(
+            id=workflow_id,
+            thread_id=thread.id,
+            created_at=datetime.now(),
+            type="workflow",
+            workflow=Workflow(
+                type="custom",
+                tasks=[initial_task],
+                expanded=True,
+                summary=None
+            )
+        )
+
+        yield ThreadItemAddedEvent(type="thread.item.added", item=workflow_item)
+
+        # Process with your agent (streaming)
+        async for event in agent.query_streamed(user_message):
+            if event["type"] == "tool_call":
+                # Add new task
+                new_task = CustomTask(
+                    type="custom",
+                    title=f"Using {event['tool_name']}",
+                    content="Processing...",
+                    status_indicator="loading",
+                    icon="sparkle"
+                )
+                yield ThreadItemUpdatedEvent(
+                    type="thread.item.updated",
+                    item_id=workflow_id,
+                    update=WorkflowTaskAdded(
+                        type="workflow.task.added",
+                        task_index=len(workflow_tasks),
+                        task=new_task
+                    )
+                )
+
+            elif event["type"] == "complete":
+                response_text = event["response"]
+
+                # Mark workflow complete
+                workflow_item.workflow.expanded = False
+                workflow_item.workflow.summary = DurationSummary(duration=elapsed_seconds)
+                yield ThreadItemDoneEvent(type="thread.item.done", item=workflow_item)
+
+                # Emit final response
+                assistant_msg = AssistantMessageItem(
+                    id=f"msg-{uuid.uuid4().hex[:12]}",
+                    thread_id=thread.id,
+                    created_at=datetime.now(),
+                    type="assistant_message",
+                    content=[AssistantMessageContent(text=response_text)]
+                )
+                yield ThreadItemAddedEvent(type="thread.item.added", item=assistant_msg)
+                yield ThreadItemDoneEvent(type="thread.item.done", item=assistant_msg)
+```
+
+### 3. PostgreSQL Store
+
+```python
+from chatkit.server import Store, ThreadMetadata, ThreadItem
+from chatkit.types import Page, UserMessageItem, AssistantMessageItem
+
+class PostgreSQLChatKitStore(Store):
+    def __init__(self, db: AsyncSession, user_id: int):
+        self.db = db
+        self.user_id = user_id
+
+    async def save_thread(self, thread: ThreadMetadata, context: Any) -> None:
+        # Insert or update thread in database
+        ...
+
+    async def load_thread(self, thread_id: str, context: Any) -> ThreadMetadata | None:
+        # Load thread with user_id filter
+        result = await self.db.execute(
+            select(ChatKitThread).where(
+                ChatKitThread.id == thread_id,
+                ChatKitThread.user_id == self.user_id
+            )
+        )
+        ...
+
+    async def load_threads(self, limit: int, after: str | None, order: str, context: Any) -> Page:
+        # Paginated list of threads for history panel
+        ...
+
+    async def add_thread_item(self, thread_id: str, item: ThreadItem, context: Any) -> None:
+        # Serialize and store message
+        ...
+
+    async def load_thread_items(self, thread_id: str, after: str | None, limit: int, order: str, context: Any) -> Page:
+        # Load messages for thread
+        ...
+```
+
+### 4. Database Models
+
+```python
+class ChatKitThread(Base):
+    __tablename__ = "chatkit_threads"
+
+    id = Column(String(100), primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    title = Column(String(255), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    thread_metadata = Column(JSON, default={})
+
+    items = relationship("ChatKitThreadItem", cascade="all, delete-orphan")
+
+
+class ChatKitThreadItem(Base):
+    __tablename__ = "chatkit_thread_items"
+
+    id = Column(String(100), primary_key=True)
+    thread_id = Column(String(100), ForeignKey("chatkit_threads.id", ondelete="CASCADE"))
+    item_type = Column(String(50), nullable=False)  # "user_message", "assistant_message"
+    content = Column(Text, nullable=False)  # JSON serialized
+    created_at = Column(DateTime, default=datetime.utcnow)
+```
+
+---
+
+## Key Patterns
+
+### 1. Session Management
+
+```typescript
+// Generate session ID (tab-lifetime persistence)
+const generateSessionId = (): string => {
+  const timestamp = Date.now();
+  const random = Math.random().toString(36).substring(2, 15);
+  return `session-${timestamp}-${random}`;
+};
+
+// Store in sessionStorage
+let id = sessionStorage.getItem('chatkit-session-id');
+if (!id) {
+  id = generateSessionId();
+  sessionStorage.setItem('chatkit-session-id', id);
+}
+```
+
+### 2. Tool Prefix Injection
+
+```typescript
+// Inject tool prefix into message before sending
+if (selectedToolPrefix && body.messages) {
+  const lastMessage = body.messages[body.messages.length - 1];
+  if (lastMessage.role === 'user' && !lastMessage.content.startsWith('[TOOL:')) {
+    lastMessage.content = `${selectedToolPrefix} ${lastMessage.content}`;
   }
 }
 ```
 
----
+### 3. Streaming Response Flow
 
-## Complete Working Backend (FastAPI + Python)
+```
+User sends message
+    ↓
+ThreadItemAddedEvent (WorkflowItem with initial task)
+    ↓
+For each tool call:
+    → WorkflowTaskAdded (new task with loading state)
+    → WorkflowTaskUpdated (mark complete when done)
+    ↓
+ThreadItemDoneEvent (collapse workflow with summary)
+    ↓
+ThreadItemAddedEvent (AssistantMessageItem)
+    ↓
+ThreadItemDoneEvent (mark response complete)
+```
+
+### 4. Source Formatting
 
 ```python
-# backend/routers/chatkit_server.py
-"""
-ChatKit Server Integration using official chatkit.server SDK
-"""
+def format_response_with_sources(response_text: str, sources: List[dict]) -> str:
+    """Format response with markdown sources section."""
+    if sources:
+        clean_text = response_text.strip()
+        clean_text += "\n\n---\n\n**Sources:**\n"
+        for i, source in enumerate(sources[:8], 1):
+            clean_text += f"[{i}] {source['title']}\n{source['url']}\n\n"
+    return clean_text.strip()
+```
 
-import logging
-import os
-import json
-from datetime import datetime
-from typing import Any, AsyncIterator
+---
 
-from fastapi import APIRouter, Request
-from fastapi.responses import StreamingResponse, JSONResponse
-from starlette.responses import Response
-from chatkit.server import (
-    ChatKitServer,
-    Store,
-    Thread,
-    ThreadMetadata,
-    ThreadItem,
-    UserMessageItem,
-    ThreadStreamEvent,
-)
-from chatkit.types import (
-    AssistantMessageContentPartTextDelta,
-    AssistantMessageContentPartDone,
-    ThreadItemDoneEvent,
-    ThreadItemAddedEvent,
-    AssistantMessageItem,
-    AssistantMessageContent,
-    Page,
-)
+## Workflow Task Icons
 
-logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/agent", tags=["chatkit"])
+Valid ChatKit icons for CustomTask:
 
+| Icon | Use For |
+|------|---------|
+| `analytics` | SQL queries, database operations |
+| `search` | Web search, file search |
+| `mail` | Email operations |
+| `notebook` | Notion, documentation |
+| `document` | File operations |
+| `check` | Completion status |
+| `sparkle` | AI operations, general tools |
+| `chart` | Data visualization |
+| `info` | Information, errors |
 
-class SimpleStore(Store):
-    """In-memory store for ChatKit threads and messages.
-    
-    CRITICAL: All methods MUST have 'context: Any' parameter!
-    """
-    
-    def __init__(self):
-        self._threads: dict[str, ThreadMetadata] = {}
-        self._items: dict[str, list[ThreadItem]] = {}
-        self._attachments: dict[str, Any] = {}
-    
-    def generate_thread_id(self, context: Any) -> str:
-        import uuid
-        return f"thread-{uuid.uuid4().hex[:12]}"
-    
-    def generate_item_id(self, item_type: str, thread: ThreadMetadata, context: Any) -> str:
-        import uuid
-        return f"{item_type}-{uuid.uuid4().hex[:12]}"
-    
-    async def save_thread(self, thread: ThreadMetadata, context: Any) -> None:
-        self._threads[thread.id] = thread
-        if thread.id not in self._items:
-            self._items[thread.id] = []
-    
-    async def load_thread(self, thread_id: str, context: Any) -> ThreadMetadata | None:
-        return self._threads.get(thread_id)
-    
-    async def delete_thread(self, thread_id: str, context: Any) -> None:
-        self._threads.pop(thread_id, None)
-        self._items.pop(thread_id, None)
-    
-    async def load_threads(self, limit: int, after: str | None, order: str, context: Any) -> Any:
-        threads = list(self._threads.values())
-        return Page(data=threads[:limit], has_more=len(threads) > limit)
-    
-    async def add_thread_item(self, thread_id: str, item: ThreadItem, context: Any) -> None:
-        if thread_id not in self._items:
-            self._items[thread_id] = []
-        self._items[thread_id].append(item)
-    
-    async def load_thread_items(self, thread_id: str, after: str | None, limit: int, order: str, context: Any) -> Any:
-        items = self._items.get(thread_id, [])
-        return Page(data=items[:limit], has_more=len(items) > limit)
-    
-    async def load_item(self, thread_id: str, item_id: str, context: Any) -> ThreadItem | None:
-        for item in self._items.get(thread_id, []):
-            if hasattr(item, 'id') and item.id == item_id:
-                return item
-        return None
-    
-    async def save_item(self, thread_id: str, item: ThreadItem, context: Any) -> None:
-        if thread_id not in self._items:
-            self._items[thread_id] = []
-        items = self._items[thread_id]
-        for i, existing in enumerate(items):
-            if hasattr(existing, 'id') and hasattr(item, 'id') and existing.id == item.id:
-                items[i] = item
-                return
-        items.append(item)
-    
-    async def delete_thread_item(self, thread_id: str, item_id: str, context: Any) -> None:
-        if thread_id in self._items:
-            self._items[thread_id] = [
-                item for item in self._items[thread_id]
-                if not (hasattr(item, 'id') and item.id == item_id)
-            ]
-    
-    async def save_attachment(self, attachment: Any, context: Any) -> None:
-        if hasattr(attachment, 'id'):
-            self._attachments[attachment.id] = attachment
-    
-    async def load_attachment(self, attachment_id: str, context: Any) -> Any:
-        return self._attachments.get(attachment_id)
-    
-    async def delete_attachment(self, attachment_id: str, context: Any) -> None:
-        self._attachments.pop(attachment_id, None)
+---
 
+## FastAPI Endpoint Template
 
-class MyChatKitServer(ChatKitServer):
-    """ChatKit server that connects to your AI agent."""
-    
-    def __init__(self, store: Store):
-        super().__init__(store)
-        # Initialize your agent here
-        self._agent = None  # Replace with your agent
-    
-    async def respond(
-        self,
-        thread: ThreadMetadata,
-        input_user_message: UserMessageItem | None,  # Can be None!
-        context: Any,
-    ) -> AsyncIterator[ThreadStreamEvent]:
-        """Process user message and yield streaming response events.
-        
-        CRITICAL Event Sequence:
-        1. AssistantMessageContentPartTextDelta - Stream text content
-        2. AssistantMessageContentPartDone - Signal content complete
-        3. ThreadItemAddedEvent - Announce new message item
-        4. ThreadItemDoneEvent - Signal message complete
-        """
-        import uuid
-        
-        if input_user_message is None:
-            return
-        
-        # Extract user message text
-        user_message = ""
-        if hasattr(input_user_message, 'content'):
-            for content in input_user_message.content:
-                if hasattr(content, 'text'):
-                    user_message += content.text
-        
-        # Process with your agent
-        # response_text = await self._agent.process(user_message)
-        response_text = f"You said: {user_message}"  # Replace with real agent
-        
-        msg_id = f"msg-{uuid.uuid4().hex[:12]}"
-        
-        # 1. Stream text delta
-        yield AssistantMessageContentPartTextDelta(
-            type="assistant_message.content_part.text_delta",
-            content_index=0,
-            delta=response_text
-        )
-        
-        # 2. Content part done
-        content = AssistantMessageContent(
-            type="output_text",
-            text=response_text,
-            annotations=[]
-        )
-        yield AssistantMessageContentPartDone(
-            type="assistant_message.content_part.done",
-            content_index=0,
-            content=content
-        )
-        
-        # 3. Create message item (NO status field!)
-        assistant_msg = AssistantMessageItem(
-            id=msg_id,
-            thread_id=thread.id,
-            created_at=datetime.now().isoformat(),
-            type="assistant_message",
-            content=[content]
-        )
-        yield ThreadItemAddedEvent(type="thread.item.added", item=assistant_msg)
-        
-        # 4. Message done
-        yield ThreadItemDoneEvent(type="thread.item.done", item=assistant_msg)
-
-
-# Global instances
-_store = SimpleStore()
-_server = MyChatKitServer(_store)
-
-
+```python
 @router.post("/chatkit")
-async def chatkit_endpoint(request: Request):
-    """Main ChatKit endpoint - handles all ChatKit protocol requests."""
-    try:
-        body = await request.body()
-        context = {"headers": dict(request.headers)}
-        
-        result = await _server.process(body, context)
-        
-        # Handle streaming result
-        if hasattr(result, '__aiter__'):
-            async def generate():
-                async for event in result:
-                    # CRITICAL: Events are already SSE formatted!
-                    # Do NOT double-wrap with another 'data:' prefix
-                    if isinstance(event, bytes):
-                        yield event
-                    elif isinstance(event, str):
-                        yield event.encode('utf-8')
-                    elif hasattr(event, 'model_dump_json'):
-                        yield f"data: {event.model_dump_json()}\n\n".encode('utf-8')
-                    else:
-                        yield f"data: {json.dumps(event)}\n\n".encode('utf-8')
-            
-            return StreamingResponse(
-                generate(),
-                media_type="text/event-stream",
-                headers={
-                    "Cache-Control": "no-cache",
-                    "Connection": "keep-alive",
-                    "X-Accel-Buffering": "no",
-                }
-            )
-        
-        # Handle non-streaming result
-        if hasattr(result, 'model_dump_json'):
-            return Response(content=result.model_dump_json(), media_type="application/json")
-        return Response(content=json.dumps(result), media_type="application/json")
-        
-    except Exception as e:
-        logger.error(f"ChatKit error: {e}", exc_info=True)
-        return JSONResponse(content={"error": str(e)}, status_code=500)
+async def chatkit_endpoint(
+    request: Request,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+) -> Response:
+    body = await request.body()
 
+    # Create store with user context
+    store = PostgreSQLChatKitStore(db, user.id)
+    server = MyChatKitServer(store)
 
-@router.get("/chatkit/health")
-async def chatkit_health():
-    """Health check endpoint."""
-    return {"status": "ok", "service": "ChatKit Server"}
-```
+    # Build context
+    context = {
+        "headers": dict(request.headers),
+        "user_id": user.id,
+        "db_session": db,
+        # Add project-specific context...
+    }
 
-**Add to main.py:**
-```python
-from app.routers import chatkit_server
-app.include_router(chatkit_server.router)
+    # Process request
+    result = await server.process(body, context)
+
+    # Handle streaming vs non-streaming
+    if hasattr(result, '__aiter__'):
+        async def generate():
+            async for event in result:
+                if hasattr(event, 'model_dump_json'):
+                    yield f"data: {event.model_dump_json()}\n\n".encode()
+                else:
+                    yield f"data: {json.dumps(event)}\n\n".encode()
+
+        return StreamingResponse(
+            generate(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",
+            }
+        )
+    else:
+        return Response(content=result.json, media_type="application/json")
 ```
 
 ---
 
-## Environment Variables
+## Dependencies
 
-```bash
-# Backend
-OPENAI_API_KEY=sk-...           # If using OpenAI models
-GEMINI_API_KEY=...              # If using Gemini models
+### Python (Backend)
+```
+chatkit>=0.1.0
+fastapi
+sqlalchemy[asyncio]
+asyncpg
+openai-agents
+```
 
-# Optional
-CHATKIT_WORKFLOW_ID=wf_...      # Only for managed ChatKit
+### JavaScript (Frontend)
+```
+# Loaded from CDN - no npm packages needed
+https://cdn.platform.openai.com/deployments/chatkit/chatkit.js
 ```
 
 ---
 
-## Quick Setup Checklist (Custom ChatKit with FastAPI)
+## Checklist for Implementation
 
-- [ ] 🚨 **This is Custom ChatKit** - Do NOT clone starter template (that's for Managed/Agent ID)
-- [ ] Backend: `pip install chatkit fastapi uvicorn`
-- [ ] Frontend: Load CDN script (no npm install for ChatKit itself)
-- [ ] CDN URL: `https://cdn.platform.openai.com/deployments/chatkit/chatkit.js`
-- [ ] Wait for custom element: `customElements.whenDefined('openai-chatkit')`
-- [ ] Configure with `setOptions()` using correct format
-- [ ] Backend `Store` methods all have `context: Any` parameter
-- [ ] Backend `respond()` yields correct event sequence
-- [ ] Backend SSE does NOT double-wrap events
-- [ ] `AssistantMessageItem` has NO `status` field
+- [ ] Create database models (ChatKitThread, ChatKitThreadItem)
+- [ ] Implement PostgreSQLChatKitStore
+- [ ] Create ChatKitServer subclass with respond() method
+- [ ] Add /chatkit FastAPI endpoint
+- [ ] Create frontend widget with Script loader
+- [ ] Configure setOptions() with API URL
+- [ ] Implement session ID management
+- [ ] Add WorkflowItem streaming for progress
+- [ ] Test history panel (load_threads, delete_thread)
+- [ ] Verify auto-generated thread titles
 
 ---
 
-## What NOT To Do
+## Common Mistakes to Avoid
 
-❌ **Never clone starter template for Custom ChatKit** - Template is for Managed (OpenAI Agent ID) only
-❌ **Never `npm install @openai/chatkit`** - It's only types, not the component
-❌ **Never check `window.openai.ChatKit`** - It doesn't exist
-❌ **Never use event handlers in Next.js Server Components**
-❌ **Never add `status` field to AssistantMessageItem**
-❌ **Never double-wrap SSE events with `data:` prefix**
-❌ **Never forget `context: Any` in Store methods**
-
-## What TO Do
-
-✅ **Use Custom ChatKit approach with FastAPI backend (this skill)**
-✅ **Follow the patterns in this skill for frontend + backend setup**
-✅ **Always load from CDN: `cdn.platform.openai.com/deployments/chatkit/chatkit.js`**
-✅ **Always use `customElements.whenDefined('openai-chatkit')`**
-✅ **Always use 'use client' for components with event handlers**
-✅ **Always include `context: Any` in ALL Store methods**
-✅ **Always follow the correct event sequence in respond()**
+1. **Using React ChatKit wrapper** - Always use vanilla `<openai-chatkit>` web component
+2. **Custom message UI** - ChatKit handles all UI, never create custom bubbles
+3. **Missing user_id filter** - All queries MUST filter by user_id
+4. **Forgetting thread title** - Auto-generate from first message for history panel
+5. **Not collapsing workflow** - Set `expanded=False` after completion
+6. **Missing SSE headers** - Include Cache-Control, Connection, X-Accel-Buffering
+7. **Hardcoded session IDs** - Use sessionStorage for tab-lifetime persistence

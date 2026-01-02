@@ -55,6 +55,8 @@ const systemIconToChatKit: Record<string, ChatKitIcon> = {
   download: 'document',
   database: 'cube',
   cloud: 'globe',
+  globe: 'globe',      // Google Search icon
+  notebook: 'notebook', // File Search icon
   settings: 'settings-slider',
 };
 
