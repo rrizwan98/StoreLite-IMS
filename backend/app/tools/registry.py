@@ -75,7 +75,7 @@ SYSTEM_TOOLS: Dict[str, SystemTool] = {
     ),
     "google_search": SystemTool(
         id="google_search",
-        name="Google Search",
+        name="Web Search",
         description="Search the web for real-time information, documentation, news, and current events",
         icon="globe",
         category="utilities",

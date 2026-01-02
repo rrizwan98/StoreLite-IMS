@@ -256,7 +256,7 @@ export default function SettingsPage() {
               <h3 className="font-semibold text-blue-900 mb-2">How it works</h3>
               <ul className="text-sm text-blue-800 space-y-2">
                 <li>
-                  <strong>System Tools:</strong> Built-in integrations like Gmail. Click "Connect" to enable.
+                  <strong>System Tools:</strong> Built-in integrations like Gmail. Click &quot;Connect&quot; to enable.
                 </li>
                 <li>
                   <strong>Connectors:</strong> Click on a connector like Notion to connect via OAuth.
