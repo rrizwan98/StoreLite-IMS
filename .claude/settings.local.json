@@ -11,7 +11,12 @@
       "Bash(git --version)",
       "Bash(git rev-parse:*)",
       "Bash(gh pr list:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(gh pr view:*)",
+      "Bash(.specify/scripts/bash/create-phr.sh:*)",
+      "WebSearch"
     ],
     "deny": [],
     "ask": []
