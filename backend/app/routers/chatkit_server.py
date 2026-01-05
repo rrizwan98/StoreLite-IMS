@@ -31,6 +31,8 @@ from chatkit.types import (
     ThreadItemAddedEvent,
     AssistantMessageItem,
     AssistantMessageContent,
+    Annotation,
+    URLSource,
     ProgressUpdateEvent,
     ErrorEvent,
     ErrorCode,
@@ -42,6 +44,71 @@ from app.services.rate_limiter import get_rate_limiter
 from app.services.auth_service import decode_token, get_user_by_id
 
 logger = logging.getLogger(__name__)
+
+def _extract_markdown_link_sources(text: str) -> list[dict[str, str]]:
+    """
+    Extract sources from a markdown-style "Sources:" section.
+    Expected lines like: - [Title](https://example.com)
+    Returns list of dicts: {title, url}
+    """
+    import re
+
+    if not text:
+        return []
+
+    # Only scan after a "Sources:" header if present (avoid linking random markdown)
+    lower = text.lower()
+    start = lower.rfind("\nsources:")
+    scan_text = text[start:] if start != -1 else text
+
+    links = re.findall(r"\[([^\]]+)\]\((https?://[^\)]+)\)", scan_text)
+    sources: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for title, url in links:
+        url = (url or "").strip()
+        if not url or url in seen:
+            continue
+        seen.add(url)
+        sources.append({"title": (title or url)[:200], "url": url[:500]})
+    return sources
+
+
+def _strip_sources_section(text: str) -> str:
+    """Remove trailing 'Sources:' section from an assistant message (if present)."""
+    import re
+    if not text:
+        return ""
+    # Remove from the last occurrence of a Sources header to the end
+    cleaned = re.sub(r"\n+Sources:\s*[\s\S]*$", "", text, flags=re.IGNORECASE).strip()
+    return cleaned
+
+
+def _build_url_annotations(text: str, sources: list[dict[str, str]]) -> list[Annotation]:
+    """
+    Convert sources into ChatKit annotations so the UI can render inline citations and source cards.
+    We attach all citations at the end of the text by using index=len(text).
+    """
+    if not sources:
+        return []
+    idx = len(text or "")
+    annotations: list[Annotation] = []
+    for s in sources[:10]:  # safety cap
+        url = (s.get("url") or "").strip()
+        if not url:
+            continue
+        title = (s.get("title") or url).strip()
+        annotations.append(
+            Annotation(
+                source=URLSource(
+                    url=url,
+                    title=title[:200],
+                    # Best-effort snippet; markdown sources don't include one.
+                    description=None,
+                ),
+                index=idx,
+            )
+        )
+    return annotations
 
 
 async def extract_user_id_from_request(request: Request) -> Optional[int]:
@@ -328,6 +395,11 @@ class IMSChatKitServer(ChatKitServer):
             # Generate message ID
             msg_id = f"msg-{uuid.uuid4().hex[:12]}"
 
+            # Convert markdown "Sources:" into ChatKit annotations (for web search style responses)
+            extracted_sources = _extract_markdown_link_sources(response_text)
+            cleaned_text = _strip_sources_section(response_text)
+            annotations = _build_url_annotations(cleaned_text, extracted_sources)
+
             # Create and yield assistant message with proper ThreadStreamEvent types
             assistant_msg = AssistantMessageItem(
                 id=msg_id,
@@ -336,8 +408,8 @@ class IMSChatKitServer(ChatKitServer):
                 type="assistant_message",
                 content=[AssistantMessageContent(
                     type="output_text",
-                    text=response_text,
-                    annotations=[]
+                    text=cleaned_text,
+                    annotations=annotations
                 )]
             )
             yield ThreadItemAddedEvent(type="thread.item.added", item=assistant_msg)

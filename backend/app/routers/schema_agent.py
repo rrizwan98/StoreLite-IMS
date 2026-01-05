@@ -93,6 +93,65 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/schema-agent", tags=["schema-agent"])
 
+def _extract_markdown_link_sources(text: str) -> List[dict]:
+    """
+    Extract sources from markdown links, prioritizing a trailing 'Sources:' section.
+    Returns list of dicts: {title, url}
+    """
+    if not text:
+        return []
+
+    # Only scan after last 'Sources:' header if present.
+    lower = text.lower()
+    start = lower.rfind("\nsources:")
+    scan_text = text[start:] if start != -1 else text
+
+    links = re.findall(r"\[([^\]]+)\]\((https?://[^\)]+)\)", scan_text)
+    out: List[dict] = []
+    seen: set[str] = set()
+    for title, url in links:
+        url = (url or "").strip()
+        if not url or url in seen:
+            continue
+        seen.add(url)
+        out.append({"title": (title or url)[:200], "url": url[:500]})
+    return out
+
+
+def _strip_sources_section(text: str) -> str:
+    """Remove trailing 'Sources:' section from a response (if present)."""
+    if not text:
+        return ""
+    return re.sub(r"\n+Sources:\s*[\s\S]*$", "", text, flags=re.IGNORECASE).strip()
+
+
+def _build_url_annotations(text: str, sources: List[dict]) -> List[Annotation]:
+    """
+    Convert URL sources into ChatKit annotations so the UI can render inline citations and source cards.
+    We attach citations at the end of the message by using index=len(text).
+    """
+    if not sources:
+        return []
+    idx = len(text or "")
+    annotations: List[Annotation] = []
+    for s in sources[:10]:  # safety cap
+        url = (s.get("url") or "").strip()
+        if not url:
+            continue
+        title = (s.get("title") or url).strip()
+        annotations.append(
+            Annotation(
+                source=URLSource(
+                    url=url,
+                    title=title[:200],
+                    # Best-effort snippet; structured snippets may not be available.
+                    description=s.get("snippet") or None,
+                ),
+                index=idx,
+            )
+        )
+    return annotations
+
 
 # ============================================================================
 # Custom ThreadItemConverter for File Attachments
@@ -1738,7 +1797,23 @@ class SchemaChatKitServer(ChatKitServer):
                     logger.warning(f"[Analytics] CHART_DATA extraction failed: {extract_err}")
 
             # Format with inline links and sources footer
-            final_text = format_response_with_sources(response_text, search_sources)
+            # Convert web-search "Sources:" markdown into ChatKit annotations so the UI renders
+            # proper source cards + inline citations (no custom frontend rendering).
+            # Keep the assistant text clean by stripping the trailing Sources section.
+            extracted_from_response = _extract_markdown_link_sources(response_text)
+
+            # Merge sources from tool outputs (already tracked) with sources embedded in response text.
+            merged_sources: List[dict] = []
+            seen_urls: set[str] = set()
+            for s in (search_sources or []) + (extracted_from_response or []):
+                url = (s.get("url") or "").strip()
+                if not url or url in seen_urls:
+                    continue
+                seen_urls.add(url)
+                merged_sources.append(s)
+
+            final_text = _strip_sources_section(response_text)
+            final_annotations = _build_url_annotations(final_text, merged_sources)
 
             logger.info(f"[Schema ChatKit] Formatted text length: {len(final_text)}")
 
@@ -1751,7 +1826,8 @@ class SchemaChatKitServer(ChatKitServer):
                 created_at=datetime.now(),
                 type="assistant_message",
                 content=[AssistantMessageContent(
-                    text=final_text
+                    text=final_text,
+                    annotations=final_annotations
                 )]
             )
 
