@@ -35,11 +35,11 @@ RETELL_AI_TOOLS = [
         "inputSchema": {
             "type": "object",
             "properties": {
-                "agent_id": {"type": "string", "description": "The agent ID to use for the call"},
-                "from_number": {"type": "string", "description": "The phone number to call from (must be provisioned)"},
-                "to_number": {"type": "string", "description": "The phone number to call"}
+                "agentId": {"type": "string", "description": "The agent ID to use for the call"},
+                "fromNumber": {"type": "string", "description": "The phone number to call from (must be provisioned in Retell AI)"},
+                "toNumber": {"type": "string", "description": "The phone number to call (E.164 format like +1234567890)"}
             },
-            "required": ["agent_id", "from_number", "to_number"]
+            "required": ["agentId", "fromNumber", "toNumber"]
         }
     },
     {
@@ -48,9 +48,9 @@ RETELL_AI_TOOLS = [
         "inputSchema": {
             "type": "object",
             "properties": {
-                "agent_id": {"type": "string", "description": "The agent ID to use for the call"}
+                "agentId": {"type": "string", "description": "The agent ID to use for the call"}
             },
-            "required": ["agent_id"]
+            "required": ["agentId"]
         }
     },
     {
@@ -59,9 +59,9 @@ RETELL_AI_TOOLS = [
         "inputSchema": {
             "type": "object",
             "properties": {
-                "call_id": {"type": "string", "description": "The call ID to retrieve"}
+                "callId": {"type": "string", "description": "The call ID to retrieve"}
             },
-            "required": ["call_id"]
+            "required": ["callId"]
         }
     },
     {
@@ -70,9 +70,9 @@ RETELL_AI_TOOLS = [
         "inputSchema": {
             "type": "object",
             "properties": {
-                "call_id": {"type": "string", "description": "The call ID to delete"}
+                "callId": {"type": "string", "description": "The call ID to delete"}
             },
-            "required": ["call_id"]
+            "required": ["callId"]
         }
     },
     {
@@ -86,11 +86,11 @@ RETELL_AI_TOOLS = [
         "inputSchema": {
             "type": "object",
             "properties": {
-                "agent_name": {"type": "string", "description": "Name of the agent"},
-                "voice_id": {"type": "string", "description": "Voice ID to use"},
+                "agentName": {"type": "string", "description": "Name of the agent"},
+                "voiceId": {"type": "string", "description": "Voice ID to use"},
                 "language": {"type": "string", "description": "Language code (e.g., en-US)"}
             },
-            "required": ["agent_name"]
+            "required": ["agentName"]
         }
     },
     {
@@ -99,9 +99,9 @@ RETELL_AI_TOOLS = [
         "inputSchema": {
             "type": "object",
             "properties": {
-                "agent_id": {"type": "string", "description": "The agent ID to retrieve"}
+                "agentId": {"type": "string", "description": "The agent ID to retrieve"}
             },
-            "required": ["agent_id"]
+            "required": ["agentId"]
         }
     },
     {
@@ -110,11 +110,11 @@ RETELL_AI_TOOLS = [
         "inputSchema": {
             "type": "object",
             "properties": {
-                "agent_id": {"type": "string", "description": "The agent ID to update"},
-                "agent_name": {"type": "string", "description": "New name for the agent"},
-                "voice_id": {"type": "string", "description": "New voice ID"}
+                "agentId": {"type": "string", "description": "The agent ID to update"},
+                "agentName": {"type": "string", "description": "New name for the agent"},
+                "voiceId": {"type": "string", "description": "New voice ID"}
             },
-            "required": ["agent_id"]
+            "required": ["agentId"]
         }
     },
     {
@@ -123,9 +123,9 @@ RETELL_AI_TOOLS = [
         "inputSchema": {
             "type": "object",
             "properties": {
-                "agent_id": {"type": "string", "description": "The agent ID to delete"}
+                "agentId": {"type": "string", "description": "The agent ID to delete"}
             },
-            "required": ["agent_id"]
+            "required": ["agentId"]
         }
     },
     {
@@ -134,9 +134,9 @@ RETELL_AI_TOOLS = [
         "inputSchema": {
             "type": "object",
             "properties": {
-                "agent_id": {"type": "string", "description": "The agent ID"}
+                "agentId": {"type": "string", "description": "The agent ID"}
             },
-            "required": ["agent_id"]
+            "required": ["agentId"]
         }
     },
     {
@@ -150,7 +150,7 @@ RETELL_AI_TOOLS = [
         "inputSchema": {
             "type": "object",
             "properties": {
-                "area_code": {"type": "string", "description": "Area code for the phone number"}
+                "areaCode": {"type": "string", "description": "Area code for the phone number"}
             },
             "required": []
         }
@@ -161,9 +161,9 @@ RETELL_AI_TOOLS = [
         "inputSchema": {
             "type": "object",
             "properties": {
-                "phone_number": {"type": "string", "description": "The phone number to retrieve"}
+                "phoneNumber": {"type": "string", "description": "The phone number to retrieve"}
             },
-            "required": ["phone_number"]
+            "required": ["phoneNumber"]
         }
     },
     {
@@ -172,10 +172,10 @@ RETELL_AI_TOOLS = [
         "inputSchema": {
             "type": "object",
             "properties": {
-                "phone_number": {"type": "string", "description": "The phone number to update"},
-                "agent_id": {"type": "string", "description": "Agent ID to associate"}
+                "phoneNumber": {"type": "string", "description": "The phone number to update"},
+                "agentId": {"type": "string", "description": "Agent ID to associate"}
             },
-            "required": ["phone_number"]
+            "required": ["phoneNumber"]
         }
     },
     {
@@ -184,9 +184,9 @@ RETELL_AI_TOOLS = [
         "inputSchema": {
             "type": "object",
             "properties": {
-                "phone_number": {"type": "string", "description": "The phone number to delete"}
+                "phoneNumber": {"type": "string", "description": "The phone number to delete"}
             },
-            "required": ["phone_number"]
+            "required": ["phoneNumber"]
         }
     },
     {
@@ -200,9 +200,9 @@ RETELL_AI_TOOLS = [
         "inputSchema": {
             "type": "object",
             "properties": {
-                "voice_id": {"type": "string", "description": "The voice ID to retrieve"}
+                "voiceId": {"type": "string", "description": "The voice ID to retrieve"}
             },
-            "required": ["voice_id"]
+            "required": ["voiceId"]
         }
     },
 ]
@@ -228,109 +228,161 @@ class RetellAIConnectorAgent(BaseConnectorAgent):
     CONNECTOR_TYPE = "RetellAI"
     TOOL_NAME = "retellai_connector"
     TOOL_DESCRIPTION = (
-        "Handle ALL Retell AI voice operations including: "
-        "creating outbound phone calls, managing voice agents, "
-        "provisioning phone numbers, viewing call analytics, "
-        "and managing call recordings. "
-        "Use this for ANY Retell AI voice-related task."
+        "IMMEDIATELY make outbound phone calls to users. "
+        "When user wants to call someone or provides a phone number, use this tool. "
+        "This tool will automatically: 1) Find available voice agents, "
+        "2) Get a phone number to call from, 3) Execute the call immediately. "
+        "Also handles: viewing calls, managing agents, and phone numbers. "
+        "Use this whenever user mentions: call, phone, dial, ring, contact by phone."
     )
 
     def get_system_prompt(self) -> str:
         """Get Retell AI-specific system prompt."""
-        return """You are a Retell AI Voice Agent Expert. Your job is to execute Retell AI operations using the available tools.
+        return """You are an AUTONOMOUS Retell AI Voice Call Executor. Your PRIMARY job is to IMMEDIATELY MAKE PHONE CALLS when asked.
 
-## AUTONOMOUS EXECUTION
-Execute tasks immediately. Make intelligent decisions based on the context.
-- Need an agent? List available agents first
-- Need a phone number? List available phone numbers first
-- Need to make a call? Specify the agent and phone number
+## CRITICAL: IMMEDIATE CALL EXECUTION
 
-Execute, don't ask unnecessary questions.
+When user says "call this number", "make a call", "call the user" or provides a phone number:
+1. IMMEDIATELY call `list_agents` to get available agents
+2. IMMEDIATELY call `list_phone_numbers` to get FROM numbers
+3. IMMEDIATELY call `create_phone_call` with EXACT parameter names (camelCase):
+   - agentId: Use the agent_id from list_agents (or match user-specified agent name)
+   - fromNumber: Use phone_number from list_phone_numbers (first one or matching)
+   - toNumber: The phone number user wants to call
 
-## YOUR CAPABILITIES
-- List and manage voice agents
-- List and manage phone numbers
-- Create outbound phone calls
-- View call details and analytics
-- Delete call recordings
-- List available voices
+DO NOT ask for confirmation. DO NOT explain what you will do. JUST EXECUTE THE CALL.
 
-## TERMINOLOGY
-- "Agent" = AI voice agent configured with personality and instructions
-- "Phone Number" = Provisioned phone number for making/receiving calls
-- "Call" = Voice conversation with analytics (duration, transcript, etc.)
-- "Voice" = Text-to-speech voice configuration
+## PHONE NUMBER FORMAT
+- Always use E.164 format: +1XXXXXXXXXX (e.g., +12025551234)
+- If user provides number without +, add +1 for US numbers
+- Pakistan numbers: +92XXXXXXXXXX
 
-## AVAILABLE TOOLS (from Retell AI MCP)
-The actual tool names from Retell AI MCP server:
-- `list_calls` - List all calls with optional filters
-- `create_phone_call` - Create an outbound phone call
-- `create_web_call` - Create a web-based call
-- `get_call` - Get details of a specific call
-- `delete_call` - Delete a call record
-- `list_agents` - List all voice agents
-- `create_agent` - Create a new voice agent
-- `get_agent` - Get details of a specific agent
-- `update_agent` - Update an existing agent
-- `delete_agent` - Delete an agent
-- `get_agent_versions` - Get version history of an agent
-- `list_phone_numbers` - List all phone numbers
-- `create_phone_number` - Provision a new phone number
-- `get_phone_number` - Get details of a phone number
-- `update_phone_number` - Update phone number settings
-- `delete_phone_number` - Delete a phone number
+## AUTONOMOUS EXECUTION RULES
+
+1. **NEVER ASK** - Don't ask "which agent?", just use the first one
+2. **NEVER EXPLAIN** - Don't say "I will now...", just do it
+3. **CHAIN TOOLS** - Call list_agents, list_phone_numbers, then create_phone_call in sequence
+4. **EXECUTE IMMEDIATELY** - When user wants a call, make it happen NOW
+
+## CRITICAL: PARAMETER FORMAT FOR create_phone_call
+ALWAYS use camelCase parameters:
+- ✅ CORRECT: agentId, fromNumber, toNumber
+- ❌ WRONG: agent_id, from_number, to_number
+
+## WORKFLOW EXAMPLE
+
+When user wants to call someone:
+1. Call `list_agents` → extract `agent_id` from response
+2. Call `list_phone_numbers` → extract `phone_number` from response
+3. Call `create_phone_call` with camelCase params:
+   - agentId: (value from step 1)
+   - fromNumber: (value from step 2)
+   - toNumber: (user's target number)
+
+## AVAILABLE TOOLS
+
+CALL MANAGEMENT:
+- `create_phone_call` - **PRIMARY TOOL** - Create outbound phone call
+  - Required params (camelCase!): agentId, fromNumber, toNumber
+- `create_web_call` - Create web-based call session (agentId)
+- `list_calls` - List all calls
+- `get_call` - Get call details by callId
+- `delete_call` - Delete a call by callId
+
+AGENT MANAGEMENT:
+- `list_agents` - List all voice agents (USE THIS FIRST to get agentId)
+- `get_agent` - Get agent details by agentId
+- `create_agent` - Create new agent (agentName, voiceId)
+- `update_agent` - Update agent (agentId)
+- `delete_agent` - Delete agent (agentId)
+
+PHONE NUMBER MANAGEMENT:
+- `list_phone_numbers` - List provisioned numbers (USE THIS to get fromNumber)
+- `get_phone_number` - Get number details by phoneNumber
+- `create_phone_number` - Provision new number (areaCode)
+- `update_phone_number` - Update number (phoneNumber, agentId)
+- `delete_phone_number` - Delete number (phoneNumber)
+
+VOICE MANAGEMENT:
 - `list_voices` - List available voices
-- `get_voice` - Get details of a specific voice
-
-## EXECUTION RULES
-
-1. ALWAYS USE TOOLS - Never pretend without calling a tool
-2. LIST FIRST - When creating, list existing resources first
-3. CHAIN OPERATIONS - Complete multi-step tasks automatically
-4. REPORT RESULTS - Confirm what was done with relevant details
-
-## WORKFLOW: MAKE A PHONE CALL
-
-Step 1: List available agents
-```
-list_agents
-```
-
-Step 2: List available phone numbers
-```
-list_phone_numbers
-```
-
-Step 3: Create the call
-```
-create_phone_call with agent_id, from_number, to_number
-```
-
-## WORKFLOW: CREATE A VOICE AGENT
-
-Step 1: List available voices (optional)
-```
-list_voices
-```
-
-Step 2: Create the agent
-```
-create_agent with name, voice, instructions, etc.
-```
-
-## ERROR HANDLING
-If an operation fails:
-- Check if the resource exists
-- Verify permissions and quotas
-- Provide clear error message to user
+- `get_voice` - Get voice details by voiceId
 
 ## RESPONSE FORMAT
-After completing operations, provide:
-- Action taken (call placed, agent created, etc.)
-- Relevant IDs and details
-- Any errors or warnings
 
-Execute tasks completely using tools."""
+After making a call successfully, respond with a PROFESSIONAL and DETAILED message:
+
+```
+### 📞 Call Initiated Successfully!
+
+Great news! I've placed the call for you. Here are the details:
+
+---
+
+#### 📋 **Call Details**
+
+| Field | Value |
+|-------|-------|
+| **Call ID** | `[call_id from response]` |
+| **Status** | 🟢 [status from response, e.g., "registered", "in_progress"] |
+
+---
+
+#### 🤖 **Agent Information**
+
+| Field | Value |
+|-------|-------|
+| **Agent ID** | `[agentId used]` |
+| **Agent Name** | [agent_name from list_agents] |
+
+---
+
+#### 📱 **Phone Numbers**
+
+| Field | Value |
+|-------|-------|
+| **From** | `[fromNumber used]` |
+| **To** | `[toNumber - user's target]` |
+
+---
+
+> 💡 **What happens next?** The AI agent is now connecting to the recipient. The agent will deliver your message as instructed.
+
+```
+
+If call fails, respond with:
+```
+### ❌ Call Failed
+
+Unfortunately, the call could not be placed.
+
+---
+
+#### 🔍 **Error Details**
+
+| Field | Value |
+|-------|-------|
+| **Error** | [error message] |
+| **Attempted From** | `[fromNumber]` |
+| **Attempted To** | `[toNumber]` |
+| **Agent** | [agent_name] |
+
+---
+
+#### 🛠️ **Suggested Actions**
+- Verify the phone number format (should be E.164: +1234567890)
+- Check if the FROM number is provisioned in Retell AI
+- Ensure the agent is properly configured
+
+```
+
+## REMEMBER
+
+You are a CALL EXECUTOR. When someone asks to call a number:
+1. Get agent_id (list_agents)
+2. Get from_number (list_phone_numbers)
+3. MAKE THE CALL (create_phone_call)
+
+That's it. Don't overthink. Just call."""
 
     async def load_tools(self) -> List[FunctionTool]:
         """
