@@ -1,45 +1,45 @@
 ---
-id: {{ID}}
-title: {{TITLE}}
-stage: {{STAGE}}
-date: {{DATE_ISO}}
-surface: {{SURFACE}}
-model: {{MODEL}}
-feature: {{FEATURE}}
-branch: {{BRANCH}}
-user: {{USER}}
-command: {{COMMAND}}
-labels: [{{LABELS}}]
+id: 0001
+title: git-push-network-failure-report
+stage: general
+date: 2026-01-05
+surface: claude-code
+model: claude-opus-4-5-20251101
+feature: none
+branch: 008-user-mcp-connectors
+user: system
+command: /sp.git.commit_pr
+labels: [git, workflow, network-error]
 links:
-  spec: {{LINKS_SPEC}}
-  ticket: {{LINKS_TICKET}}
-  adr: {{LINKS_ADR}}
-  pr: {{LINKS_PR}}
+  spec: none
+  ticket: none
+  adr: none
+  pr: pending
 files:
-{{FILES_YAML}}
+  - none (push only)
 tests:
-{{TESTS_YAML}}
+  - none
 ---
 
 ## Prompt
 
-{{PROMPT_TEXT}}
+Execute git workflow to commit and create PR for branch 008-user-mcp-connectors.
 
 ## Response snapshot
 
-{{RESPONSE_TEXT}}
+Initial attempt to push latest commit (d8d68d3) failed due to network connectivity issue (GitHub port 443 timeout after 21083ms). Provided manual recovery instructions for when network restores.
 
 ## Outcome
 
-- ✅ Impact: {{OUTCOME_IMPACT}}
-- 🧪 Tests: {{TESTS_SUMMARY}}
-- 📁 Files: {{FILES_SUMMARY}}
-- 🔁 Next prompts: {{NEXT_PROMPTS}}
-- 🧠 Reflection: {{REFLECTION_NOTE}}
+- Impact: Push blocked by network, provided manual recovery path
+- Tests: N/A
+- Files: No file changes (push operation only)
+- Next prompts: Retry push when network available (see PHR 0002)
+- Reflection: Network issues outside agent control; always provide fallback instructions
 
 ## Evaluation notes (flywheel)
 
-- Failure modes observed: {{FAILURE_MODES}}
-- Graders run and results (PASS/FAIL): {{GRADER_RESULTS}}
-- Prompt variant (if applicable): {{PROMPT_VARIANT_ID}}
-- Next experiment (smallest change to try): {{NEXT_EXPERIMENT}}
+- Failure modes observed: Network connectivity to GitHub failed
+- Graders run and results (PASS/FAIL): N/A - external failure
+- Prompt variant (if applicable): none
+- Next experiment (smallest change to try): Add network retry logic or offline queue
