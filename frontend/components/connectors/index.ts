@@ -9,3 +9,4 @@ export { default as ConnectorsList } from './ConnectorsList';
 export { default as AppsToolsPanel } from './AppsToolsPanel';
 export { default as AddConnectorForm } from './AddConnectorForm';
 export { default as ConnectorsModal } from './ConnectorsModal';
+export { default as RetellAIConnectView } from './RetellAIConnectView';

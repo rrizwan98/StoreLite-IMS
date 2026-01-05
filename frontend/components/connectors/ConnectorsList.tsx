@@ -28,6 +28,7 @@ import {
   getNotionStatus,
   getGDriveStatus,
   getGmailStatus,
+  getRetellAIStatus,
   OAuthStatus,
   checkConnectorHealth,
   HealthCheckResult,
@@ -174,6 +175,18 @@ export default function ConnectorsList({
       };
     } catch {
       statuses['gmail'] = { connected: false };
+    }
+
+    // Check Retell AI status
+    try {
+      const retellStatus = await getRetellAIStatus();
+      statuses['retellai'] = {
+        connected: retellStatus.connected,
+        connector_id: retellStatus.connector_id,
+        connector_name: retellStatus.connector_name,
+      };
+    } catch {
+      statuses['retellai'] = { connected: false };
     }
 
     return statuses;

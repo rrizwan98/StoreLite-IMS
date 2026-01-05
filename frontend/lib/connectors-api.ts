@@ -494,6 +494,89 @@ export async function refreshGmailToken(): Promise<{ success: boolean; message: 
   });
 }
 
+// ============================================================================
+// Retell AI MCP Functions (API Key based)
+// ============================================================================
+
+/**
+ * Response from Retell AI test
+ */
+export interface RetellAITestResponse {
+  success: boolean;
+  message: string;
+  tool_count?: number;
+  tools?: DiscoveredTool[];
+  error_code?: string;
+}
+
+/**
+ * Response from Retell AI connect
+ */
+export interface RetellAIConnectResponse {
+  success: boolean;
+  connector_id?: number;
+  connector_name?: string;
+  message: string;
+  tool_count: number;
+  tools?: DiscoveredTool[];
+}
+
+/**
+ * Retell AI connection status
+ */
+export interface RetellAIStatus {
+  connected: boolean;
+  connector_id?: number;
+  connector_name?: string;
+  tool_count?: number;
+  last_verified?: string;
+}
+
+/**
+ * Test Retell AI API key before saving
+ */
+export async function testRetellAIConnection(apiKey: string): Promise<RetellAITestResponse> {
+  return connectorsFetch<RetellAITestResponse>('/api/retellai/test', {
+    method: 'POST',
+    body: JSON.stringify({ api_key: apiKey }),
+  });
+}
+
+/**
+ * Connect Retell AI with API key
+ */
+export async function connectRetellAI(apiKey: string): Promise<RetellAIConnectResponse> {
+  return connectorsFetch<RetellAIConnectResponse>('/api/retellai/connect', {
+    method: 'POST',
+    body: JSON.stringify({ api_key: apiKey }),
+  });
+}
+
+/**
+ * Check Retell AI connection status
+ */
+export async function getRetellAIStatus(): Promise<RetellAIStatus> {
+  return connectorsFetch<RetellAIStatus>('/api/retellai/status');
+}
+
+/**
+ * Disconnect Retell AI
+ */
+export async function disconnectRetellAI(): Promise<{ success: boolean; message: string }> {
+  return connectorsFetch('/api/retellai/disconnect', {
+    method: 'DELETE',
+  });
+}
+
+/**
+ * Refresh Retell AI tools
+ */
+export async function refreshRetellAI(): Promise<{ success: boolean; message: string; tool_count?: number }> {
+  return connectorsFetch('/api/retellai/refresh', {
+    method: 'POST',
+  });
+}
+
 /**
  * Response from OAuth initiation
  */

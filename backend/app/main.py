@@ -157,7 +157,7 @@ async def root():
 
 # ============ Include Routers ============
 
-from app.routers import inventory, billing, agent, chatkit_server, analytics, db_connect, inventory_agent, auth, schema_agent, gmail, tools, connectors, oauth_connectors, notion_mcp_oauth, gdrive_oauth, gmail_oauth, files, user_settings, gemini_file_search
+from app.routers import inventory, billing, agent, chatkit_server, analytics, db_connect, inventory_agent, auth, schema_agent, gmail, tools, connectors, oauth_connectors, notion_mcp_oauth, gdrive_oauth, gmail_oauth, retellai_mcp, files, user_settings, gemini_file_search
 
 # Authentication router (must be first for auth to work)
 app.include_router(auth.router)
@@ -190,6 +190,9 @@ app.include_router(gdrive_oauth.router)
 
 # Gmail OAuth (MCP Connector Pattern)
 app.include_router(gmail_oauth.router)
+
+# Retell AI MCP (API Key based voice agent connector)
+app.include_router(retellai_mcp.router)
 
 # File Upload Processing (Feature 012)
 app.include_router(files.router)
