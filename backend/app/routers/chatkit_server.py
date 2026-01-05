@@ -47,56 +47,214 @@ logger = logging.getLogger(__name__)
 
 def _extract_markdown_link_sources(text: str) -> list[dict[str, str]]:
     """
-    Extract sources from a markdown-style "Sources:" section.
-    Expected lines like: - [Title](https://example.com)
+    Extract sources from a "Sources" section in common LLM formats.
+    Supports:
+    - Markdown links: - [Title](https://example.com)
+    - Label + next-line URL:
+        - VegasInsider:
+          https://example.com
+    - Label + URL on same line:
+        - VegasInsider: https://example.com
     Returns list of dicts: {title, url}
     """
     import re
+    from urllib.parse import urlparse
 
     if not text:
         return []
 
-    # Only scan after a "Sources:" header if present (avoid linking random markdown)
-    lower = text.lower()
-    start = lower.rfind("\nsources:")
+    # Only scan after the LAST "Sources" header if present (avoid linking random markdown)
+    matches = list(re.finditer(r"\n\s*Sources\b", text, flags=re.IGNORECASE))
+    start = matches[-1].start() if matches else -1
     scan_text = text[start:] if start != -1 else text
 
-    links = re.findall(r"\[([^\]]+)\]\((https?://[^\)]+)\)", scan_text)
+    lines = scan_text.splitlines()
+    # Find first "Sources" line, then scan after it
+    start_line = 0
+    for i, line in enumerate(lines):
+        if re.match(r"^\s*Sources\b", line, flags=re.IGNORECASE):
+            start_line = i + 1
+            break
+
     sources: list[dict[str, str]] = []
     seen: set[str] = set()
+
+    def _add(title: str, url: str):
+        u = (url or "").strip()
+        if not u or u in seen:
+            return
+        seen.add(u)
+        t = (title or "").strip()
+        if not t:
+            try:
+                netloc = (urlparse(u).netloc or u).strip()
+                if netloc.startswith("www."):
+                    netloc = netloc[4:]
+                t = netloc or u
+            except Exception:
+                t = u
+        sources.append({"title": t[:200], "url": u[:500]})
+
+    links = re.findall(r"\[([^\]]+)\]\((https?://[^\)]+)\)", scan_text)
     for title, url in links:
-        url = (url or "").strip()
-        if not url or url in seen:
+        _add(title, url)
+
+    pending_title: str | None = None
+    for raw in lines[start_line:]:
+        line = raw.strip()
+        if not line:
             continue
-        seen.add(url)
-        sources.append({"title": (title or url)[:200], "url": url[:500]})
+
+        # Bullet prefix
+        line = re.sub(r"^[\-\*\u2022]\s*", "", line)
+
+        # If line contains a URL, try to parse inline "Title: URL" first
+        m_inline = re.match(r"^(.*?):\s*(https?://\S+)\s*$", line)
+        if m_inline:
+            _add(m_inline.group(1), m_inline.group(2))
+            pending_title = None
+            continue
+
+        # If line is just a URL, pair with pending title if present
+        m_url = re.match(r"^(https?://\S+)\s*$", line)
+        if m_url:
+            _add(pending_title or "", m_url.group(1))
+            pending_title = None
+            continue
+
+        # If line looks like "Title:" with no URL, hold as pending for next URL line
+        m_title = re.match(r"^(.+?):\s*$", line)
+        if m_title:
+            pending_title = m_title.group(1)
+            continue
+
+        # Otherwise, keep looking; some formats have label then URL elsewhere
+
+    # Fallback: any bare URLs in the scanned area
+    for url in re.findall(r"https?://[^\s\)\]\"\'\<\>]+", scan_text):
+        _add("", url)
+
     return sources
 
 
 def _strip_sources_section(text: str) -> str:
-    """Remove trailing 'Sources:' section from an assistant message (if present)."""
+    """Remove trailing 'Sources...' section from an assistant message (if present)."""
     import re
     if not text:
         return ""
-    # Remove from the last occurrence of a Sources header to the end
-    cleaned = re.sub(r"\n+Sources:\s*[\s\S]*$", "", text, flags=re.IGNORECASE).strip()
-    return cleaned
+    matches = list(re.finditer(r"\n\s*Sources\b", text, flags=re.IGNORECASE))
+    if not matches:
+        return text.strip()
+    return text[: matches[-1].start()].rstrip()
 
+def _strip_url_source_blocks(text: str, extracted_sources: list[dict[str, str]]) -> str:
+    """
+    Remove leading/trailing blocks that look like "sources" lists even when there is no
+    explicit "Sources:" header (e.g., title + next-line URL, or bullet URLs).
+    """
+    import re
+
+    if not text:
+        return ""
+
+    if not extracted_sources:
+        return text.strip()
+
+    lines = text.splitlines()
+
+    def is_url_line(s: str) -> bool:
+        return bool(re.match(r"^\s*https?://\S+\s*$", s))
+
+    def is_label_line(s: str) -> bool:
+        s2 = re.sub(r"^[\-\*\u2022]\s*", "", s.strip())
+        return bool(re.match(r"^[^\s].{0,80}:?\s*$", s2)) and not is_url_line(s2)
+
+    def looks_like_source_pair(i: int) -> bool:
+        if i + 1 < len(lines) and is_label_line(lines[i]) and is_url_line(lines[i + 1]):
+            return True
+        if re.search(r"https?://\S+", lines[i]):
+            return True
+        return False
+
+    # Leading
+    start = 0
+    leading_urls = 0
+    while start < len(lines):
+        if not lines[start].strip():
+            start += 1
+            continue
+        if looks_like_source_pair(start):
+            if is_url_line(lines[start]):
+                leading_urls += 1
+                start += 1
+                continue
+            if start + 1 < len(lines) and is_url_line(lines[start + 1]):
+                leading_urls += 1
+                start += 2
+                continue
+            leading_urls += 1
+            start += 1
+            continue
+        break
+    if leading_urls >= 2:
+        lines = lines[start:]
+
+    # Trailing
+    end = len(lines)
+    trailing_urls = 0
+    while end > 0:
+        if not lines[end - 1].strip():
+            end -= 1
+            continue
+        i = end - 1
+        if is_url_line(lines[i]):
+            trailing_urls += 1
+            end -= 1
+            if end > 0 and is_label_line(lines[end - 1]):
+                end -= 1
+            continue
+        if re.search(r"https?://\S+", lines[i]):
+            trailing_urls += 1
+            end -= 1
+            continue
+        break
+    if trailing_urls >= 2:
+        lines = lines[:end]
+
+    return "\n".join(lines).strip()
 
 def _build_url_annotations(text: str, sources: list[dict[str, str]]) -> list[Annotation]:
     """
     Convert sources into ChatKit annotations so the UI can render inline citations and source cards.
-    We attach all citations at the end of the text by using index=len(text).
+    Without model-provided spans, we heuristically distribute citations across the message
+    by anchoring them to the ends of successive non-empty lines.
     """
     if not sources:
         return []
-    idx = len(text or "")
+    content = text or ""
+
+    # Anchor candidates: end index of each non-empty line
+    line_end_indices: list[int] = []
+    cursor = 0
+    for line in content.splitlines(True):  # keepends
+        next_cursor = cursor + len(line)
+        if line.strip():
+            # anchor before newline(s)
+            anchor = next_cursor
+            while anchor > cursor and content[anchor - 1] in "\r\n":
+                anchor -= 1
+            line_end_indices.append(anchor)
+        cursor = next_cursor
+    if not line_end_indices:
+        line_end_indices = [len(content)]
+
     annotations: list[Annotation] = []
-    for s in sources[:10]:  # safety cap
+    for i, s in enumerate(sources[:10]):  # safety cap
         url = (s.get("url") or "").strip()
         if not url:
             continue
         title = (s.get("title") or url).strip()
+        idx = line_end_indices[min(i, len(line_end_indices) - 1)]
         annotations.append(
             Annotation(
                 source=URLSource(
@@ -398,6 +556,7 @@ class IMSChatKitServer(ChatKitServer):
             # Convert markdown "Sources:" into ChatKit annotations (for web search style responses)
             extracted_sources = _extract_markdown_link_sources(response_text)
             cleaned_text = _strip_sources_section(response_text)
+            cleaned_text = _strip_url_source_blocks(cleaned_text, extracted_sources)
             annotations = _build_url_annotations(cleaned_text, extracted_sources)
 
             # Create and yield assistant message with proper ThreadStreamEvent types
