@@ -12,12 +12,13 @@ import { X } from 'lucide-react';
 import AppsToolsPanel from './AppsToolsPanel';
 import AddConnectorForm from './AddConnectorForm';
 import ConnectorDetailView from './ConnectorDetailView';
+import RetellAIConnectView from './RetellAIConnectView';
 import OAuthConfirmModal from './OAuthConfirmModal';
-import { Connector, initiateOAuth, getOAuthStatus, connectNotion, getNotionStatus, connectGoogleDrive, getGDriveStatus, connectGmail, getGmailStatus } from '@/lib/connectors-api';
+import { Connector, initiateOAuth, getOAuthStatus, connectNotion, getNotionStatus, connectGoogleDrive, getGDriveStatus, connectGmail, getGmailStatus, getRetellAIStatus } from '@/lib/connectors-api';
 import { SystemTool } from '@/lib/tools-api';
 import { PredefinedConnector, PREDEFINED_CONNECTORS } from '@/lib/predefined-connectors';
 
-type ModalView = 'list' | 'add' | 'edit' | 'connector-detail';
+type ModalView = 'list' | 'add' | 'edit' | 'connector-detail' | 'retellai-connect';
 
 interface ConnectorsModalProps {
   isOpen: boolean;
@@ -89,6 +90,16 @@ export default function ConnectorsModal({
         // Gmail not connected or error
       }
 
+      // Check Retell AI status
+      try {
+        const retellStatus = await getRetellAIStatus();
+        if (retellStatus.connected) {
+          connectedIds.push('retellai');
+        }
+      } catch {
+        // Retell AI not connected or error
+      }
+
       setConnectedPredefinedIds(connectedIds);
     } catch (error) {
       console.error('Failed to load OAuth statuses:', error);
@@ -111,7 +122,12 @@ export default function ConnectorsModal({
 
   function handlePredefinedConnectorClick(connector: PredefinedConnector) {
     setSelectedPredefined(connector);
-    setView('connector-detail');
+    // Use special view for API key based connectors
+    if (connector.authType === 'api_key') {
+      setView('retellai-connect');
+    } else {
+      setView('connector-detail');
+    }
   }
 
   function handleConnectClick() {
@@ -191,6 +207,7 @@ export default function ConnectorsModal({
             {view === 'add' && 'Custom Connector'}
             {view === 'edit' && 'Edit Connector'}
             {view === 'connector-detail' && selectedPredefined?.name}
+            {view === 'retellai-connect' && selectedPredefined?.name}
           </h2>
           <button
             onClick={onClose}
@@ -252,6 +269,18 @@ export default function ConnectorsModal({
                 onCancel={handleCancel}
               />
             </div>
+          )}
+
+          {view === 'retellai-connect' && selectedPredefined && (
+            <RetellAIConnectView
+              connector={selectedPredefined}
+              onBack={handleCancel}
+              onSuccess={() => {
+                handleConnectorSuccess();
+                onClose();
+              }}
+              isConnected={connectedPredefinedIds.includes(selectedPredefined.id)}
+            />
           )}
         </div>
       </div>

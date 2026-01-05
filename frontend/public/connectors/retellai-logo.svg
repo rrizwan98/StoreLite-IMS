@@ -1,0 +1,13 @@
+<svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background circle -->
+  <circle cx="24" cy="24" r="22" fill="#6366F1"/>
+
+  <!-- Phone icon representing voice calls -->
+  <path d="M20 12C18.9 12 18 12.9 18 14V34C18 35.1 18.9 36 20 36H28C29.1 36 30 35.1 30 34V14C30 12.9 29.1 12 28 12H20ZM24 34C22.9 34 22 33.1 22 32C22 30.9 22.9 30 24 30C25.1 30 26 30.9 26 32C26 33.1 25.1 34 24 34ZM28 28H20V16H28V28Z" fill="white"/>
+
+  <!-- Sound waves representing AI voice -->
+  <path d="M32 22C32.5 23.3 32.5 24.7 32 26M34 19C35.3 21.5 35.3 26.5 34 29M36 16C38 20 38 28 36 32" stroke="white" stroke-width="2" stroke-linecap="round"/>
+
+  <!-- Small accent dot -->
+  <circle cx="24" cy="22" r="2" fill="#A5B4FC"/>
+</svg>

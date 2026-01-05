@@ -11,14 +11,14 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, Settings } from 'lucide-react';
-import { SystemToolsList, ConnectorsList } from '@/components/connectors';
+import { SystemToolsList, ConnectorsList, RetellAIConnectView } from '@/components/connectors';
 import ConnectorDetailView from '@/components/connectors/ConnectorDetailView';
 import OAuthConfirmModal from '@/components/connectors/OAuthConfirmModal';
-import { initiateOAuth, connectNotion, connectGoogleDrive, connectGmail } from '@/lib/connectors-api';
+import { initiateOAuth, connectNotion, connectGoogleDrive, connectGmail, getRetellAIStatus } from '@/lib/connectors-api';
 import { PredefinedConnector, PREDEFINED_CONNECTORS } from '@/lib/predefined-connectors';
 import { getFileRetention, updateFileRetention, FileRetentionMode } from '@/lib/user-settings-api';
 
-type View = 'main' | 'connector-detail';
+type View = 'main' | 'connector-detail' | 'retellai-connect';
 
 export default function SettingsPage() {
   const [view, setView] = useState<View>('main');
@@ -68,7 +68,12 @@ export default function SettingsPage() {
 
   function handlePredefinedConnectorClick(connector: PredefinedConnector) {
     setSelectedConnector(connector);
-    setView('connector-detail');
+    // Use special view for API key based connectors like Retell AI
+    if (connector.authType === 'api_key') {
+      setView('retellai-connect');
+    } else {
+      setView('connector-detail');
+    }
   }
 
   function handleBack() {
@@ -277,6 +282,17 @@ export default function SettingsPage() {
               onConnect={handleConnectClick}
               isConnected={isConnectorConnected}
               isConnecting={isConnecting}
+            />
+          </div>
+        ) : view === 'retellai-connect' && selectedConnector ? (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden max-w-2xl mx-auto">
+            <RetellAIConnectView
+              connector={selectedConnector}
+              onBack={handleBack}
+              onSuccess={() => {
+                handleBack();
+              }}
+              isConnected={false}
             />
           </div>
         ) : null}

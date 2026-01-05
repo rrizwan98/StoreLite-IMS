@@ -101,15 +101,38 @@ class BaseConnectorAgent(ABC):
         """
         Get the LLM model for this agent.
 
-        Uses Gemini via LiteLLM if available, otherwise OpenAI.
+        Uses LLM_CONNECTOR_PROVIDER env var to switch between OpenAI and Gemini.
+        - LLM_CONNECTOR_PROVIDER=openai → Uses OPENAI_CONNECTOR_MODEL
+        - LLM_CONNECTOR_PROVIDER=gemini → Uses GEMINI_CONNECTOR_MODEL via LiteLLM
+
+        Falls back to LLM_PROVIDER if LLM_CONNECTOR_PROVIDER is not set.
         """
-        gemini_key = os.getenv("GEMINI_API_KEY")
-        if gemini_key:
-            model = os.getenv("GEMINI_MODEL", "gemini/gemini-2.5-flash")
-            logger.info(f"[{self.CONNECTOR_TYPE}Agent] Using model: {model}")
+        # Check connector-specific provider first, then fall back to general LLM_PROVIDER
+        provider = os.getenv("LLM_CONNECTOR_PROVIDER", "").lower()
+        if not provider:
+            provider = os.getenv("LLM_PROVIDER", "openai").lower()
+
+        if provider == "gemini":
+            # Use Gemini via LiteLLM
+            gemini_key = os.getenv("GEMINI_API_KEY")
+            if not gemini_key:
+                logger.warning(
+                    f"[{self.CONNECTOR_TYPE}Agent] LLM_CONNECTOR_PROVIDER=gemini but "
+                    "GEMINI_API_KEY not set. Falling back to OpenAI."
+                )
+                model = os.getenv("OPENAI_CONNECTOR_MODEL", os.getenv("OPENAI_MODEL", "gpt-4o-mini"))
+                logger.info(f"[{self.CONNECTOR_TYPE}Agent] Using OpenAI model: {model}")
+                return model
+
+            model = os.getenv(
+                "GEMINI_CONNECTOR_MODEL",
+                os.getenv("GEMINI_MODEL", "gemini/gemini-2.5-flash")
+            )
+            logger.info(f"[{self.CONNECTOR_TYPE}Agent] Using Gemini model: {model}")
             return LitellmModel(model=model, api_key=gemini_key)
         else:
-            model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+            # Use OpenAI (default)
+            model = os.getenv("OPENAI_CONNECTOR_MODEL", os.getenv("OPENAI_MODEL", "gpt-4o-mini"))
             logger.info(f"[{self.CONNECTOR_TYPE}Agent] Using OpenAI model: {model}")
             return model
 

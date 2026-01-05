@@ -17,6 +17,7 @@ from .base import BaseConnectorAgent
 from .notion_agent import NotionConnectorAgent
 from .gdrive_agent import GoogleDriveConnectorAgent
 from .gmail_agent import GmailConnectorAgent
+from .retellai_agent import RetellAIConnectorAgent
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +36,9 @@ class ConnectorAgentRegistry:
         "google_drive": GoogleDriveConnectorAgent,
         "gdrive": GoogleDriveConnectorAgent,  # Alias
         "gmail": GmailConnectorAgent,
+        "retellai": RetellAIConnectorAgent,
+        "retell_ai": RetellAIConnectorAgent,  # Alias
+        "retell": RetellAIConnectorAgent,  # Alias
         # Future connectors:
         # "slack": SlackConnectorAgent,
         # "airtable": AirtableConnectorAgent,
@@ -48,6 +52,8 @@ class ConnectorAgentRegistry:
         "google_drive": "google_drive",
         "gmail": "gmail",
         "mail": "gmail",
+        "retellai": "retellai",
+        "retell": "retellai",
         "slack": "slack",
         "airtable": "airtable",
     }

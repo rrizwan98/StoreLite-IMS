@@ -602,8 +602,59 @@ async def health_check_connector(
         auth_config = decrypt_credentials(connector.auth_config)
         logger.info(f"[Health Check] Decrypted auth config for {connector.name}, keys: {list(auth_config.keys())}")
 
-    # Special handling for sub-agent connectors (Gmail, GDrive) that use direct API calls
+    # Special handling for sub-agent connectors (Gmail, GDrive, Retell AI) that use direct API calls
     # These don't have real MCP servers - they use custom protocol URLs as markers
+    if connector.server_url == "retellai://mcp":
+        # For Retell AI, check if we have a valid API key by testing MCP server
+        api_key = auth_config.get("api_key")
+        logger.info(f"[Health Check] Retell AI - has api_key: {bool(api_key)}")
+
+        if api_key:
+            # Import the validation function from retellai_mcp router
+            try:
+                from app.routers.retellai_mcp import validate_retell_api_key
+                validation_result = await validate_retell_api_key(api_key)
+
+                if validation_result["success"]:
+                    tool_count = len(validation_result.get("tools", []))
+                    logger.info(f"Connector {connector_id} health check: HEALTHY (Retell AI OK)")
+                    return {
+                        "is_healthy": True,
+                        "connector_id": connector.id,
+                        "connector_name": connector.name,
+                        "tool_count": tool_count,
+                        "message": f"Retell AI connected with {tool_count} tools"
+                    }
+                else:
+                    logger.warning(f"Retell AI health check failed: {validation_result.get('error_message')}")
+                    return {
+                        "is_healthy": False,
+                        "connector_id": connector.id,
+                        "connector_name": connector.name,
+                        "error_code": validation_result.get("error_code", "api_key_invalid"),
+                        "error_message": validation_result.get("error_message", "API key validation failed"),
+                        "message": "Retell AI API key may be invalid or expired"
+                    }
+            except Exception as e:
+                logger.error(f"Health check error for Retell AI: {e}")
+                return {
+                    "is_healthy": False,
+                    "connector_id": connector.id,
+                    "connector_name": connector.name,
+                    "error_code": "check_failed",
+                    "error_message": str(e),
+                    "message": f"Health check failed: {str(e)}"
+                }
+        else:
+            return {
+                "is_healthy": False,
+                "connector_id": connector.id,
+                "connector_name": connector.name,
+                "error_code": "no_api_key",
+                "error_message": "No API key found. Please reconnect.",
+                "message": "No API key found"
+            }
+
     if connector.server_url in ("gmail://mcp", "gdrive://mcp"):
         # For these connectors, check if we have a valid access token
         access_token = auth_config.get("access_token")
