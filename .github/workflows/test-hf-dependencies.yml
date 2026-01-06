@@ -1,0 +1,319 @@
+name: Test HF Dependencies
+
+on:
+  push:
+    branches: [test/*, fix/*]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/test-hf-dependencies.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'backend/**'
+  workflow_dispatch:
+
+jobs:
+  test-dependencies:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential \
+            libpq-dev \
+            curl \
+            git
+
+      - name: Install Python dependencies (same as Dockerfile)
+        run: |
+          pip install --no-cache-dir \
+            fastapi>=0.104.0 \
+            uvicorn[standard]>=0.24.0 \
+            httpx>=0.24.0 \
+            sqlalchemy>=2.0.0 \
+            asyncpg>=0.29.0 \
+            psycopg2-binary>=2.9.0 \
+            aiosqlite>=0.19.0 \
+            python-dotenv>=1.0.0 \
+            pydantic>=2.0.0 \
+            pydantic-settings>=2.0.0 \
+            openai>=1.3.0 \
+            openai-agents>=0.6.2 \
+            litellm>=1.76.1 \
+            fastmcp>=1.0 \
+            postgres-mcp \
+            openai-chatkit \
+            python-jose[cryptography]>=3.3.0 \
+            passlib[bcrypt]>=1.7.4 \
+            python-multipart>=0.0.6 \
+            google-auth>=2.25.0 \
+            google-auth-oauthlib>=1.2.0 \
+            google-api-python-client>=2.111.0 \
+            google-genai>=1.0.0 \
+            cryptography>=41.0.0 \
+            python-json-logger>=2.0.7 \
+            typing-extensions>=4.0.0 \
+            markdown2>=2.4.0 \
+            aiofiles>=23.0.0 \
+            pandas>=2.0.0 \
+            openpyxl>=3.1.0 \
+            pdfplumber>=0.10.0 \
+            Pillow>=10.0.0
+
+      - name: Show installed packages
+        run: pip list
+
+      - name: Test all imports
+        working-directory: backend
+        run: |
+          python -c "
+          import sys
+          errors = []
+
+          # Test standard library
+          print('Testing standard library imports...')
+          import os, logging, json, asyncio, uuid, re, base64, io
+          from typing import Optional, Dict, Any, List
+          from datetime import datetime, timedelta
+          from pathlib import Path
+          from decimal import Decimal
+          from email.message import EmailMessage
+          from contextlib import asynccontextmanager
+          from urllib.parse import urlparse, parse_qs
+          print('  Standard library: OK')
+
+          # Test FastAPI/Web
+          print('Testing FastAPI/Web imports...')
+          try:
+              from fastapi import FastAPI, Request, APIRouter, Depends, HTTPException, BackgroundTasks
+              from fastapi.responses import JSONResponse, StreamingResponse, HTMLResponse
+              from fastapi.middleware.cors import CORSMiddleware
+              from starlette.responses import StreamingResponse as StarletteStreamingResponse
+              import uvicorn
+              print('  FastAPI/Web: OK')
+          except ImportError as e:
+              errors.append(f'FastAPI/Web: {e}')
+              print(f'  FastAPI/Web: FAILED - {e}')
+
+          # Test Database
+          print('Testing Database imports...')
+          try:
+              from sqlalchemy import create_engine, Column, Integer, String, select, delete, event, JSON
+              from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
+              from sqlalchemy.orm import declarative_base, relationship, sessionmaker
+              from sqlalchemy.dialects.postgresql import JSONB
+              from sqlalchemy.types import TypeDecorator
+              from sqlalchemy.sql import func
+              import asyncpg
+              import aiosqlite
+              print('  Database: OK')
+          except ImportError as e:
+              errors.append(f'Database: {e}')
+              print(f'  Database: FAILED - {e}')
+
+          # Test Pydantic
+          print('Testing Pydantic imports...')
+          try:
+              from pydantic import BaseModel, Field, ConfigDict, create_model, field_validator, field_serializer, HttpUrl
+              from pydantic_settings import BaseSettings
+              print('  Pydantic: OK')
+          except ImportError as e:
+              errors.append(f'Pydantic: {e}')
+              print(f'  Pydantic: FAILED - {e}')
+
+          # Test OpenAI Agents SDK
+          print('Testing OpenAI Agents SDK imports...')
+          try:
+              from agents import Agent, Runner, function_tool, ItemHelpers
+              from agents.extensions.models.litellm_model import LitellmModel
+              from agents.exceptions import ModelBehaviorError, MaxTurnsExceeded
+              from agents.run import RunConfig
+              from agents.mcp import MCPServerStdio, MCPServerSse
+              from agents.model_settings import ModelSettings
+              from agents.tool import FunctionTool
+              print('  OpenAI Agents SDK: OK')
+          except ImportError as e:
+              errors.append(f'OpenAI Agents SDK: {e}')
+              print(f'  OpenAI Agents SDK: FAILED - {e}')
+
+          # Test LiteLLM
+          print('Testing LiteLLM imports...')
+          try:
+              import litellm
+              from litellm.exceptions import APIError, RateLimitError
+              print('  LiteLLM: OK')
+          except ImportError as e:
+              errors.append(f'LiteLLM: {e}')
+              print(f'  LiteLLM: FAILED - {e}')
+
+          # Test FastMCP
+          print('Testing FastMCP imports...')
+          try:
+              from fastmcp import FastMCP
+              print('  FastMCP: OK')
+          except ImportError as e:
+              errors.append(f'FastMCP: {e}')
+              print(f'  FastMCP: FAILED - {e}')
+
+          # Test ChatKit
+          print('Testing ChatKit imports...')
+          try:
+              from chatkit.server import ChatServer
+              from chatkit.types import Ui, Turn, TextPart
+              print('  ChatKit: OK')
+          except ImportError as e:
+              errors.append(f'ChatKit: {e}')
+              print(f'  ChatKit: FAILED - {e}')
+
+          # Test Google APIs
+          print('Testing Google APIs imports...')
+          try:
+              from google.oauth2.credentials import Credentials
+              from google_auth_oauthlib.flow import InstalledAppFlow, Flow
+              from google.auth.transport.requests import Request as GoogleRequest
+              from googleapiclient.discovery import build
+              from googleapiclient.errors import HttpError
+              print('  Google APIs: OK')
+          except ImportError as e:
+              errors.append(f'Google APIs: {e}')
+              print(f'  Google APIs: FAILED - {e}')
+
+          # Test File Processing
+          print('Testing File Processing imports...')
+          try:
+              import pandas as pd
+              import pdfplumber
+              from PIL import Image
+              import openpyxl
+              print('  File Processing: OK')
+          except ImportError as e:
+              errors.append(f'File Processing: {e}')
+              print(f'  File Processing: FAILED - {e}')
+
+          # Test Auth/Security
+          print('Testing Auth/Security imports...')
+          try:
+              from jose import jwt, JWTError
+              from passlib.context import CryptContext
+              from cryptography.fernet import Fernet
+              print('  Auth/Security: OK')
+          except ImportError as e:
+              errors.append(f'Auth/Security: {e}')
+              print(f'  Auth/Security: FAILED - {e}')
+
+          # Test HTTP
+          print('Testing HTTP imports...')
+          try:
+              import httpx
+              print('  HTTP: OK')
+          except ImportError as e:
+              errors.append(f'HTTP: {e}')
+              print(f'  HTTP: FAILED - {e}')
+
+          # Test Other utilities
+          print('Testing Other utilities imports...')
+          try:
+              from dotenv import load_dotenv
+              import markdown2
+              import aiofiles
+              from python_json_logger import jsonlogger
+              print('  Other utilities: OK')
+          except ImportError as e:
+              errors.append(f'Other utilities: {e}')
+              print(f'  Other utilities: FAILED - {e}')
+
+          # Summary
+          print()
+          print('='*50)
+          if errors:
+              print(f'FAILED: {len(errors)} import group(s) failed')
+              for err in errors:
+                  print(f'  - {err}')
+              sys.exit(1)
+          else:
+              print('SUCCESS: All imports passed!')
+              sys.exit(0)
+          "
+
+      - name: Test app imports (main_hf.py)
+        working-directory: backend
+        run: |
+          python -c "
+          import sys
+          sys.path.insert(0, '.')
+
+          print('Testing app module imports...')
+
+          # Test main_hf imports
+          try:
+              from app.database import Base
+              print('  app.database: OK')
+          except ImportError as e:
+              print(f'  app.database: FAILED - {e}')
+              sys.exit(1)
+
+          try:
+              from app.models import User
+              print('  app.models: OK')
+          except ImportError as e:
+              print(f'  app.models: FAILED - {e}')
+              sys.exit(1)
+
+          try:
+              from app.schemas import UserCreate
+              print('  app.schemas: OK')
+          except ImportError as e:
+              print(f'  app.schemas: FAILED - {e}')
+              sys.exit(1)
+
+          try:
+              from app.agents import OpenAIAgent, SessionManager
+              print('  app.agents: OK')
+          except ImportError as e:
+              print(f'  app.agents: FAILED - {e}')
+              sys.exit(1)
+
+          try:
+              from app.services.mcp_server_manager import MCPServerManager
+              print('  app.services.mcp_server_manager: OK')
+          except ImportError as e:
+              print(f'  app.services.mcp_server_manager: FAILED - {e}')
+              sys.exit(1)
+
+          print()
+          print('SUCCESS: All app imports passed!')
+          "
+
+      - name: Test FastAPI app loads
+        working-directory: backend
+        run: |
+          python -c "
+          import sys
+          sys.path.insert(0, '.')
+
+          print('Testing FastAPI app initialization...')
+
+          try:
+              # This will import the app but not start the server
+              from app.main_hf import app
+              print(f'  App title: {app.title}')
+              print(f'  App version: {app.version}')
+              print(f'  Routes: {len(app.routes)} routes loaded')
+              print()
+              print('SUCCESS: FastAPI app loaded successfully!')
+          except Exception as e:
+              print(f'FAILED: Could not load app - {e}')
+              import traceback
+              traceback.print_exc()
+              sys.exit(1)
+          "
