@@ -1,14 +1,15 @@
 """
 Hugging Face Spaces Entry Point - Schema Agent API
 
-This is a simplified entry point for Hugging Face Spaces deployment.
-Includes only Schema Agent and related connectors (no auth required).
+This is the production entry point for Hugging Face Spaces deployment.
+Includes Schema Agent, Authentication, and all connectors.
 
 Features:
+- User Authentication (signup, login, logout)
 - Schema Query Agent with all 7 tools
-- OAuth Connectors (Notion, Gmail, GDrive)
+- OAuth Connectors (Notion, Gmail, GDrive, RetellAI)
 - File Upload & Analysis
-- Public API (no authentication)
+- Full API with JWT authentication
 """
 
 import logging
@@ -28,17 +29,19 @@ logger = logging.getLogger(__name__)
 app = FastAPI(
     title="Schema Query Agent API",
     description="""
-    AI-powered natural language database query agent.
+    AI-powered natural language database query agent with full authentication.
 
     **Features:**
+    - User authentication (signup, login, JWT tokens)
     - Natural language to SQL conversion
     - 7 integrated tools: WebSearch, FileSearch, Analytics, Gmail, GDrive, Notion, RetellAI
     - File upload and analysis (PDF, Excel, CSV, Images)
     - OAuth connectors for external services
 
     **Usage:**
-    1. Connect your database via `/schema-agent/connect`
-    2. Query using natural language via `/schema-agent/chatkit`
+    1. Sign up/Login via `/auth/signup` or `/auth/login`
+    2. Connect your database via `/schema-agent/connect`
+    3. Query using natural language via `/schema-agent/chatkit`
 
     Deployed on Hugging Face Spaces.
     """,
@@ -149,6 +152,10 @@ async def root():
 
 
 # ============ Include Routers ============
+
+# Authentication (Required for login/signup)
+from app.routers import auth
+app.include_router(auth.router)
 
 # Schema Query Agent (Main feature)
 from app.routers import schema_agent
