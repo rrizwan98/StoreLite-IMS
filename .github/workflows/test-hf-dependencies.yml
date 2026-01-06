@@ -61,7 +61,6 @@ jobs:
             google-api-python-client>=2.111.0 \
             google-genai>=1.0.0 \
             cryptography>=41.0.0 \
-            python-json-logger>=2.0.7 \
             typing-extensions>=4.0.0 \
             markdown2>=2.4.0 \
             aiofiles>=23.0.0 \
@@ -165,11 +164,14 @@ jobs:
               errors.append(f'FastMCP: {e}')
               print(f'  FastMCP: FAILED - {e}')
 
-          # Test ChatKit
+          # Test ChatKit (openai-chatkit)
           print('Testing ChatKit imports...')
           try:
-              from chatkit.server import ChatServer
-              from chatkit.types import Ui, Turn, TextPart
+              from chatkit.server import ChatKitServer, Store, Thread, ThreadMetadata, ThreadItem
+              from chatkit.types import AssistantMessageItem, AssistantMessageContent, Annotation
+              from chatkit.store import AttachmentStore
+              from chatkit.agents import ThreadItemConverter
+              from chatkit.widgets import Chart, Card, Box, Text
               print('  ChatKit: OK')
           except ImportError as e:
               errors.append(f'ChatKit: {e}')
@@ -226,7 +228,6 @@ jobs:
               from dotenv import load_dotenv
               import markdown2
               import aiofiles
-              from python_json_logger import jsonlogger
               print('  Other utilities: OK')
           except ImportError as e:
               errors.append(f'Other utilities: {e}')
