@@ -271,7 +271,7 @@ jobs:
               sys.exit(1)
 
           try:
-              from app.schemas import UserCreate
+              from app.schemas import ItemCreate, BillCreate, AgentMessageRequest
               print('  app.schemas: OK')
           except ImportError as e:
               print(f'  app.schemas: FAILED - {e}')
