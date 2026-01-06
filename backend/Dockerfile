@@ -56,7 +56,6 @@ RUN pip install --no-cache-dir \
     google-genai>=1.0.0 \
     # Utils
     cryptography>=41.0.0 \
-    python-json-logger>=2.0.7 \
     typing-extensions>=4.0.0 \
     markdown2>=2.4.0 \
     aiofiles>=23.0.0 \
