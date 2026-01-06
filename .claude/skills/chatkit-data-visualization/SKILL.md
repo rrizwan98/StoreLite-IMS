@@ -606,6 +606,117 @@ Add buttons above/below ChatKit that trigger specific queries:
 5. **Not handling empty data** - Return empty arrays, not null
 6. **Hardcoded domains** - Make patterns configurable for any domain
 7. **Blocking main response** - Visualization fetch should be async/non-blocking
+8. **Non-persistent tool buttons** - Always use `persistent: true` and `pinned: true` for tool/connector buttons
+
+---
+
+## Persistent Tool/Connector Selection (Pinned Buttons)
+
+When adding visualization tools or data source buttons to ChatKit's composer, use `persistent: true` and `pinned: true` to keep selections active across multiple messages.
+
+### Why This Matters for Visualization
+
+Without persistence:
+- User selects "Analytics" tool
+- Asks "Show me sales data"
+- Tool deselects after response
+- User must re-select to ask "Now break it down by month"
+
+With persistence:
+- User selects "Analytics" tool
+- Asks multiple follow-up questions
+- Tool stays selected for continuous data exploration
+- Much better UX for data analysis workflows
+
+### Implementation
+
+```typescript
+// When building visualization tool buttons
+const composerButtons = [];
+
+// Add visualization/analytics tools with persistence
+visualizationTools.forEach((tool) => {
+  composerButtons.push({
+    id: `viz-${tool.id}`,
+    label: tool.name,
+    shortLabel: tool.name,
+    icon: tool.icon || 'chart',
+    placeholderOverride: `What data would you like to visualize with ${tool.name}?`,
+    // CRITICAL: Keep selected tool active across multiple messages
+    // This enables continuous data exploration without re-selecting
+    persistent: true,
+    // CRITICAL: Make selection state visible in composer UI
+    pinned: true,
+  });
+});
+
+// Add data source connectors with persistence
+dataConnectors.forEach((connector) => {
+  composerButtons.push({
+    id: `data-${connector.id}`,
+    label: connector.name,
+    shortLabel: connector.name,
+    icon: connector.icon || 'analytics',
+    placeholderOverride: `Query data from ${connector.name}`,
+    // CRITICAL: Keep selected connector active
+    persistent: true,
+    // CRITICAL: Show active state in UI
+    pinned: true,
+  });
+});
+
+chatkit.setOptions({
+  composer: {
+    buttons: composerButtons,
+  },
+});
+```
+
+### Key Properties
+
+| Property | Value | Effect |
+|----------|-------|--------|
+| `persistent` | `true` | Selection stays active after message until user deselects |
+| `pinned` | `true` | Shows selection state visually in composer UI |
+
+### Do NOT Auto-Reset After Use
+
+```typescript
+// BAD - Don't reset selection after each query
+api: {
+  fetch: async (url, options) => {
+    const response = await fetch(url, options);
+
+    // DON'T DO THIS - breaks continuous data exploration:
+    selectedToolId = null;
+    selectedDataSource = null;
+
+    return response;
+  }
+}
+
+// GOOD - Let persistence work naturally
+api: {
+  fetch: async (url, options) => {
+    const response = await fetch(url, options);
+
+    // Selection persists via ChatKit's built-in mechanism
+    // User can continue asking follow-up questions
+    // User deselects manually when switching context
+
+    return response;
+  }
+}
+```
+
+### Behavior Comparison
+
+| Scenario | Without Persistence | With Persistence |
+|----------|---------------------|------------------|
+| "Show sales data" | Tool deselects | Tool stays selected |
+| "Break down by month" | Must re-select Analytics | Continues with Analytics |
+| "Compare to last year" | Must re-select again | Still selected |
+| Data exploration flow | Interrupted, frustrating | Smooth, natural |
 
 ---
 

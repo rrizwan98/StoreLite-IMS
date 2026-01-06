@@ -131,7 +131,11 @@ export default function SchemaAgentPage() {
         shortLabel: tool.name,
         icon: systemIconToChatKit[tool.icon] || 'sparkle',
         placeholderOverride: `What would you like to do with ${tool.name}?`,
-        persistent: false,
+        // Keep selected tool active across multiple messages until the user deselects it.
+        // This uses ChatKit's built-in persistence (no custom UI/state).
+        persistent: true,
+        // Make selection state visible in the composer UI (ChatKit-native pinned buttons).
+        pinned: true,
       });
     });
 
@@ -147,7 +151,10 @@ export default function SchemaAgentPage() {
         placeholderOverride: toolCount > 0
           ? `Ask anything - ${toolCount} tools available from ${connector.name}`
           : `What would you like to do with ${connector.name}?`,
-        persistent: false,
+        // Keep selected connector active across multiple messages until the user deselects it.
+        persistent: true,
+        // Make selection state visible in the composer UI (ChatKit-native pinned buttons).
+        pinned: true,
       });
     });
 
@@ -315,10 +322,6 @@ export default function SchemaAgentPage() {
                     }
 
                     options.body = JSON.stringify(body);
-
-                    // Reset after use
-                    selectedToolId = null;
-                    selectedConnectorInfo = null;
                   } catch (parseError) {
                     console.error('[ChatKit] Parse error:', parseError);
                   }

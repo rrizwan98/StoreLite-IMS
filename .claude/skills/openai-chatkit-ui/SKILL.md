@@ -463,3 +463,104 @@ https://cdn.platform.openai.com/deployments/chatkit/chatkit.js
 5. **Not collapsing workflow** - Set `expanded=False` after completion
 6. **Missing SSE headers** - Include Cache-Control, Connection, X-Accel-Buffering
 7. **Hardcoded session IDs** - Use sessionStorage for tab-lifetime persistence
+
+---
+
+## Persistent Tool/Connector Selection (Pinned Buttons)
+
+When adding custom tool or connector selection buttons to ChatKit's composer, use `persistent: true` and `pinned: true` to keep selections active across multiple messages.
+
+### Problem (Without Persistence)
+- User selects a tool (e.g., "Analytics")
+- Sends a message
+- Tool auto-deselects after message is sent
+- User must re-select the tool for next message
+
+### Solution (With Persistence)
+
+```typescript
+// When building composer buttons for tools/connectors
+const composerButtons = [];
+
+// Add tool buttons with persistence
+tools.forEach((tool) => {
+  composerButtons.push({
+    id: `tool-${tool.id}`,
+    label: tool.name,
+    shortLabel: tool.name,
+    icon: tool.icon || 'sparkle',
+    placeholderOverride: `What would you like to do with ${tool.name}?`,
+    // CRITICAL: Keep selected tool active across multiple messages
+    persistent: true,
+    // CRITICAL: Make selection state visible in composer UI (native pinned button)
+    pinned: true,
+  });
+});
+
+// Add connector buttons with persistence
+connectors.forEach((connector) => {
+  composerButtons.push({
+    id: `connector-${connector.id}`,
+    label: connector.name,
+    shortLabel: connector.name,
+    icon: connector.icon || 'plug',
+    placeholderOverride: `Ask anything using ${connector.name}`,
+    // CRITICAL: Keep selected connector active across multiple messages
+    persistent: true,
+    // CRITICAL: Make selection state visible in composer UI
+    pinned: true,
+  });
+});
+
+// Configure ChatKit with persistent buttons
+chatkit.setOptions({
+  composer: {
+    buttons: composerButtons,
+  },
+});
+```
+
+### Key Properties
+
+| Property | Value | Effect |
+|----------|-------|--------|
+| `persistent` | `true` | Selection stays active after message is sent until user deselects |
+| `pinned` | `true` | Shows selection state visually in composer UI (ChatKit-native) |
+
+### Do NOT Reset Selection After Use
+
+```typescript
+// BAD - Don't auto-reset after sending message
+api: {
+  fetch: async (url, options) => {
+    // ... handle request ...
+
+    // DON'T DO THIS:
+    selectedToolId = null;
+    selectedConnectorInfo = null;
+
+    return response;
+  }
+}
+
+// GOOD - Let ChatKit handle persistence naturally
+api: {
+  fetch: async (url, options) => {
+    // ... handle request ...
+
+    // Selection persists automatically via ChatKit's built-in persistence
+    // User can deselect manually when they want to switch
+
+    return response;
+  }
+}
+```
+
+### Behavior Summary
+
+| Feature | Without `persistent: true` | With `persistent: true` |
+|---------|---------------------------|------------------------|
+| After sending message | Tool/connector deselects | Stays selected |
+| Multiple questions to same tool | Re-select each time | Continuous conversation |
+| User experience | Frustrating, repetitive | Smooth, natural flow |
+| Visible state | May be unclear | Pinned button shows active state |

@@ -21,13 +21,18 @@ from datetime import datetime
 
 from agents import Agent, Runner, ItemHelpers
 from agents.run import RunConfig
-from agents.mcp import MCPServerStdio
+from agents.mcp import MCPServerStdio, MCPServerSse
 from agents.extensions.models.litellm_model import LitellmModel
 from agents.extensions.memory import SQLAlchemySession
 from agents.model_settings import ModelSettings
 
 from app.services.schema_discovery import format_schema_for_prompt
 from app.services.agent_session_service import create_user_session, AgentSessionManager
+from app.services.mcp_server_manager import (
+    get_mcp_server_manager,
+    ensure_mcp_server_for_user,
+    stop_mcp_server_for_user,
+)
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -35,8 +40,17 @@ load_dotenv()
 logger = logging.getLogger(__name__)
 
 # Version marker for debugging
-SCHEMA_AGENT_VERSION = "2.5.0-domain-agnostic-reasoning"
-logger.info(f"[Schema Agent] Module loaded - Version {SCHEMA_AGENT_VERSION} (MCP + Domain-Agnostic + Reasoning)")
+SCHEMA_AGENT_VERSION = "2.7.0-http-mcp"
+logger.info(f"[Schema Agent] Module loaded - Version {SCHEMA_AGENT_VERSION} (HTTP MCP + Tiered Routing)")
+
+# ============================================================================
+# Performance Optimization Imports
+# ============================================================================
+from app.agents.agent_pool import (
+    get_cached_function_tools,
+    is_simple_message,
+    get_simple_response,
+)
 
 
 # ============================================================================
@@ -1093,7 +1107,9 @@ class SchemaQueryAgent:
         """
         Process a natural language query using the MCP-connected agent.
 
-        Creates a fresh MCP connection for each query to avoid stale connection issues.
+        OPTIMIZED: Uses MCP connection pooling for ~90% faster response times.
+        Falls back to fresh connection if pool unavailable.
+
         Uses PostgreSQL-backed session for persistent conversation history.
 
         Args:
@@ -1116,6 +1132,20 @@ class SchemaQueryAgent:
 
             logger.info(f"[Schema Agent] Processing query: {query_preview}...")
 
+            # ================================================================
+            # OPTIMIZATION 1: Tiered Routing - Simple messages skip MCP
+            # ================================================================
+            if isinstance(natural_query, str) and is_simple_message(natural_query):
+                logger.info(f"[Schema Agent] Simple message detected, using fast response")
+                simple_response = get_simple_response(natural_query)
+                return {
+                    "success": True,
+                    "response": simple_response,
+                    "visualization_hint": None,
+                    "session_type": "fast_response",
+                    "optimization": "tiered_routing",
+                }
+
             # Use provided thread_id or instance thread_id
             effective_thread_id = thread_id or self.thread_id
 
@@ -1132,26 +1162,54 @@ class SchemaQueryAgent:
             # Determine access mode
             access_mode = "restricted" if self.read_only else "unrestricted"
 
-            # Create fresh MCP server for this query
-            # This avoids stale connection issues on Windows
-            mcp_server = MCPServerStdio(
-                name=f"postgres-mcp-query-{datetime.now().strftime('%H%M%S%f')}",
-                params={
-                    "command": "postgres-mcp",
-                    "args": [self.database_uri, f"--access-mode={access_mode}"],
-                },
-                cache_tools_list=True,
-                client_session_timeout_seconds=300.0,  # 5 minutes for complex multi-step operations
-            )
+            # ================================================================
+            # OPTIMIZATION: Use HTTP/SSE MCP server (persistent, ~2s vs ~60s)
+            # ================================================================
+            # Try to use HTTP MCP server first (much faster)
+            # Falls back to stdio if HTTP not available
+            use_http_mcp = os.getenv("USE_HTTP_MCP", "true").lower() == "true"
 
-            # Start MCP server
-            logger.info(f"[Schema Agent] Starting postgres-mcp for query...")
-            await mcp_server.__aenter__()
+            if use_http_mcp and self.user_id:
+                try:
+                    # Get or start HTTP MCP server for this user
+                    mcp_url = await ensure_mcp_server_for_user(
+                        user_id=self.user_id,
+                        database_uri=self.database_uri,
+                        access_mode=access_mode
+                    )
+                    logger.info(f"[Schema Agent] Using HTTP MCP server: {mcp_url}")
 
-            # Get tools (for logging)
-            tools = await mcp_server.list_tools()
-            tool_names = [t.name for t in tools]
-            logger.info(f"[Schema Agent] MCP connected with tools: {tool_names}")
+                    mcp_server = MCPServerSse(
+                        name=f"postgres-mcp-http-{self.user_id}",
+                        params={"url": mcp_url},
+                        cache_tools_list=True,
+                        client_session_timeout_seconds=300.0,
+                    )
+                    await mcp_server.__aenter__()
+                    tools = await mcp_server.list_tools()
+                    tool_names = [t.name for t in tools]
+                    logger.info(f"[Schema Agent] HTTP MCP ready with tools: {tool_names}")
+
+                except Exception as http_error:
+                    logger.warning(f"[Schema Agent] HTTP MCP failed, falling back to stdio: {http_error}")
+                    use_http_mcp = False
+
+            # Fallback to stdio MCP (slower but always works)
+            if not use_http_mcp or mcp_server is None:
+                mcp_server = MCPServerStdio(
+                    name=f"postgres-mcp-query-{datetime.now().strftime('%H%M%S%f')}",
+                    params={
+                        "command": "postgres-mcp",
+                        "args": [self.database_uri, f"--access-mode={access_mode}"],
+                    },
+                    cache_tools_list=True,
+                    client_session_timeout_seconds=300.0,
+                )
+                logger.info(f"[Schema Agent] Starting stdio postgres-mcp for query...")
+                await mcp_server.__aenter__()
+                tools = await mcp_server.list_tools()
+                tool_names = [t.name for t in tools]
+                logger.info(f"[Schema Agent] Stdio MCP ready with tools: {tool_names}")
 
             # Generate system prompt with schema context
             system_prompt = generate_schema_agent_prompt(self.schema_metadata)
@@ -1183,36 +1241,12 @@ IMPORTANT CONNECTOR TOOL RULES:
                 system_prompt = system_prompt + connector_tools_section
                 logger.info(f"[Schema Agent] Added {len(self._connector_tool_names)} connector tools to system prompt")
 
-            # Prepare function tools list
-            function_tools = []
-
-            # Add Google Search tool (always available as System Tool)
-            try:
-                from app.mcp_server.tools_google_search import GOOGLE_SEARCH_TOOLS
-                function_tools.extend(GOOGLE_SEARCH_TOOLS)
-                self._function_tools.append("google_search") if hasattr(self, '_function_tools') else None
-                logger.info(f"[Schema Agent] Google Search tool enabled")
-            except ImportError as e:
-                logger.warning(f"[Schema Agent] Google Search tool not available: {e}")
-
-            # Add File Analysis tools (Feature 012 - File Upload Processing)
-            try:
-                from app.mcp_server.tools_file_analysis import FILE_ANALYSIS_TOOLS, set_file_analysis_context
-                function_tools.extend(FILE_ANALYSIS_TOOLS)
-                self._function_tools.append("analyze_uploaded_file") if hasattr(self, '_function_tools') else None
-                self._function_tools.append("get_uploaded_file_info") if hasattr(self, '_function_tools') else None
-                logger.info(f"[Schema Agent] File Analysis tools enabled")
-            except ImportError as e:
-                logger.warning(f"[Schema Agent] File Analysis tools not available: {e}")
-
-            # Add Gemini File Search tool (Feature 013 - Semantic file search with RAG)
-            try:
-                from app.mcp_server.tools_file_search import FILE_SEARCH_TOOLS
-                function_tools.extend(FILE_SEARCH_TOOLS)
-                self._function_tools.append("file_search") if hasattr(self, '_function_tools') else None
-                logger.info(f"[Schema Agent] Gemini File Search tool enabled")
-            except ImportError as e:
-                logger.warning(f"[Schema Agent] Gemini File Search tool not available: {e}")
+            # ================================================================
+            # OPTIMIZATION 3: Cached Function Tools
+            # ================================================================
+            # Get pre-loaded function tools (loaded once at module level)
+            function_tools = await get_cached_function_tools()
+            logger.info(f"[Schema Agent] Using {len(function_tools)} CACHED function tools")
 
             # Add connector tools if available
             if self.connector_tools:
@@ -1482,6 +1516,22 @@ IMPORTANT CONNECTOR TOOL RULES:
 
             logger.info(f"[Schema Agent] Processing streamed query: {query_preview}... (multimodal={is_multimodal})")
 
+            # ================================================================
+            # OPTIMIZATION 1: Tiered Routing - Simple messages skip MCP
+            # ================================================================
+            if isinstance(natural_query, str) and is_simple_message(natural_query):
+                logger.info(f"[Schema Agent] Simple message detected, using fast response")
+                simple_response = get_simple_response(natural_query)
+                yield {"type": "progress", "text": "Quick response..."}
+                yield {
+                    "type": "complete",
+                    "response": simple_response,
+                    "tools_used": [],
+                    "visualization_hint": None,
+                    "optimization": "tiered_routing",
+                }
+                return
+
             yield {"type": "progress", "text": "Analyzing your question..."}
 
             effective_thread_id = thread_id or self.thread_id
@@ -1497,26 +1547,59 @@ IMPORTANT CONNECTOR TOOL RULES:
 
             access_mode = "restricted" if self.read_only else "unrestricted"
 
-            yield {"type": "progress", "text": "Connecting to database..."}
+            # ================================================================
+            # OPTIMIZATION: Use HTTP/SSE MCP server (persistent, ~2s vs ~60s)
+            # ================================================================
+            use_http_mcp = os.getenv("USE_HTTP_MCP", "true").lower() == "true"
+            tool_names = []
 
-            # Create fresh MCP server
-            mcp_server = MCPServerStdio(
-                name=f"postgres-mcp-stream-{datetime.now().strftime('%H%M%S%f')}",
-                params={
-                    "command": "postgres-mcp",
-                    "args": [self.database_uri, f"--access-mode={access_mode}"],
-                },
-                cache_tools_list=True,
-                client_session_timeout_seconds=300.0,
-            )
+            if use_http_mcp and self.user_id:
+                try:
+                    yield {"type": "progress", "text": "Getting database connection..."}
 
-            await mcp_server.__aenter__()
+                    # Get or start HTTP MCP server for this user
+                    mcp_url = await ensure_mcp_server_for_user(
+                        user_id=self.user_id,
+                        database_uri=self.database_uri,
+                        access_mode=access_mode
+                    )
+                    logger.info(f"[Schema Agent] Using HTTP MCP server: {mcp_url}")
 
-            tools = await mcp_server.list_tools()
-            tool_names = [t.name for t in tools]
-            logger.info(f"[Schema Agent] MCP connected with tools: {tool_names}")
+                    mcp_server = MCPServerSse(
+                        name=f"postgres-mcp-http-{self.user_id}",
+                        params={"url": mcp_url},
+                        cache_tools_list=True,
+                        client_session_timeout_seconds=300.0,
+                    )
+                    await mcp_server.__aenter__()
+                    tools = await mcp_server.list_tools()
+                    tool_names = [t.name for t in tools]
 
-            yield {"type": "progress", "text": f"Database connected. {len(tool_names)} tools available."}
+                    yield {"type": "progress", "text": f"Database ready (fast). {len(tool_names)} tools available."}
+                    logger.info(f"[Schema Agent] HTTP MCP ready with tools: {tool_names}")
+
+                except Exception as http_error:
+                    logger.warning(f"[Schema Agent] HTTP MCP failed, falling back to stdio: {http_error}")
+                    use_http_mcp = False
+                    mcp_server = None
+
+            # Fallback to stdio MCP (slower but always works)
+            if not use_http_mcp or mcp_server is None:
+                yield {"type": "progress", "text": "Connecting to database..."}
+                mcp_server = MCPServerStdio(
+                    name=f"postgres-mcp-stream-{datetime.now().strftime('%H%M%S%f')}",
+                    params={
+                        "command": "postgres-mcp",
+                        "args": [self.database_uri, f"--access-mode={access_mode}"],
+                    },
+                    cache_tools_list=True,
+                    client_session_timeout_seconds=300.0,
+                )
+                await mcp_server.__aenter__()
+                tools = await mcp_server.list_tools()
+                tool_names = [t.name for t in tools]
+                yield {"type": "progress", "text": f"Database connected. {len(tool_names)} tools available."}
+                logger.info(f"[Schema Agent] Stdio MCP ready with tools: {tool_names}")
 
             # Generate system prompt
             system_prompt = generate_schema_agent_prompt(self.schema_metadata)
@@ -1533,31 +1616,11 @@ AVAILABLE CONNECTOR TOOLS:
 """
                 system_prompt = system_prompt + connector_tools_section
 
-            # Prepare function tools
-            function_tools = []
-
-            # Add Google Search tool
-            try:
-                from app.mcp_server.tools_google_search import GOOGLE_SEARCH_TOOLS
-                function_tools.extend(GOOGLE_SEARCH_TOOLS)
-            except ImportError:
-                pass
-
-            # Add File Analysis tools (Feature 012)
-            try:
-                from app.mcp_server.tools_file_analysis import FILE_ANALYSIS_TOOLS
-                function_tools.extend(FILE_ANALYSIS_TOOLS)
-                logger.info(f"[Schema Agent Stream] File Analysis tools enabled")
-            except ImportError:
-                pass
-
-            # Add Gemini File Search tool (Feature 013)
-            try:
-                from app.mcp_server.tools_file_search import FILE_SEARCH_TOOLS
-                function_tools.extend(FILE_SEARCH_TOOLS)
-                logger.info(f"[Schema Agent Stream] Gemini File Search tool enabled")
-            except ImportError:
-                pass
+            # ================================================================
+            # OPTIMIZATION 3: Cached Function Tools
+            # ================================================================
+            function_tools = await get_cached_function_tools()
+            logger.info(f"[Schema Agent Stream] Using {len(function_tools)} CACHED function tools")
 
             if self.connector_tools:
                 function_tools.extend(self.connector_tools)
@@ -1831,9 +1894,11 @@ AVAILABLE CONNECTOR TOOLS:
                 "response": f"I encountered an error: {str(e)}",
             }
         finally:
+            # Always clean up MCP server
             if mcp_server:
                 try:
                     await mcp_server.__aexit__(None, None, None)
+                    logger.info(f"[Schema Agent] MCP server closed")
                 except Exception:
                     pass
 

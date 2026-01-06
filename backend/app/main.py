@@ -128,6 +128,22 @@ async def shutdown_event():
     except Exception as e:
         logger.warning(f"Agent session cleanup warning: {e}")
 
+    # Cleanup HTTP MCP servers (IMPORTANT: Stop all postgres-mcp processes)
+    try:
+        from app.services.mcp_server_manager import shutdown_mcp_server_manager
+        await shutdown_mcp_server_manager()
+        logger.info("HTTP MCP servers cleaned up")
+    except Exception as e:
+        logger.warning(f"HTTP MCP cleanup warning: {e}")
+
+    # Cleanup legacy MCP connection pool (stub/no-op)
+    try:
+        from app.agents.agent_pool import shutdown_mcp_pool
+        await shutdown_mcp_pool()
+        logger.info("MCP connection pool cleaned up")
+    except Exception as e:
+        logger.warning(f"MCP pool cleanup warning: {e}")
+
     await cleanup()
     logger.info("Cleanup complete")
 

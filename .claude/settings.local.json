@@ -16,7 +16,8 @@
       "Bash(git push:*)",
       "Bash(gh pr view:*)",
       "Bash(.specify/scripts/bash/create-phr.sh:*)",
-      "WebSearch"
+      "WebSearch",
+      "Bash(gh pr create:*)"
     ],
     "deny": [],
     "ask": []

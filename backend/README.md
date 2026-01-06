@@ -1,42 +1,80 @@
-# FastAPI Backend - Inventory Management System (Phase 2)
+---
+title: Schema Query Agent
+emoji: 🤖
+colorFrom: blue
+colorTo: purple
+sdk: docker
+app_port: 7860
+pinned: false
+license: mit
+---
 
-RESTful API backend for the Inventory Management System, built with FastAPI and PostgreSQL.
+# Schema Query Agent API
+
+AI-powered natural language database query agent deployed on Hugging Face Spaces.
+
+## Features
+
+- **Natural Language Queries**: Ask questions in plain English, get SQL results
+- **7 Integrated Tools**:
+  - WebSearch (Google Search)
+  - FileSearch (Semantic file search)
+  - Analytics (Data visualization)
+  - Gmail (Email integration)
+  - GDrive (Google Drive)
+  - Notion (Workspace integration)
+  - RetellAI (Voice agent)
+- **File Processing**: PDF, Excel, CSV, Images
+- **OAuth Connectors**: Connect your external services
 
 ## Quick Start
 
-1. Install dependencies: `pip install -e .`
-2. Create `.env` file with database configuration
-3. Run FastAPI: `uvicorn app.main:app --reload`
-4. Access API docs: http://localhost:8000/docs
+1. **Connect Your Database**
+   ```
+   POST /schema-agent/connect
+   {
+     "database_uri": "postgresql://user:pass@host:5432/db"
+   }
+   ```
 
-## Project Structure
-
-```
-backend/
-├── app/
-│   ├── __init__.py
-│   ├── main.py              # FastAPI app initialization
-│   ├── database.py          # Database connection and session management
-│   ├── models.py            # SQLAlchemy ORM models
-│   ├── schemas.py           # Pydantic request/response schemas
-│   ├── exceptions.py        # Custom exception classes
-│   └── routers/             # API endpoint routers
-│       ├── __init__.py
-│       ├── inventory.py     # Inventory endpoints
-│       └── billing.py       # Billing endpoints
-├── tests/
-│   ├── unit/                # Unit tests
-│   ├── integration/         # Integration tests
-│   ├── contract/            # API contract tests
-│   └── conftest.py          # Pytest configuration and fixtures
-└── README.md                # This file
-```
-
-## Testing
-
-Run tests: `pytest tests/`
-Run with coverage: `pytest --cov=app tests/`
+2. **Query with Natural Language**
+   ```
+   POST /schema-agent/chatkit
+   {
+     "message": "How many orders were placed last month?"
+   }
+   ```
 
 ## API Documentation
 
-Interactive API docs available at `/docs` (Swagger UI) after starting the app.
+- Swagger UI: `/docs`
+- ReDoc: `/redoc`
+
+## Environment Variables
+
+Set these in HF Space Settings > Variables:
+
+| Variable | Description |
+|----------|-------------|
+| `GEMINI_API_KEY` | Google Gemini API key |
+| `OPENAI_API_KEY` | OpenAI API key (optional) |
+| `LLM_PROVIDER` | "gemini" or "openai" |
+| `GOOGLE_API_KEY` | For Google Search |
+| `GOOGLE_CSE_ID` | Custom Search Engine ID |
+| `GOOGLE_CLIENT_ID` | OAuth for Gmail/GDrive |
+| `GOOGLE_CLIENT_SECRET` | OAuth secret |
+| `NOTION_CLIENT_ID` | Notion OAuth |
+| `NOTION_CLIENT_SECRET` | Notion secret |
+| `RETELL_API_KEY` | Retell AI key |
+| `TOKEN_ENCRYPTION_KEY` | For OAuth token encryption |
+
+## Local Development
+
+1. Install dependencies: `pip install -e .`
+2. Create `.env` file with configuration
+3. Run FastAPI: `uvicorn app.main:app --reload`
+4. Access API docs: http://localhost:8000/docs
+
+## License
+
+MIT
