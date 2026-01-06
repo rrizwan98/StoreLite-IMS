@@ -24,9 +24,9 @@ jobs:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
           cd backend
-          git init
+          git init -b main
           git config user.email "github-actions@github.com"
           git config user.name "GitHub Actions"
           git add .
-          git commit -m "Sync from GitHub"
+          git commit -m "Sync from GitHub - $(date +'%Y-%m-%d %H:%M:%S')"
           git push --force https://rrizwan98:$HF_TOKEN@huggingface.co/spaces/rrizwan98/IMS main
