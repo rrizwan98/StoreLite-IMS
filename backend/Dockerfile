@@ -43,8 +43,8 @@ RUN pip install --no-cache-dir \
     # MCP
     fastmcp>=1.0 \
     postgres-mcp \
-    # ChatKit (IMPORTANT!)
-    chatkit \
+    # ChatKit (IMPORTANT! Package name is openai-chatkit, not chatkit)
+    openai-chatkit \
     # Auth
     python-jose[cryptography]>=3.3.0 \
     passlib[bcrypt]>=1.7.4 \
