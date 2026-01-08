@@ -73,10 +73,11 @@ def get_llm_model():
     Environment variables are read at runtime to ensure HF secrets are picked up.
     """
     # Read env vars at runtime (not module load time)
-    llm_provider = os.getenv("LLM_PROVIDER", "gemini").lower()
-    gemini_api_key = os.getenv("GEMINI_API_KEY")
-    gemini_model = os.getenv("GEMINI_MODEL", "gemini/gemini-2.0-flash")
-    openai_model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+    # Use .strip() to remove any accidental whitespace/newlines from HF secrets
+    llm_provider = os.getenv("LLM_PROVIDER", "gemini").strip().lower()
+    gemini_api_key = (os.getenv("GEMINI_API_KEY") or "").strip() or None
+    gemini_model = os.getenv("GEMINI_MODEL", "gemini/gemini-2.5-flash").strip()
+    openai_model = os.getenv("OPENAI_MODEL", "gpt-4o-mini").strip()
 
     logger.info(f"[Schema Agent] LLM_PROVIDER={llm_provider}, GEMINI_API_KEY={'set' if gemini_api_key else 'NOT SET'}")
 
