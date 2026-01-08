@@ -239,8 +239,8 @@ export default function SchemaAgentPage() {
           // Custom backend API configuration (CustomApiConfig)
           api: {
             url: apiUrl,
-            // domainKey is required for custom API - using empty string for development
-            domainKey: '',
+            // domainKey is required for custom API - loaded from environment variable
+            domainKey: process.env.NEXT_PUBLIC_CHATKIT_DOMAIN_KEY || '',
             // Upload strategy for ChatKit attachments - sends files to our backend
             // Uses ChatKit-specific endpoint that returns the correct response format
             // IMPORTANT: ChatKit does NOT use the custom api.fetch for file uploads!
