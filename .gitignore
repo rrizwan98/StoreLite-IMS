@@ -46,7 +46,9 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
+# Python lib folder (but NOT frontend/lib which contains our TypeScript code)
+/lib/
+/backend/lib/
 lib64/
 parts/
 sdist/
