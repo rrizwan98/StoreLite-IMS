@@ -108,31 +108,32 @@ class BaseConnectorAgent(ABC):
         Falls back to LLM_PROVIDER if LLM_CONNECTOR_PROVIDER is not set.
         """
         # Check connector-specific provider first, then fall back to general LLM_PROVIDER
-        provider = os.getenv("LLM_CONNECTOR_PROVIDER", "").lower()
+        # Use .strip() to remove any accidental whitespace/newlines from HF secrets
+        provider = os.getenv("LLM_CONNECTOR_PROVIDER", "").strip().lower()
         if not provider:
-            provider = os.getenv("LLM_PROVIDER", "gemini").lower()  # Default to gemini
+            provider = os.getenv("LLM_PROVIDER", "gemini").strip().lower()  # Default to gemini
 
         if provider == "gemini":
             # Use Gemini via LiteLLM
-            gemini_key = os.getenv("GEMINI_API_KEY")
+            gemini_key = (os.getenv("GEMINI_API_KEY") or "").strip() or None
             if not gemini_key:
                 logger.warning(
                     f"[{self.CONNECTOR_TYPE}Agent] LLM_CONNECTOR_PROVIDER=gemini but "
                     "GEMINI_API_KEY not set. Falling back to OpenAI."
                 )
-                model = os.getenv("OPENAI_CONNECTOR_MODEL", os.getenv("OPENAI_MODEL", "gpt-4o-mini"))
+                model = os.getenv("OPENAI_CONNECTOR_MODEL", os.getenv("OPENAI_MODEL", "gpt-4o-mini")).strip()
                 logger.info(f"[{self.CONNECTOR_TYPE}Agent] Using OpenAI model: {model}")
                 return model
 
             model = os.getenv(
                 "GEMINI_CONNECTOR_MODEL",
                 os.getenv("GEMINI_MODEL", "gemini/gemini-2.5-flash")
-            )
+            ).strip()
             logger.info(f"[{self.CONNECTOR_TYPE}Agent] Using Gemini model: {model}")
             return LitellmModel(model=model, api_key=gemini_key)
         else:
             # Use OpenAI (default)
-            model = os.getenv("OPENAI_CONNECTOR_MODEL", os.getenv("OPENAI_MODEL", "gpt-4o-mini"))
+            model = os.getenv("OPENAI_CONNECTOR_MODEL", os.getenv("OPENAI_MODEL", "gpt-4o-mini")).strip()
             logger.info(f"[{self.CONNECTOR_TYPE}Agent] Using OpenAI model: {model}")
             return model
 
