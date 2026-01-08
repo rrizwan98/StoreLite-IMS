@@ -134,8 +134,6 @@ export default function SchemaAgentPage() {
         // Keep selected tool active across multiple messages until the user deselects it.
         // This uses ChatKit's built-in persistence (no custom UI/state).
         persistent: true,
-        // Make selection state visible in the composer UI (ChatKit-native pinned buttons).
-        pinned: true,
       });
     });
 
@@ -153,8 +151,6 @@ export default function SchemaAgentPage() {
           : `What would you like to do with ${connector.name}?`,
         // Keep selected connector active across multiple messages until the user deselects it.
         persistent: true,
-        // Make selection state visible in the composer UI (ChatKit-native pinned buttons).
-        pinned: true,
       });
     });
 
