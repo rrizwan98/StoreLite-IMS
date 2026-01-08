@@ -59,15 +59,7 @@ from app.agents.agent_pool import (
 
 # LLM Provider Selection: "gemini" or "openai"
 # Set LLM_PROVIDER in .env to switch between models
-LLM_PROVIDER = os.getenv("LLM_PROVIDER", "gemini")  # default: gemini
-
-# API Keys
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-
-# Model Names
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini/gemini-robotics-er-1.5-preview")
-OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-5.2-nano")
+# NOTE: Read at runtime in get_llm_model() to pick up env changes
 
 
 def get_llm_model():
@@ -75,19 +67,32 @@ def get_llm_model():
     Get the LLM model based on LLM_PROVIDER setting.
 
     Set LLM_PROVIDER in .env:
-      - "gemini" → Uses Gemini via LiteLLM
+      - "gemini" → Uses Gemini via LiteLLM (default)
       - "openai" → Uses OpenAI directly
+
+    Environment variables are read at runtime to ensure HF secrets are picked up.
     """
-    if LLM_PROVIDER == "openai":
+    # Read env vars at runtime (not module load time)
+    llm_provider = os.getenv("LLM_PROVIDER", "gemini").lower()
+    gemini_api_key = os.getenv("GEMINI_API_KEY")
+    gemini_model = os.getenv("GEMINI_MODEL", "gemini/gemini-2.0-flash")
+    openai_model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+
+    logger.info(f"[Schema Agent] LLM_PROVIDER={llm_provider}, GEMINI_API_KEY={'set' if gemini_api_key else 'NOT SET'}")
+
+    if llm_provider == "openai":
         # Use OpenAI model directly
-        logger.info(f"[Schema Agent] Using OpenAI model: {OPENAI_MODEL}")
-        return OPENAI_MODEL
+        logger.info(f"[Schema Agent] Using OpenAI model: {openai_model}")
+        return openai_model
     else:
         # Use Gemini via LiteLLM (default)
-        logger.info(f"[Schema Agent] Using Gemini model: {GEMINI_MODEL}")
+        if not gemini_api_key:
+            logger.error("[Schema Agent] GEMINI_API_KEY not set! Cannot use Gemini.")
+            raise ValueError("GEMINI_API_KEY environment variable is required when LLM_PROVIDER=gemini")
+        logger.info(f"[Schema Agent] Using Gemini model: {gemini_model}")
         return LitellmModel(
-            model=GEMINI_MODEL,
-            api_key=GEMINI_API_KEY,
+            model=gemini_model,
+            api_key=gemini_api_key,
         )
 
 

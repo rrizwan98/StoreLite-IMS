@@ -64,27 +64,36 @@ _sessions: Dict[str, Dict[str, Any]] = {}
 # Database URL for session persistence
 DATABASE_URL = os.getenv("DATABASE_URL", "")
 
-# LiteLLM model configuration for Gemini
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini/gemini-2.5-flash-lite")
+# LiteLLM model configuration - read at runtime in get_llm_model()
 
 
 def get_llm_model():
     """
     Get the LLM model instance.
-    Uses Gemini via LiteLLM if GEMINI_API_KEY is set, otherwise falls back to OpenAI.
+    Uses Gemini via LiteLLM based on LLM_PROVIDER setting.
+    Environment variables are read at runtime to ensure HF secrets are picked up.
     """
-    if GEMINI_API_KEY:
-        logger.info(f"[MCP] Using Gemini model: {GEMINI_MODEL}")
-        return LitellmModel(
-            model=GEMINI_MODEL,
-            api_key=GEMINI_API_KEY,
-        )
-    else:
-        # Fallback to OpenAI if no Gemini key
-        openai_model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+    # Read env vars at runtime (not module load time)
+    llm_provider = os.getenv("LLM_PROVIDER", "gemini").lower()
+    gemini_api_key = os.getenv("GEMINI_API_KEY")
+    gemini_model = os.getenv("GEMINI_MODEL", "gemini/gemini-2.0-flash")
+    openai_model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+
+    logger.info(f"[MCP] LLM_PROVIDER={llm_provider}, GEMINI_API_KEY={'set' if gemini_api_key else 'NOT SET'}")
+
+    if llm_provider == "openai":
         logger.info(f"[MCP] Using OpenAI model: {openai_model}")
         return openai_model
+    else:
+        # Use Gemini via LiteLLM (default)
+        if not gemini_api_key:
+            logger.error("[MCP] GEMINI_API_KEY not set! Cannot use Gemini.")
+            raise ValueError("GEMINI_API_KEY environment variable is required when LLM_PROVIDER=gemini")
+        logger.info(f"[MCP] Using Gemini model: {gemini_model}")
+        return LitellmModel(
+            model=gemini_model,
+            api_key=gemini_api_key,
+        )
 
 
 class ConnectRequest(BaseModel):
