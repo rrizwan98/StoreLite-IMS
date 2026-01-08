@@ -110,7 +110,7 @@ class BaseConnectorAgent(ABC):
         # Check connector-specific provider first, then fall back to general LLM_PROVIDER
         provider = os.getenv("LLM_CONNECTOR_PROVIDER", "").lower()
         if not provider:
-            provider = os.getenv("LLM_PROVIDER", "openai").lower()
+            provider = os.getenv("LLM_PROVIDER", "gemini").lower()  # Default to gemini
 
         if provider == "gemini":
             # Use Gemini via LiteLLM
