@@ -180,6 +180,187 @@ Whenever a new update, feature, bug fix, or refactor is requested (frontend, bac
 
 ---
 
+## III.6 MANDATORY: Push Code Before Moving to Next Feature
+
+**CRITICAL RULE - NEVER SKIP THIS:**
+
+When a feature/fix is complete (tests pass, developer approves), you MUST:
+
+1. **Push the code FIRST** before starting any new work
+2. **Ask for confirmation** if developer moves to next feature without pushing
+
+### Workflow:
+```
+Feature Complete → Tests Pass → Developer Approves → PUSH CODE → Then Next Feature
+```
+
+### If Developer Asks for New Feature Before Push:
+
+**STOP and ASK:**
+```markdown
+⚠️ Previous work not pushed yet!
+
+I notice the previous feature/fix is complete but not pushed to remote.
+Before starting the new feature, let me push the existing changes first.
+
+Current branch: `feature/xyz`
+Changes ready to push: [list files]
+
+Do you want me to:
+1. Push the current changes now, then start new feature?
+2. Skip pushing (NOT RECOMMENDED - changes may be lost)
+
+Please confirm.
+```
+
+### Why This Matters:
+- **Prevents lost work**: Uncommitted changes can be overwritten
+- **Enables collaboration**: Others can see/review your work
+- **Creates backup**: Remote repo serves as backup
+- **Maintains history**: Clear commit history for debugging
+- **Allows rollback**: Easy to revert if new feature breaks something
+
+### Checklist Before Moving to Next Feature:
+- [ ] All tests pass
+- [ ] Code committed with proper message
+- [ ] Branch pushed to remote
+- [ ] PR created (if needed)
+- [ ] Developer confirmed/approved
+
+**NEVER start new feature with uncommitted changes from previous feature.**
+
+---
+
+## III.7 Environment Configuration: Local vs Production (MANDATORY)
+
+**CRITICAL: Same Code, Different Configs**
+
+The codebase MUST work in both local development and production (Vercel/HF Spaces) WITHOUT any code changes. Only environment variables should differ.
+
+### Principle: Environment Variables Only
+
+```
+❌ WRONG: Different code for local vs production
+✅ RIGHT: Same code, different .env files
+```
+
+### Backend (Python/FastAPI):
+
+**Use `os.getenv()` with sensible defaults:**
+
+```python
+# ✅ CORRECT - Works in both environments
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://localhost:5432/dev_db")
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
+API_KEY = os.getenv("API_KEY")  # No default for secrets
+
+# ❌ WRONG - Hardcoded values
+DATABASE_URL = "postgresql://prod-server:5432/prod_db"  # Never do this!
+```
+
+**Local `.env` file (NOT committed to git):**
+```env
+DATABASE_URL=postgresql://localhost:5432/dev_db
+FRONTEND_URL=http://localhost:3000
+JWT_SECRET_KEY=dev-secret-key
+```
+
+**Production (Vercel/HF Spaces) - Set in dashboard:**
+```env
+DATABASE_URL=postgresql://prod-server:5432/prod_db
+FRONTEND_URL=https://your-app.vercel.app
+JWT_SECRET_KEY=super-secure-production-key
+```
+
+### Frontend (Next.js):
+
+**Use `NEXT_PUBLIC_` prefix for client-side variables:**
+
+```typescript
+// ✅ CORRECT - Works in both environments
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+
+// ❌ WRONG - Hardcoded
+const API_URL = 'https://prod-api.example.com';
+```
+
+**Local `.env.local` file:**
+```env
+NEXT_PUBLIC_API_URL=http://localhost:8000
+NEXT_PUBLIC_CHATKIT_DOMAIN_KEY=dev-key
+```
+
+**Production (Vercel) - Set in dashboard:**
+```env
+NEXT_PUBLIC_API_URL=https://your-backend.hf.space
+NEXT_PUBLIC_CHATKIT_DOMAIN_KEY=prod-key
+```
+
+### File Structure for Configs:
+
+```
+project/
+├── backend/
+│   ├── .env              # Local secrets (gitignored)
+│   ├── .env.example      # Template (committed)
+│   └── app/
+│       └── config.py     # os.getenv() calls
+├── frontend/
+│   ├── .env.local        # Local secrets (gitignored)
+│   ├── .env.example      # Template (committed)
+│   └── lib/
+│       └── constants.ts  # process.env calls
+└── .gitignore            # Must include .env files
+```
+
+### .gitignore MUST Include:
+```gitignore
+# Environment files with secrets
+.env
+.env.local
+.env.*.local
+*.env
+
+# Keep example files
+!.env.example
+!.env.local.example
+```
+
+### Validation Checklist:
+- [ ] No hardcoded URLs in code
+- [ ] No hardcoded API keys/secrets
+- [ ] All configs use environment variables
+- [ ] `.env` files are gitignored
+- [ ] `.env.example` files exist for reference
+- [ ] Same code works locally and in production
+
+### Common Mistakes to Avoid:
+
+```python
+# ❌ WRONG: Conditional code based on environment
+if os.getenv("ENV") == "production":
+    url = "https://prod.example.com"
+else:
+    url = "http://localhost:8000"
+
+# ✅ RIGHT: Single env variable
+url = os.getenv("API_URL", "http://localhost:8000")
+```
+
+```typescript
+// ❌ WRONG: Build-time environment check
+const API_URL = process.env.NODE_ENV === 'production'
+  ? 'https://prod.com'
+  : 'http://localhost:8000';
+
+// ✅ RIGHT: Single env variable
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+```
+
+**Remember: If you need different behavior, use different ENV values, NOT different code.**
+
+---
+
 ## IV. Documentation & Intelligence Harvesting
 
 ### Specs

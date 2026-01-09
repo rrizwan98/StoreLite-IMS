@@ -223,11 +223,78 @@ Then proceed with code generation.
 
 ---
 
+## Git Workflow: ALWAYS Push Before Next Feature
+
+**MANDATORY RULE:**
+
+When a feature/fix is complete (tests pass, developer approves):
+
+1. **Commit and push code FIRST**
+2. **Then start next feature**
+
+If developer asks for new feature before pushing:
+```
+⚠️ Wait! Previous changes not pushed yet.
+Let me push the current work first before starting new feature.
+Is that okay?
+```
+
+**Never leave uncommitted work when switching features.**
+
+---
+
+## Environment Configuration: Local vs Production
+
+**CRITICAL: Same code, different configs. NEVER write different code for local vs production.**
+
+### Use Environment Variables ONLY:
+
+```python
+# ✅ CORRECT
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://localhost:5432/dev_db")
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
+API_KEY = os.getenv("API_KEY")  # No default for secrets
+
+# ❌ WRONG - Never hardcode!
+DATABASE_URL = "postgresql://prod-server:5432/prod_db"
+```
+
+### File Structure:
+```
+backend/
+├── .env              # Local secrets (gitignored)
+├── .env.example      # Template (committed, no real secrets)
+└── app/
+    └── config.py     # os.getenv() calls only
+```
+
+### Local `.env`:
+```env
+DATABASE_URL=postgresql://localhost:5432/dev_db
+FRONTEND_URL=http://localhost:3000
+JWT_SECRET_KEY=dev-secret
+```
+
+### Production (HF Spaces):
+Set via dashboard/secrets - same variable names, production values.
+
+### Rules:
+- ✅ All configs via `os.getenv()`
+- ✅ Sensible defaults for local dev
+- ✅ `.env` in `.gitignore`
+- ✅ `.env.example` committed
+- ❌ NEVER hardcode URLs/keys
+- ❌ NEVER write `if production:` conditionals
+
+---
+
 ## Remember
 
 - **Latest docs FIRST** - Never rely solely on training data for API syntax
 - **Skills file ALWAYS** - Contains my patterns and preferences
 - **My stack ONLY** - Don't suggest alternative frameworks
 - **Quality over speed** - Take time to get it right
+- **Push before switching** - Always push completed work before new feature
+- **Same code everywhere** - Use env vars, not conditional code
 
 This workflow ensures every agent I build uses current APIs, follows my standards, and works correctly in production.
