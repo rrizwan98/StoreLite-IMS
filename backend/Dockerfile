@@ -63,7 +63,9 @@ RUN pip install --no-cache-dir \
     pandas>=2.0.0 \
     openpyxl>=3.1.0 \
     pdfplumber>=0.10.0 \
-    Pillow>=10.0.0
+    Pillow>=10.0.0 \
+    # Task Scheduler
+    apscheduler>=4.0.0a5
 
 # Copy application code
 COPY app/ ./app/
