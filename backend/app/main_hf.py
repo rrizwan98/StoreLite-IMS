@@ -45,7 +45,7 @@ app = FastAPI(
 
     Deployed on Hugging Face Spaces.
     """,
-    version="1.0.0",
+    version="0.2.0",
     docs_url="/docs",
     redoc_url="/redoc",
 )
@@ -94,11 +94,30 @@ async def startup_event():
     except Exception as e:
         logger.warning(f"Database init warning: {e}")
 
+    # Initialize task scheduler (APScheduler)
+    try:
+        from app.services.scheduler_service import initialize_scheduler
+        from app.database import get_database_url
+        database_url = get_database_url()
+        await initialize_scheduler(database_url)
+        logger.info("Task scheduler initialized successfully")
+    except Exception as e:
+        logger.warning(f"Task scheduler initialization warning: {e}")
+        logger.info("Scheduler features may be unavailable")
+
 
 @app.on_event("shutdown")
 async def shutdown_event():
     """Cleanup on shutdown"""
     logger.info("Shutting down Schema Agent API")
+
+    # Shutdown task scheduler
+    try:
+        from app.services.scheduler_service import shutdown_scheduler
+        await shutdown_scheduler()
+        logger.info("Task scheduler shut down")
+    except Exception as e:
+        logger.warning(f"Task scheduler shutdown warning: {e}")
 
     # Cleanup HTTP MCP servers
     try:
@@ -125,7 +144,7 @@ async def health_check():
         "status": "ok",
         "service": "Schema Query Agent",
         "platform": "Hugging Face Spaces",
-        "version": "1.0.0"
+        "version": "0.2.0"
     }
 
 
@@ -134,7 +153,7 @@ async def root():
     """Root endpoint with API information"""
     return {
         "service": "Schema Query Agent API",
-        "version": "1.0.0",
+        "version": "0.2.0",
         "platform": "Hugging Face Spaces",
         "docs": "/docs",
         "features": [
@@ -188,5 +207,9 @@ app.include_router(gemini_file_search.router)
 # User Settings
 from app.routers import user_settings
 app.include_router(user_settings.router)
+
+# Task Scheduler (Feature 014 - Scheduled task automation)
+from app.routers import scheduler
+app.include_router(scheduler.router)
 
 logger.info("Schema Agent API initialized - Ready for queries!")
