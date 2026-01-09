@@ -612,8 +612,8 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            {/* Feature Cards - Only Agent + Analytics */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {/* Feature Cards - Agent, Analytics, Scheduler, Connection */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
               <Link href={connectionStatus.schema_status === 'ready' ? ROUTES.SCHEMA_AGENT : ROUTES.SCHEMA_CONNECT}>
                 <div className="bg-white rounded-xl shadow-md p-6 hover:shadow-lg transition-shadow cursor-pointer border-2 border-emerald-200">
                   <div className="text-4xl mb-4">🧠</div>
@@ -633,6 +633,19 @@ export default function DashboardPage() {
                   <h2 className="text-xl font-semibold mb-2">Analytics</h2>
                   <p className="text-gray-600">
                     Visualize your data with AI-powered charts.
+                  </p>
+                  {connectionStatus.schema_status !== 'ready' && (
+                    <span className="text-xs text-yellow-600 mt-2 block">Discover schema first</span>
+                  )}
+                </div>
+              </Link>
+
+              <Link href={connectionStatus.schema_status === 'ready' ? ROUTES.SCHEDULER : ROUTES.SCHEMA_CONNECT}>
+                <div className="bg-white rounded-xl shadow-md p-6 hover:shadow-lg transition-shadow cursor-pointer border-2 border-purple-200">
+                  <div className="text-4xl mb-4">⏰</div>
+                  <h2 className="text-xl font-semibold mb-2">Scheduler</h2>
+                  <p className="text-gray-600">
+                    Schedule automated tasks to run at specific times.
                   </p>
                   {connectionStatus.schema_status !== 'ready' && (
                     <span className="text-xs text-yellow-600 mt-2 block">Discover schema first</span>

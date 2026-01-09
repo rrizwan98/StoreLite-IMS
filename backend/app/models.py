@@ -542,3 +542,84 @@ class UserFileDocument(Base):
 
     def __repr__(self):
         return f"<UserFileDocument(id={self.id}, name={self.original_filename}, status={self.status})>"
+
+
+# ============================================================================
+# Scheduled Tasks Models (Feature 014 - Task Scheduler)
+# ============================================================================
+
+class ScheduledTaskStatus(enum.Enum):
+    """Status of a scheduled task"""
+    PENDING = "pending"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+
+
+class ScheduledTask(Base):
+    """
+    Scheduled task for automated agent execution.
+    Users can schedule queries to run at specific times with selected tools.
+    Results are stored in ChatKit threads for viewing.
+    """
+    __tablename__ = "scheduled_tasks"
+
+    id = Column(String(36), primary_key=True, index=True)  # UUID
+    user_id = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True
+    )
+
+    # Task configuration
+    query = Column(Text, nullable=False)  # User's natural language query
+    selected_tools = Column(PortableJSON, nullable=False, default=[])  # ["gmail", "analytics", "file_search"]
+    scheduled_time = Column(DateTime, nullable=False, index=True)  # When to run the task
+
+    # Execution state
+    status = Column(String(20), default="pending", nullable=False, index=True)  # pending, running, completed, failed, cancelled
+
+    # ChatKit integration - KEY for viewing results!
+    thread_id = Column(String(100), nullable=True, index=True)  # ChatKit thread where result lives
+
+    # Result storage
+    result_summary = Column(Text, nullable=True)  # Brief summary for list view (first 500 chars)
+    error_message = Column(Text, nullable=True)
+
+    # APScheduler job reference
+    apscheduler_job_id = Column(String(100), nullable=True, index=True)  # APScheduler job ID for cancellation
+
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    executed_at = Column(DateTime, nullable=True)  # When task actually ran
+
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('pending', 'running', 'completed', 'failed', 'cancelled')",
+            name="scheduled_task_status_check"
+        ),
+        {"extend_existing": True},
+    )
+
+    # Relationships
+    user = relationship("User", backref="scheduled_tasks")
+
+    @property
+    def is_pending(self) -> bool:
+        """Check if task is still pending."""
+        return self.status == "pending"
+
+    @property
+    def is_completed(self) -> bool:
+        """Check if task completed successfully."""
+        return self.status == "completed"
+
+    @property
+    def can_view_result(self) -> bool:
+        """Check if task has viewable result in ChatKit."""
+        return self.status == "completed" and self.thread_id is not None
+
+    def __repr__(self):
+        return f"<ScheduledTask(id={self.id}, user_id={self.user_id}, status={self.status}, scheduled={self.scheduled_time})>"
