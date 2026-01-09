@@ -50,6 +50,8 @@ export default function SchedulerPage() {
 
   // Form state
   const [availableTools, setAvailableTools] = useState<SchedulerTool[]>([]);
+  const [toolsLoading, setToolsLoading] = useState(true);
+  const [toolsError, setToolsError] = useState<string | null>(null);
   const [selectedTools, setSelectedTools] = useState<string[]>([]);
   const [query, setQuery] = useState('');
   const [scheduledDate, setScheduledDate] = useState('');
@@ -84,17 +86,25 @@ export default function SchedulerPage() {
   // Load available tools
   useEffect(() => {
     const loadTools = async () => {
+      setToolsLoading(true);
+      setToolsError(null);
       try {
+        console.log('[Scheduler] Loading tools...');
         const tools = await getAvailableTools();
+        console.log('[Scheduler] Tools loaded:', tools);
         setAvailableTools(tools);
       } catch (err) {
-        console.error('Failed to load tools:', err);
+        const errMsg = err instanceof Error ? err.message : 'Failed to load tools';
+        console.error('[Scheduler] Failed to load tools:', errMsg);
+        setToolsError(errMsg);
+      } finally {
+        setToolsLoading(false);
       }
     };
-    if (isAuthenticated) {
+    if (isAuthenticated && connectionStatus?.connection_type === 'schema_query_only') {
       loadTools();
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, connectionStatus]);
 
   // Load tasks
   useEffect(() => {
@@ -283,32 +293,79 @@ export default function SchedulerPage() {
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Select Tools (max 3)
               </label>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                {availableTools.map(tool => (
+
+              {/* Loading State */}
+              {toolsLoading && (
+                <div className="flex items-center justify-center py-8 border-2 border-dashed border-gray-200 rounded-lg">
+                  <Loader2 className="h-6 w-6 animate-spin text-gray-400 mr-2" />
+                  <span className="text-gray-500">Loading tools...</span>
+                </div>
+              )}
+
+              {/* Error State */}
+              {toolsError && !toolsLoading && (
+                <div className="py-6 px-4 border-2 border-dashed border-red-200 rounded-lg bg-red-50">
+                  <div className="flex items-center justify-center text-red-600 mb-2">
+                    <AlertCircle className="h-5 w-5 mr-2" />
+                    <span className="text-sm font-medium">Failed to load tools</span>
+                  </div>
+                  <p className="text-xs text-red-500 text-center mb-3">{toolsError}</p>
                   <button
-                    key={tool.id}
-                    onClick={() => handleToolToggle(tool.id)}
-                    disabled={!tool.available || (!selectedTools.includes(tool.id) && selectedTools.length >= 3)}
-                    className={`
-                      flex items-center p-3 rounded-lg border-2 transition-all text-left
-                      ${selectedTools.includes(tool.id)
-                        ? 'border-emerald-500 bg-emerald-50 text-emerald-700'
-                        : 'border-gray-200 hover:border-gray-300 text-gray-700'
-                      }
-                      ${!tool.available || (!selectedTools.includes(tool.id) && selectedTools.length >= 3)
-                        ? 'opacity-50 cursor-not-allowed'
-                        : 'cursor-pointer'
-                      }
-                    `}
+                    onClick={() => {
+                      setToolsLoading(true);
+                      setToolsError(null);
+                      getAvailableTools()
+                        .then(tools => setAvailableTools(tools))
+                        .catch(err => setToolsError(err instanceof Error ? err.message : 'Failed to load tools'))
+                        .finally(() => setToolsLoading(false));
+                    }}
+                    className="w-full py-2 px-4 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 text-sm font-medium transition-colors"
                   >
-                    <span className="mr-2">{toolIcons[tool.icon] || <Box className="h-5 w-5" />}</span>
-                    <span className="text-sm font-medium truncate">{tool.name}</span>
-                    {selectedTools.includes(tool.id) && (
-                      <CheckCircle className="h-4 w-4 ml-auto text-emerald-600" />
-                    )}
+                    Retry
                   </button>
-                ))}
-              </div>
+                </div>
+              )}
+
+              {/* Tools Grid */}
+              {!toolsLoading && !toolsError && (
+                <>
+                  {availableTools.length === 0 ? (
+                    <div className="py-8 border-2 border-dashed border-gray-200 rounded-lg text-center">
+                      <Box className="h-8 w-8 mx-auto text-gray-300 mb-2" />
+                      <p className="text-gray-500 text-sm">No tools available</p>
+                      <p className="text-gray-400 text-xs mt-1">Connect services to enable more tools</p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                      {availableTools.map(tool => (
+                        <button
+                          key={tool.id}
+                          onClick={() => handleToolToggle(tool.id)}
+                          disabled={!tool.available || (!selectedTools.includes(tool.id) && selectedTools.length >= 3)}
+                          className={`
+                            flex items-center p-3 rounded-lg border-2 transition-all text-left
+                            ${selectedTools.includes(tool.id)
+                              ? 'border-emerald-500 bg-emerald-50 text-emerald-700'
+                              : 'border-gray-200 hover:border-gray-300 text-gray-700'
+                            }
+                            ${!tool.available || (!selectedTools.includes(tool.id) && selectedTools.length >= 3)
+                              ? 'opacity-50 cursor-not-allowed'
+                              : 'cursor-pointer'
+                            }
+                          `}
+                        >
+                          <span className="mr-2">{toolIcons[tool.icon] || <Box className="h-5 w-5" />}</span>
+                          <span className="text-sm font-medium truncate">{tool.name}</span>
+                          {selectedTools.includes(tool.id) && (
+                            <CheckCircle className="h-4 w-4 ml-auto text-emerald-600" />
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+
               <p className="mt-2 text-xs text-gray-500">
                 Selected: {selectedTools.length}/3 tools
               </p>
