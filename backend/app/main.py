@@ -114,11 +114,30 @@ async def startup_event():
         logger.warning(f"Database initialization warning: {str(e)}")
         logger.info("Using SQLite database for development")
 
+    # Initialize task scheduler (APScheduler)
+    try:
+        from app.services.scheduler_service import initialize_scheduler
+        from app.database import get_database_url
+        database_url = get_database_url()
+        await initialize_scheduler(database_url)
+        logger.info("Task scheduler initialized successfully")
+    except Exception as e:
+        logger.warning(f"Task scheduler initialization warning: {e}")
+        logger.info("Scheduler features may be unavailable")
+
 
 @app.on_event("shutdown")
 async def shutdown_event():
     """Cleanup on app shutdown"""
     logger.info("Shutting down FastAPI application")
+
+    # Shutdown task scheduler
+    try:
+        from app.services.scheduler_service import shutdown_scheduler
+        await shutdown_scheduler()
+        logger.info("Task scheduler shut down")
+    except Exception as e:
+        logger.warning(f"Task scheduler shutdown warning: {e}")
 
     # Cleanup agent session engine
     try:
@@ -173,7 +192,7 @@ async def root():
 
 # ============ Include Routers ============
 
-from app.routers import inventory, billing, agent, chatkit_server, analytics, db_connect, inventory_agent, auth, schema_agent, gmail, tools, connectors, oauth_connectors, notion_mcp_oauth, gdrive_oauth, gmail_oauth, retellai_mcp, files, user_settings, gemini_file_search
+from app.routers import inventory, billing, agent, chatkit_server, analytics, db_connect, inventory_agent, auth, schema_agent, gmail, tools, connectors, oauth_connectors, notion_mcp_oauth, gdrive_oauth, gmail_oauth, retellai_mcp, files, user_settings, gemini_file_search, scheduler
 
 # Authentication router (must be first for auth to work)
 app.include_router(auth.router)
@@ -218,6 +237,9 @@ app.include_router(user_settings.router)
 
 # Gemini File Search (Feature 013 - Semantic file search with RAG)
 app.include_router(gemini_file_search.router)
+
+# Task Scheduler (Feature 014 - Scheduled task automation)
+app.include_router(scheduler.router)
 
 logger.info("FastAPI application initialized")
 

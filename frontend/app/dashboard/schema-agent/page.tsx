@@ -14,7 +14,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Script from 'next/script';
 import { ROUTES, API_BASE_URL } from '@/lib/constants';
@@ -73,6 +73,10 @@ interface ChatKitToolOption {
 export default function SchemaAgentPage() {
   const { user, connectionStatus, isLoading, isAuthenticated } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
+
+  // Get thread_id from URL query params (for scheduled task results)
+  const threadIdFromUrl = searchParams.get('thread');
 
   const [isLoaded, setIsLoaded] = useState(false);
   const [error, setError] = useState('');
@@ -399,6 +403,25 @@ export default function SchemaAgentPage() {
           },
         });
 
+        // If we have a thread from URL (e.g., from scheduled task), load it after ChatKit is ready
+        if (threadIdFromUrl) {
+          console.log('[SchemaAgent] Will load thread from URL:', threadIdFromUrl);
+          // Use ChatKit's setThreadId method to switch to the specific thread
+          // Give ChatKit time to initialize before switching
+          setTimeout(async () => {
+            try {
+              if (typeof chatkit.setThreadId === 'function') {
+                await chatkit.setThreadId(threadIdFromUrl);
+                console.log('[SchemaAgent] Switched to thread via setThreadId:', threadIdFromUrl);
+              } else {
+                console.warn('[SchemaAgent] setThreadId method not available');
+              }
+            } catch (err) {
+              console.error('[SchemaAgent] Failed to switch thread:', err);
+            }
+          }, 500);
+        }
+
         // Official ChatKit event listeners
         chatkit.addEventListener('chatkit.message', (e: CustomEvent) => {
           console.log('ChatKit message event:', e.detail);
@@ -548,7 +571,7 @@ export default function SchemaAgentPage() {
 
     // Initialize with delay for element to be ready
     setTimeout(initChatKit, 300);
-  }, [isLoaded, toolsLoaded, buildChatKitTools, showAllTools]);
+  }, [isLoaded, toolsLoaded, buildChatKitTools, showAllTools, threadIdFromUrl]);
 
   // Check if ChatKit is already registered (from cache or previous page)
   useEffect(() => {

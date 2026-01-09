@@ -17,7 +17,15 @@
       "Bash(gh pr view:*)",
       "Bash(.specify/scripts/bash/create-phr.sh:*)",
       "WebSearch",
-      "Bash(gh pr create:*)"
+      "Bash(gh pr create:*)",
+      "Bash(pip show:*)",
+      "Bash(pip index:*)",
+      "Bash(pip search:*)",
+      "Bash(git checkout:*)",
+      "Bash(gh pr merge:*)",
+      "Bash(gh run list:*)",
+      "Bash(git pull:*)",
+      "Bash(npm run build:*)"
     ],
     "deny": [],
     "ask": []

@@ -68,6 +68,9 @@ dependencies = [
     "pdfplumber>=0.10.0",      # PDF text/table extraction
     "Pillow>=10.0.0",          # Image processing
     "aiofiles>=23.0.0",        # Async file operations
+
+    # Task Scheduler (Feature 014)
+    "apscheduler>=4.0.0a5",    # APScheduler v4 with async support
 ]
 
 [project.optional-dependencies]

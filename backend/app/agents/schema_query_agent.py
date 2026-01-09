@@ -62,39 +62,79 @@ from app.agents.agent_pool import (
 # NOTE: Read at runtime in get_llm_model() to pick up env changes
 
 
-def get_llm_model():
+def get_llm_model(provider_override: Optional[str] = None, model_override: Optional[str] = None):
     """
-    Get the LLM model based on LLM_PROVIDER setting.
+    Get the LLM model based on LLM_PROVIDER setting or overrides.
 
     Set LLM_PROVIDER in .env:
       - "gemini" → Uses Gemini via LiteLLM (default)
       - "openai" → Uses OpenAI directly
 
+    Args:
+        provider_override: Override the LLM_PROVIDER env var (e.g., "gemini" or "openai")
+        model_override: Override the model name (e.g., "gpt-4o-mini" or "gemini/gemini-2.5-flash")
+
     Environment variables are read at runtime to ensure HF secrets are picked up.
     """
     # Read env vars at runtime (not module load time)
     # Use .strip() to remove any accidental whitespace/newlines from HF secrets
-    llm_provider = os.getenv("LLM_PROVIDER", "gemini").strip().lower()
+    llm_provider = (provider_override or os.getenv("LLM_PROVIDER", "gemini")).strip().lower()
     gemini_api_key = (os.getenv("GEMINI_API_KEY") or "").strip() or None
-    gemini_model = os.getenv("GEMINI_MODEL", "gemini/gemini-2.5-flash").strip()
-    openai_model = os.getenv("OPENAI_MODEL", "gpt-4o-mini").strip()
+    gemini_model = (model_override if model_override and "gemini" in model_override.lower()
+                    else os.getenv("GEMINI_MODEL", "gemini/gemini-2.5-flash")).strip()
+    openai_model = (model_override if model_override and "gpt" in model_override.lower()
+                    else os.getenv("OPENAI_MODEL", "gpt-4o-mini")).strip()
 
     logger.info(f"[Schema Agent] LLM_PROVIDER={llm_provider}, GEMINI_API_KEY={'set' if gemini_api_key else 'NOT SET'}")
 
     if llm_provider == "openai":
         # Use OpenAI model directly
-        logger.info(f"[Schema Agent] Using OpenAI model: {openai_model}")
-        return openai_model
+        final_model = model_override if model_override else openai_model
+        logger.info(f"[Schema Agent] Using OpenAI model: {final_model}")
+        return final_model
     else:
         # Use Gemini via LiteLLM (default)
         if not gemini_api_key:
             logger.error("[Schema Agent] GEMINI_API_KEY not set! Cannot use Gemini.")
             raise ValueError("GEMINI_API_KEY environment variable is required when LLM_PROVIDER=gemini")
-        logger.info(f"[Schema Agent] Using Gemini model: {gemini_model}")
+        final_model = model_override if model_override else gemini_model
+        logger.info(f"[Schema Agent] Using Gemini model: {final_model}")
         return LitellmModel(
-            model=gemini_model,
+            model=final_model,
             api_key=gemini_api_key,
         )
+
+
+def get_scheduler_llm_model():
+    """
+    Get the LLM model for scheduled tasks based on SCHEDULER_LLM_PROVIDER setting.
+
+    Scheduler-specific environment variables:
+      - SCHEDULER_LLM_PROVIDER: "gemini" or "openai"
+      - SCHEDULER_GEMINI_MODEL: Gemini model for scheduler
+      - SCHEDULER_OPENAI_MODEL: OpenAI model for scheduler
+
+    Falls back to regular LLM settings if scheduler-specific ones are not set.
+    """
+    # Read scheduler-specific env vars
+    scheduler_provider = os.getenv("SCHEDULER_LLM_PROVIDER", "").strip().lower()
+    scheduler_gemini_model = os.getenv("SCHEDULER_GEMINI_MODEL", "").strip()
+    scheduler_openai_model = os.getenv("SCHEDULER_OPENAI_MODEL", "").strip()
+
+    # If scheduler provider is not set, fall back to regular get_llm_model()
+    if not scheduler_provider:
+        logger.info("[Scheduler] No SCHEDULER_LLM_PROVIDER set, using default LLM settings")
+        return get_llm_model()
+
+    # Determine model based on provider
+    if scheduler_provider == "openai":
+        model = scheduler_openai_model or os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+        logger.info(f"[Scheduler] Using OpenAI model for scheduled task: {model}")
+        return get_llm_model(provider_override="openai", model_override=model)
+    else:
+        model = scheduler_gemini_model or os.getenv("GEMINI_MODEL", "gemini/gemini-2.5-flash")
+        logger.info(f"[Scheduler] Using Gemini model for scheduled task: {model}")
+        return get_llm_model(provider_override="gemini", model_override=model)
 
 
 # ============================================================================
@@ -952,6 +992,7 @@ class SchemaQueryAgent:
         user_id: Optional[int] = None,
         thread_id: Optional[str] = None,
         connector_tools: Optional[List[Any]] = None,
+        model_getter: Optional[callable] = None,
     ):
         """
         Initialize Schema Query Agent.
@@ -963,6 +1004,7 @@ class SchemaQueryAgent:
             user_id: User ID for tool context
             thread_id: Thread ID for ChatKit session (for persistent conversation)
             connector_tools: Optional list of tools from user's MCP connectors (Gmail, Notion, GDrive, etc.)
+            model_getter: Optional callable to get LLM model (default: get_llm_model)
         """
         self.database_uri = database_uri
         self.schema_metadata = schema_metadata
@@ -970,6 +1012,7 @@ class SchemaQueryAgent:
         self.user_id = user_id
         self.thread_id = thread_id
         self.connector_tools = connector_tools or []
+        self.model_getter = model_getter or get_llm_model
 
         # MCP server and agent instances
         self._mcp_server: Optional[MCPServerStdio] = None
@@ -1273,7 +1316,7 @@ IMPORTANT CONNECTOR TOOL RULES:
             agent = Agent(
                 name="Schema Query Agent",
                 instructions=system_prompt,
-                model=get_llm_model(),
+                model=self.model_getter(),
                 mcp_servers=[mcp_server],
                 tools=function_tools if function_tools else None,
                 model_settings=ModelSettings(tool_choice="auto"),
@@ -1638,7 +1681,7 @@ AVAILABLE CONNECTOR TOOLS:
             agent = Agent(
                 name="Schema Query Agent",
                 instructions=system_prompt,
-                model=get_llm_model(),
+                model=self.model_getter(),
                 mcp_servers=[mcp_server],
                 tools=function_tools if function_tools else None,
                 model_settings=ModelSettings(tool_choice="auto"),
@@ -2015,6 +2058,7 @@ async def create_schema_query_agent(
     user_id: Optional[int] = None,
     thread_id: Optional[str] = None,
     connector_tools: Optional[List[Any]] = None,
+    model_getter: Optional[callable] = None,
 ) -> SchemaQueryAgent:
     """
     Factory function to create and initialize a Schema Query Agent.
@@ -2027,6 +2071,8 @@ async def create_schema_query_agent(
         user_id: User ID for tool context
         thread_id: Thread ID for ChatKit session (for persistent conversation)
         connector_tools: Optional list of tools from user's MCP connectors (Gmail, Notion, GDrive, etc.)
+        model_getter: Optional callable to get LLM model (default: get_llm_model).
+                      Use get_scheduler_llm_model for scheduled tasks.
 
     Returns:
         Initialized SchemaQueryAgent instance with PostgreSQL session support
@@ -2038,6 +2084,7 @@ async def create_schema_query_agent(
         user_id=user_id,
         thread_id=thread_id,
         connector_tools=connector_tools,
+        model_getter=model_getter,
     )
 
     if auto_initialize:

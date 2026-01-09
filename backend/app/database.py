@@ -118,3 +118,12 @@ async def verify_connection():
 async def cleanup():
     """Cleanup database connections"""
     await engine.dispose()
+
+
+def get_database_url() -> str:
+    """
+    Get the database URL for external services.
+
+    Returns the original DATABASE_URL (not async version).
+    """
+    return DATABASE_URL
