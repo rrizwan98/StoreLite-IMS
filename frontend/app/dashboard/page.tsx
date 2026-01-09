@@ -303,7 +303,7 @@ export default function DashboardPage() {
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <header className="bg-white shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col sm:flex-row justify-between items-center gap-3">
           <div className="flex items-center space-x-3">
             <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
               <span className="text-white text-xl font-bold">S</span>
@@ -311,7 +311,7 @@ export default function DashboardPage() {
             <span className="text-xl font-bold text-gray-900">{APP_METADATA.NAME}</span>
           </div>
           <div className="flex items-center space-x-4">
-            <span className="text-gray-600">
+            <span className="text-gray-600 text-sm sm:text-base truncate max-w-[150px] sm:max-w-none">
               {user.full_name || user.email}
             </span>
             <button
@@ -319,7 +319,7 @@ export default function DashboardPage() {
                 localStorage.removeItem('ims_auth_tokens');
                 window.location.href = ROUTES.HOME;
               }}
-              className="text-gray-600 hover:text-gray-900 font-medium"
+              className="text-gray-600 hover:text-gray-900 font-medium text-sm sm:text-base"
             >
               Logout
             </button>
@@ -331,11 +331,11 @@ export default function DashboardPage() {
         {needsSetup ? (
           /* Service Selection for First-Time Users */
           <div className="max-w-4xl mx-auto">
-            <div className="text-center mb-10">
-              <h1 className="text-3xl font-bold text-gray-900 mb-3">
+            <div className="text-center mb-6 sm:mb-10">
+              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2 sm:mb-3">
                 Welcome, {user.full_name || 'there'}!
               </h1>
-              <p className="text-xl text-gray-600">
+              <p className="text-lg sm:text-xl text-gray-600">
                 How would you like to use {APP_METADATA.NAME}?
               </p>
             </div>
@@ -347,7 +347,7 @@ export default function DashboardPage() {
             )}
 
             {/* Database URI Input (shared between options 1 and 3) */}
-            <div className="bg-white rounded-xl shadow-md p-6 mb-8">
+            <div className="bg-white rounded-xl shadow-md p-4 sm:p-6 mb-6 sm:mb-8">
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 PostgreSQL Database URI (for options 1 or 3)
               </label>
@@ -356,11 +356,11 @@ export default function DashboardPage() {
                 value={databaseUri}
                 onChange={(e) => setDatabaseUri(e.target.value)}
                 placeholder="postgresql://user:pass@host:5432/db"
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
+                className="w-full px-3 sm:px-4 py-2 sm:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-xs sm:text-sm"
               />
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
               {/* Option 1: Full IMS Connection */}
               <div className="bg-white rounded-2xl shadow-lg p-6 border-2 border-blue-200 flex flex-col">
                 <div className="text-center mb-4">
@@ -522,7 +522,7 @@ export default function DashboardPage() {
             </div>
 
             {/* Feature Cards - Full Features for Own Database Users */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
               <Link href={connectionStatus.mcp_status === 'connected' ? ROUTES.MCP_ADMIN : ROUTES.DB_CONNECT}>
                 <div className="bg-white rounded-xl shadow-md p-6 hover:shadow-lg transition-shadow cursor-pointer">
                   <div className="text-4xl mb-4">📦</div>
@@ -613,7 +613,7 @@ export default function DashboardPage() {
             </div>
 
             {/* Feature Cards - Only Agent + Analytics */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
               <Link href={connectionStatus.schema_status === 'ready' ? ROUTES.SCHEMA_AGENT : ROUTES.SCHEMA_CONNECT}>
                 <div className="bg-white rounded-xl shadow-md p-6 hover:shadow-lg transition-shadow cursor-pointer border-2 border-emerald-200">
                   <div className="text-4xl mb-4">🧠</div>
@@ -684,7 +684,7 @@ export default function DashboardPage() {
             </div>
 
             {/* Feature Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
               <Link href={ROUTES.ADMIN}>
                 <div className="bg-white rounded-xl shadow-md p-6 hover:shadow-lg transition-shadow cursor-pointer">
                   <div className="text-4xl mb-4">📦</div>
@@ -766,7 +766,7 @@ export default function DashboardPage() {
 
           {/* Chat Modal */}
           {isChatOpen && (
-            <div className="fixed bottom-24 right-6 w-96 h-[500px] bg-white rounded-xl shadow-2xl z-50 overflow-hidden border border-gray-200">
+            <div className="fixed bottom-24 right-4 sm:right-6 w-[calc(100vw-2rem)] sm:w-96 max-w-md h-[60vh] sm:h-[500px] bg-white rounded-xl shadow-2xl z-50 overflow-hidden border border-gray-200">
               {chatLoadError ? (
                 <div className="flex items-center justify-center h-full">
                   <div className="text-center p-6">

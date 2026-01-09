@@ -414,9 +414,9 @@ export default function AnalyticsPage() {
         }}
       />
 
-      <div className="h-[calc(100vh-120px)] flex gap-4">
+      <div className="h-[calc(100vh-120px)] flex flex-col lg:flex-row gap-4">
         {/* Left: ChatKit Panel */}
-        <div className="w-1/2 flex flex-col bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+        <div className="w-full lg:w-1/2 h-[50vh] lg:h-full flex flex-col bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
           <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-4 py-3">
             <h2 className="font-semibold flex items-center">
               <span className="mr-2">🤖</span>
@@ -463,7 +463,7 @@ export default function AnalyticsPage() {
         </div>
 
         {/* Right: Visualization Panel */}
-        <div className="w-1/2 flex flex-col bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+        <div className="w-full lg:w-1/2 h-[50vh] lg:h-full flex flex-col bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
           <div className="bg-gradient-to-r from-purple-600 to-pink-600 text-white px-4 py-3">
             <h2 className="font-semibold flex items-center">
               <span className="mr-2">📊</span>
@@ -502,7 +502,7 @@ export default function AnalyticsPage() {
               <div className="space-y-4">
                 {/* Metrics Cards */}
                 {metrics.length > 0 && (
-                  <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                     {metrics.map((m, i) => (
                       <div
                         key={i}

@@ -135,49 +135,51 @@ export default function SchemaAnalyticsPage() {
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <header className="bg-white shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
-          <div className="flex items-center space-x-3">
-            <Link href={ROUTES.DASHBOARD} className="flex items-center space-x-3">
-              <div className="w-10 h-10 bg-emerald-600 rounded-lg flex items-center justify-center">
-                <span className="text-white text-xl">📊</span>
-              </div>
-              <span className="text-xl font-bold text-gray-900">Analytics</span>
-            </Link>
-            <span className="text-gray-400">|</span>
-            <span className="text-gray-600 text-sm">AI-powered data insights</span>
-          </div>
-          <div className="flex items-center space-x-4">
-            <Link
-              href={ROUTES.SCHEMA_AGENT}
-              className="text-gray-600 hover:text-gray-900 text-sm"
-            >
-              Open Agent
-            </Link>
-            <Link
-              href={ROUTES.DASHBOARD}
-              className="text-gray-600 hover:text-gray-900 font-medium"
-            >
-              Dashboard
-            </Link>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 sm:py-4">
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 sm:gap-0">
+            <div className="flex items-center space-x-2 sm:space-x-3">
+              <Link href={ROUTES.DASHBOARD} className="flex items-center space-x-2 sm:space-x-3">
+                <div className="w-8 h-8 sm:w-10 sm:h-10 bg-emerald-600 rounded-lg flex items-center justify-center">
+                  <span className="text-white text-lg sm:text-xl">📊</span>
+                </div>
+                <span className="text-lg sm:text-xl font-bold text-gray-900">Analytics</span>
+              </Link>
+              <span className="hidden md:inline text-gray-400">|</span>
+              <span className="hidden md:inline text-gray-600 text-sm">AI-powered data insights</span>
+            </div>
+            <div className="flex items-center space-x-3 sm:space-x-4 text-sm">
+              <Link
+                href={ROUTES.SCHEMA_AGENT}
+                className="text-gray-600 hover:text-gray-900"
+              >
+                Agent
+              </Link>
+              <Link
+                href={ROUTES.DASHBOARD}
+                className="text-gray-600 hover:text-gray-900 font-medium"
+              >
+                Dashboard
+              </Link>
+            </div>
           </div>
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8">
         {/* Quick Analytics Cards */}
-        <div className="mb-8">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Quick Analytics</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="mb-6 sm:mb-8">
+          <h2 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4">Quick Analytics</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
             {analyticsQueries.map((item, idx) => (
               <button
                 key={idx}
                 onClick={() => runQuickQuery(item.query)}
                 disabled={querying}
-                className="bg-white rounded-xl shadow-md p-6 text-left hover:shadow-lg transition-shadow disabled:opacity-50"
+                className="bg-white rounded-xl shadow-md p-4 sm:p-6 text-left hover:shadow-lg transition-shadow disabled:opacity-50"
               >
-                <div className="text-3xl mb-3">{item.icon}</div>
-                <h3 className="font-semibold text-gray-900 mb-1">{item.title}</h3>
-                <p className="text-sm text-gray-600">{item.description}</p>
+                <div className="text-2xl sm:text-3xl mb-2 sm:mb-3">{item.icon}</div>
+                <h3 className="font-semibold text-gray-900 mb-1 text-sm sm:text-base">{item.title}</h3>
+                <p className="text-xs sm:text-sm text-gray-600">{item.description}</p>
               </button>
             ))}
           </div>
@@ -185,9 +187,9 @@ export default function SchemaAnalyticsPage() {
 
         {/* Query Result */}
         {(querying || queryResult) && (
-          <div className="bg-white rounded-xl shadow-md p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-gray-900">
+          <div className="bg-white rounded-xl shadow-md p-4 sm:p-6">
+            <div className="flex items-center justify-between mb-3 sm:mb-4">
+              <h2 className="text-base sm:text-lg font-semibold text-gray-900">
                 {querying ? 'Analyzing...' : 'Analysis Result'}
               </h2>
               {queryResult && (
@@ -228,14 +230,14 @@ export default function SchemaAnalyticsPage() {
         )}
 
         {/* Custom Query */}
-        <div className="mt-8 bg-white rounded-xl shadow-md p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Custom Analysis</h2>
-          <p className="text-gray-600 mb-4">
+        <div className="mt-6 sm:mt-8 bg-white rounded-xl shadow-md p-4 sm:p-6">
+          <h2 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4">Custom Analysis</h2>
+          <p className="text-gray-600 mb-3 sm:mb-4 text-sm sm:text-base">
             Need a specific analysis? Ask in natural language or use the AI Agent for more complex queries.
           </p>
           <Link
             href={ROUTES.SCHEMA_AGENT}
-            className="inline-flex items-center px-6 py-3 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors font-semibold"
+            className="inline-flex items-center px-4 sm:px-6 py-2.5 sm:py-3 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors font-semibold text-sm sm:text-base"
           >
             <span className="mr-2">🧠</span>
             Open AI Agent
@@ -243,12 +245,12 @@ export default function SchemaAnalyticsPage() {
         </div>
 
         {/* Read-Only Notice */}
-        <div className="mt-8 bg-emerald-50 border border-emerald-200 rounded-lg p-4">
-          <div className="flex items-start space-x-3">
-            <span className="text-emerald-600 text-xl">🛡️</span>
+        <div className="mt-6 sm:mt-8 bg-emerald-50 border border-emerald-200 rounded-lg p-3 sm:p-4">
+          <div className="flex items-start space-x-2 sm:space-x-3">
+            <span className="text-emerald-600 text-lg sm:text-xl">🛡️</span>
             <div>
-              <h4 className="font-semibold text-emerald-800">Read-Only Analytics</h4>
-              <p className="text-sm text-emerald-700">
+              <h4 className="font-semibold text-emerald-800 text-sm sm:text-base">Read-Only Analytics</h4>
+              <p className="text-xs sm:text-sm text-emerald-700">
                 All analytics queries are read-only. Your data is never modified.
               </p>
             </div>
