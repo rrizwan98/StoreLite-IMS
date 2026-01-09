@@ -94,12 +94,65 @@ export function getAccessToken(): string | null {
 }
 
 // ============================================================================
-// API Helper
+// API Helper with Auto-Refresh on 401
 // ============================================================================
 
+// Flag to prevent multiple simultaneous refresh attempts
+let isRefreshing = false;
+let refreshPromise: Promise<AuthTokens | null> | null = null;
+
+/**
+ * Perform token refresh (singleton pattern to prevent race conditions)
+ */
+async function performTokenRefresh(): Promise<AuthTokens | null> {
+  if (isRefreshing && refreshPromise) {
+    return refreshPromise;
+  }
+
+  isRefreshing = true;
+  refreshPromise = (async () => {
+    const currentTokens = getTokens();
+    if (!currentTokens?.refresh_token) {
+      isRefreshing = false;
+      return null;
+    }
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refresh_token: currentTokens.refresh_token }),
+      });
+
+      if (!response.ok) {
+        clearTokens();
+        isRefreshing = false;
+        return null;
+      }
+
+      const tokens = await response.json();
+      saveTokens(tokens);
+      isRefreshing = false;
+      return tokens;
+    } catch {
+      clearTokens();
+      isRefreshing = false;
+      return null;
+    }
+  })();
+
+  return refreshPromise;
+}
+
+/**
+ * API fetch helper with automatic token refresh on 401
+ * - If token is expired (401), automatically refreshes and retries the request
+ * - Prevents multiple simultaneous refresh attempts
+ */
 async function authFetch<T>(
   endpoint: string,
-  options: RequestInit = {}
+  options: RequestInit = {},
+  retryOnUnauthorized: boolean = true
 ): Promise<T> {
   const token = getAccessToken();
 
@@ -116,6 +169,34 @@ async function authFetch<T>(
     ...options,
     headers,
   });
+
+  // Auto-refresh on 401 (Unauthorized) - token might be expired
+  if (response.status === 401 && retryOnUnauthorized) {
+    const newTokens = await performTokenRefresh();
+    if (newTokens) {
+      // Retry the original request with new token
+      const retryHeaders: Record<string, string> = {
+        'Content-Type': 'application/json',
+        ...(options.headers as Record<string, string>),
+        'Authorization': `Bearer ${newTokens.access_token}`,
+      };
+
+      const retryResponse = await fetch(`${API_BASE_URL}${endpoint}`, {
+        ...options,
+        headers: retryHeaders,
+      });
+
+      if (!retryResponse.ok) {
+        const error = await retryResponse.json().catch(() => ({ detail: 'Request failed' }));
+        throw new Error(error.detail || error.message || 'Request failed');
+      }
+
+      return retryResponse.json();
+    } else {
+      // Refresh failed, throw auth error
+      throw new Error('Session expired. Please log in again.');
+    }
+  }
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({ detail: 'Request failed' }));
@@ -166,23 +247,10 @@ export async function logout(): Promise<void> {
 }
 
 /**
- * Refresh access token
+ * Refresh access token (uses singleton pattern to prevent race conditions)
  */
 export async function refreshToken(): Promise<AuthTokens | null> {
-  const currentTokens = getTokens();
-  if (!currentTokens?.refresh_token) return null;
-
-  try {
-    const tokens = await authFetch<AuthTokens>('/auth/refresh', {
-      method: 'POST',
-      body: JSON.stringify({ refresh_token: currentTokens.refresh_token }),
-    });
-    saveTokens(tokens);
-    return tokens;
-  } catch {
-    clearTokens();
-    return null;
-  }
+  return performTokenRefresh();
 }
 
 /**
