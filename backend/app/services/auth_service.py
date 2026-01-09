@@ -20,8 +20,8 @@ logger = logging.getLogger(__name__)
 # JWT Configuration
 SECRET_KEY = os.getenv("JWT_SECRET_KEY", "your-secret-key-change-in-production-please")
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60  # 1 hour
-REFRESH_TOKEN_EXPIRE_DAYS = 7
+ACCESS_TOKEN_EXPIRE_DAYS = 30  # 30 days for long-lived sessions
+REFRESH_TOKEN_EXPIRE_DAYS = 30  # 30 days for refresh token
 
 
 # ============================================================================
@@ -95,8 +95,8 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 # ============================================================================
 
 def create_access_token(user_id: int, email: str) -> str:
-    """Create JWT access token"""
-    expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    """Create JWT access token (valid for 30 days)"""
+    expire = datetime.utcnow() + timedelta(days=ACCESS_TOKEN_EXPIRE_DAYS)
     to_encode = {
         "sub": str(user_id),
         "email": email,
@@ -107,7 +107,7 @@ def create_access_token(user_id: int, email: str) -> str:
 
 
 def create_refresh_token(user_id: int, email: str) -> str:
-    """Create JWT refresh token"""
+    """Create JWT refresh token (valid for 30 days)"""
     expire = datetime.utcnow() + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
     to_encode = {
         "sub": str(user_id),
@@ -133,13 +133,13 @@ def decode_token(token: str) -> Optional[TokenData]:
 
 
 def create_tokens(user_id: int, email: str) -> Token:
-    """Create both access and refresh tokens"""
+    """Create both access and refresh tokens (both valid for 30 days)"""
     access_token = create_access_token(user_id, email)
     refresh_token = create_refresh_token(user_id, email)
     return Token(
         access_token=access_token,
         refresh_token=refresh_token,
-        expires_in=ACCESS_TOKEN_EXPIRE_MINUTES * 60  # seconds
+        expires_in=ACCESS_TOKEN_EXPIRE_DAYS * 24 * 60 * 60  # 30 days in seconds
     )
 
 
