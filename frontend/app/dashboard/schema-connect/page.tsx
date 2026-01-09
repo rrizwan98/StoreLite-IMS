@@ -225,45 +225,47 @@ export default function SchemaConnectPage() {
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <header className="bg-white shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
-          <div className="flex items-center space-x-3">
-            <Link href={ROUTES.DASHBOARD} className="flex items-center space-x-3">
-              <div className="w-10 h-10 bg-emerald-600 rounded-lg flex items-center justify-center">
-                <span className="text-white text-xl font-bold">S</span>
-              </div>
-              <span className="text-xl font-bold text-gray-900">{APP_METADATA.NAME}</span>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 sm:py-4">
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 sm:gap-0">
+            <div className="flex items-center space-x-2 sm:space-x-3">
+              <Link href={ROUTES.DASHBOARD} className="flex items-center space-x-2 sm:space-x-3">
+                <div className="w-8 h-8 sm:w-10 sm:h-10 bg-emerald-600 rounded-lg flex items-center justify-center">
+                  <span className="text-white text-lg sm:text-xl font-bold">S</span>
+                </div>
+                <span className="text-lg sm:text-xl font-bold text-gray-900">{APP_METADATA.NAME}</span>
+              </Link>
+              <span className="hidden sm:inline text-gray-400">/</span>
+              <span className="hidden sm:inline text-gray-600">Schema Connect</span>
+            </div>
+            <Link
+              href={ROUTES.DASHBOARD}
+              className="text-gray-600 hover:text-gray-900 font-medium text-sm sm:text-base"
+            >
+              Back to Dashboard
             </Link>
-            <span className="text-gray-400">/</span>
-            <span className="text-gray-600">Schema Connect</span>
           </div>
-          <Link
-            href={ROUTES.DASHBOARD}
-            className="text-gray-600 hover:text-gray-900 font-medium"
-          >
-            Back to Dashboard
-          </Link>
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8">
         {/* Error/Success Messages */}
         {error && (
-          <div className="mb-6 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+          <div className="mb-4 sm:mb-6 bg-red-50 border border-red-200 text-red-700 px-3 sm:px-4 py-2 sm:py-3 rounded-lg text-sm">
             {error}
           </div>
         )}
         {success && (
-          <div className="mb-6 bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg">
+          <div className="mb-4 sm:mb-6 bg-green-50 border border-green-200 text-green-700 px-3 sm:px-4 py-2 sm:py-3 rounded-lg text-sm">
             {success}
           </div>
         )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-8">
           {/* Left Column - Connection Status & Actions */}
-          <div className="lg:col-span-1 space-y-6">
+          <div className="lg:col-span-1 space-y-4 sm:space-y-6">
             {/* Connection Status Card */}
-            <div className="bg-white rounded-xl shadow-md p-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">Connection Status</h2>
+            <div className="bg-white rounded-xl shadow-md p-4 sm:p-6">
+              <h2 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4">Connection Status</h2>
 
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
@@ -299,8 +301,8 @@ export default function SchemaConnectPage() {
             </div>
 
             {/* Actions Card */}
-            <div className="bg-white rounded-xl shadow-md p-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">Actions</h2>
+            <div className="bg-white rounded-xl shadow-md p-4 sm:p-6">
+              <h2 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4">Actions</h2>
 
               <div className="space-y-3">
                 {!schemaMetadata ? (
@@ -383,26 +385,26 @@ export default function SchemaConnectPage() {
           </div>
 
           {/* Right Column - Tables List & Details */}
-          <div className="lg:col-span-2 space-y-6">
+          <div className="lg:col-span-2 space-y-4 sm:space-y-6">
             {!schemaMetadata ? (
-              <div className="bg-white rounded-xl shadow-md p-12 text-center">
-                <div className="text-6xl mb-4">🔍</div>
-                <h2 className="text-xl font-semibold text-gray-900 mb-2">
+              <div className="bg-white rounded-xl shadow-md p-8 sm:p-12 text-center">
+                <div className="text-5xl sm:text-6xl mb-3 sm:mb-4">🔍</div>
+                <h2 className="text-lg sm:text-xl font-semibold text-gray-900 mb-2">
                   Discover Your Schema
                 </h2>
-                <p className="text-gray-600 mb-6">
+                <p className="text-gray-600 mb-4 sm:mb-6 text-sm sm:text-base">
                   Click &quot;Discover Schema&quot; to analyze your database and enable AI-powered queries.
                 </p>
               </div>
             ) : (
               <>
                 {/* Tables List */}
-                <div className="bg-white rounded-xl shadow-md p-6">
-                  <h2 className="text-lg font-semibold text-gray-900 mb-4">
+                <div className="bg-white rounded-xl shadow-md p-4 sm:p-6">
+                  <h2 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4">
                     Tables ({schemaMetadata.table_count})
                   </h2>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-3">
                     {schemaMetadata.tables.map((table) => (
                       <button
                         key={table.name}
@@ -424,8 +426,8 @@ export default function SchemaConnectPage() {
 
                 {/* Table Details */}
                 {selectedTable && (
-                  <div className="bg-white rounded-xl shadow-md p-6">
-                    <h2 className="text-lg font-semibold text-gray-900 mb-4">
+                  <div className="bg-white rounded-xl shadow-md p-4 sm:p-6">
+                    <h2 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4">
                       Table: {selectedTable}
                     </h2>
 

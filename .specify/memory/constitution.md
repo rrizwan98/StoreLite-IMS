@@ -196,6 +196,59 @@ python backend/mcp_server.py
 
 **Why this matters:** Local development is way faster - no waiting for cloud servers. You can work offline. You save money. And if something breaks, it only breaks on your machine, not for everyone.
 
+### VI-A. Environment Configuration: Same Code, Different Configs (NON-NEGOTIABLE)
+
+**What this means:** The SAME code must work in both local development AND production. Only environment variables change - NEVER the code itself.
+
+**Simple Rules:**
+- **Use environment variables**: All configs (URLs, keys, secrets) come from environment variables
+- **Sensible defaults**: Provide local defaults so code works without setting everything
+- **Never hardcode**: No production URLs or secrets in the code
+- **Never conditional code**: Don't write `if production: use_this_url else: use_that_url`
+- **Git-ignore secrets**: `.env` files with real secrets must be in `.gitignore`
+
+**Correct Pattern:**
+```python
+# ✅ CORRECT - Works everywhere
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://localhost:5432/dev_db")
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
+
+# ❌ WRONG - Hardcoded production value
+DATABASE_URL = "postgresql://prod-server/prod_db"
+
+# ❌ WRONG - Conditional code
+if os.getenv("ENV") == "production":
+    url = "https://prod.com"
+else:
+    url = "http://localhost"
+```
+
+**Why this matters:** When code is the same everywhere, you avoid "works on my machine" bugs. Deployment becomes predictable. No one accidentally commits production secrets.
+
+### VI-B. Commit and Push Before Switching Features (NON-NEGOTIABLE)
+
+**What this means:** When a feature/fix is complete (tests pass, developer approves), you MUST commit and push the code BEFORE starting any new work.
+
+**Simple Rules:**
+- **Complete work first**: Finish current feature before starting new one
+- **Push immediately**: Don't leave completed work uncommitted
+- **Ask before switching**: If developer wants new feature, check if previous work is pushed
+- **Never lose work**: Uncommitted changes can be lost when switching branches
+
+**Workflow:**
+```
+Feature Complete → Tests Pass → Developer Approves → COMMIT & PUSH → Start Next Feature
+```
+
+**If Asked to Switch Before Push:**
+```
+⚠️ Wait! Previous changes not pushed yet.
+Let me push the current work first before starting new feature.
+Is that okay?
+```
+
+**Why this matters:** Unpushed work can be lost. Other team members can't see or build on your work. Git history becomes unclear. Rollback becomes impossible if something breaks.
+
 ### VII. Simplicity Over Abstraction
 
 **What this means:** Write code that works today, not code that might be useful someday. Simple is better than clever.
@@ -348,4 +401,7 @@ For day-to-day development decisions not covered here, consult:
 - `.specify/templates/` for spec/plan/task templates
 - `README.md` for project setup and quickstart
 
-**Version**: 1.1.0 | **Ratified**: 2025-12-07 | **Last Amended**: 2025-12-08
+**Version**: 1.2.0 | **Ratified**: 2025-12-07 | **Last Amended**: 2026-01-09
+
+### Amendment History
+- **v1.2.0** (2026-01-09): Added VI-A (Environment Configuration) and VI-B (Commit Before Switching) as NON-NEGOTIABLE principles

@@ -132,53 +132,52 @@ export default function SettingsPage() {
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <header className="bg-white border-b border-gray-200 shadow-sm">
-        <div className="container mx-auto px-4 py-4">
+        <div className="container mx-auto px-4 py-3 sm:py-4">
           <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <Link
-                href="/dashboard"
-                className="flex items-center text-gray-600 hover:text-gray-900 transition-colors"
-              >
-                <ArrowLeft className="h-5 w-5 mr-2" />
-                Back to Dashboard
-              </Link>
-            </div>
+            <Link
+              href="/dashboard"
+              className="flex items-center text-gray-600 hover:text-gray-900 transition-colors text-sm sm:text-base"
+            >
+              <ArrowLeft className="h-4 w-4 sm:h-5 sm:w-5 mr-1 sm:mr-2" />
+              <span className="hidden sm:inline">Back to Dashboard</span>
+              <span className="sm:hidden">Back</span>
+            </Link>
             <div className="flex items-center space-x-2">
-              <Settings className="h-6 w-6 text-gray-600" />
-              <h1 className="text-xl font-semibold text-gray-900">Settings</h1>
+              <Settings className="h-5 w-5 sm:h-6 sm:w-6 text-gray-600" />
+              <h1 className="text-lg sm:text-xl font-semibold text-gray-900">Settings</h1>
             </div>
           </div>
         </div>
       </header>
 
       {/* Main Content */}
-      <main className="container mx-auto px-4 py-8 max-w-4xl">
+      <main className="container mx-auto px-4 py-4 sm:py-8 max-w-4xl">
         {view === 'main' ? (
-          <div className="space-y-8">
+          <div className="space-y-4 sm:space-y-8">
             {/* System Tools Section */}
             <section className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-              <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
-                <h2 className="text-lg font-semibold text-gray-900">System Tools</h2>
-                <p className="text-sm text-gray-500 mt-1">
+              <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-200 bg-gray-50">
+                <h2 className="text-base sm:text-lg font-semibold text-gray-900">System Tools</h2>
+                <p className="text-xs sm:text-sm text-gray-500 mt-1">
                   Connect to built-in tools like Gmail and Analytics
                 </p>
               </div>
-              <div className="p-6">
+              <div className="p-4 sm:p-6">
                 <SystemToolsList showBeta={true} />
               </div>
             </section>
 
             {/* Connectors Section */}
             <section className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-              <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
+              <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-200 bg-gray-50">
                 <div>
-                  <h2 className="text-lg font-semibold text-gray-900">Connectors</h2>
-                  <p className="text-sm text-gray-500 mt-1">
+                  <h2 className="text-base sm:text-lg font-semibold text-gray-900">Connectors</h2>
+                  <p className="text-xs sm:text-sm text-gray-500 mt-1">
                     Connect to external services like Notion
                   </p>
                 </div>
               </div>
-              <div className="p-6" key={refreshKey}>
+              <div className="p-4 sm:p-6" key={refreshKey}>
                 <ConnectorsList
                   onConnectorClick={handlePredefinedConnectorClick}
                 />
@@ -187,13 +186,13 @@ export default function SettingsPage() {
 
             {/* File Retention Section */}
             <section className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-              <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
-                <h2 className="text-lg font-semibold text-gray-900">File retention</h2>
-                <p className="text-sm text-gray-500 mt-1">
+              <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-200 bg-gray-50">
+                <h2 className="text-base sm:text-lg font-semibold text-gray-900">File retention</h2>
+                <p className="text-xs sm:text-sm text-gray-500 mt-1">
                   Control how long uploaded attachments remain available for thread replay.
                 </p>
               </div>
-              <div className="p-6">
+              <div className="p-4 sm:p-6">
                 {fileRetentionLoading ? (
                   <p className="text-sm text-gray-500">Loading...</p>
                 ) : (
@@ -257,9 +256,9 @@ export default function SettingsPage() {
             </section>
 
             {/* Help Section */}
-            <section className="bg-blue-50 rounded-xl border border-blue-200 p-6">
-              <h3 className="font-semibold text-blue-900 mb-2">How it works</h3>
-              <ul className="text-sm text-blue-800 space-y-2">
+            <section className="bg-blue-50 rounded-xl border border-blue-200 p-4 sm:p-6">
+              <h3 className="font-semibold text-blue-900 mb-2 text-sm sm:text-base">How it works</h3>
+              <ul className="text-xs sm:text-sm text-blue-800 space-y-2">
                 <li>
                   <strong>System Tools:</strong> Built-in integrations like Gmail. Click &quot;Connect&quot; to enable.
                 </li>

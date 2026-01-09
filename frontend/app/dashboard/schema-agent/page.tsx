@@ -652,42 +652,44 @@ export default function SchemaAgentPage() {
 
       {/* Header */}
       <header className="bg-white shadow-sm flex-shrink-0 z-10">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
-          <div className="flex items-center space-x-3">
-            <Link href={ROUTES.DASHBOARD} className="flex items-center space-x-3">
-              <div className="w-10 h-10 bg-emerald-600 rounded-lg flex items-center justify-center">
-                <span className="text-white text-xl">🧠</span>
-              </div>
-              <span className="text-xl font-bold text-gray-900">AI Agent</span>
-            </Link>
-            <span className="text-gray-400">|</span>
-            <span className="text-gray-600 text-sm">Query your database with natural language</span>
-          </div>
-          <div className="flex items-center space-x-4">
-            {connectionStatus?.tables_count !== undefined && (
-              <span className="text-sm text-gray-500 bg-gray-100 px-3 py-1 rounded-full">
-                {connectionStatus.tables_count} tables
-              </span>
-            )}
-            {/* Tools indicator */}
-            {toolsLoaded && (systemTools.length > 0 || connectors.length > 0) && (
-              <span className="text-sm text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full flex items-center">
-                <span className="mr-1">🔧</span>
-                {systemTools.length + connectors.length} tools
-              </span>
-            )}
-            <Link
-              href={ROUTES.SCHEMA_CONNECT}
-              className="text-gray-600 hover:text-gray-900 text-sm"
-            >
-              View Schema
-            </Link>
-            <Link
-              href={ROUTES.DASHBOARD}
-              className="text-gray-600 hover:text-gray-900 font-medium"
-            >
-              Dashboard
-            </Link>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 sm:py-4">
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 sm:gap-0">
+            <div className="flex items-center space-x-2 sm:space-x-3">
+              <Link href={ROUTES.DASHBOARD} className="flex items-center space-x-2 sm:space-x-3">
+                <div className="w-8 h-8 sm:w-10 sm:h-10 bg-emerald-600 rounded-lg flex items-center justify-center">
+                  <span className="text-white text-lg sm:text-xl">🧠</span>
+                </div>
+                <span className="text-lg sm:text-xl font-bold text-gray-900">AI Agent</span>
+              </Link>
+              <span className="hidden md:inline text-gray-400">|</span>
+              <span className="hidden md:inline text-gray-600 text-sm">Query your database with natural language</span>
+            </div>
+            <div className="flex items-center space-x-2 sm:space-x-4 text-xs sm:text-sm">
+              {connectionStatus?.tables_count !== undefined && (
+                <span className="text-gray-500 bg-gray-100 px-2 sm:px-3 py-1 rounded-full">
+                  {connectionStatus.tables_count} tables
+                </span>
+              )}
+              {/* Tools indicator */}
+              {toolsLoaded && (systemTools.length > 0 || connectors.length > 0) && (
+                <span className="text-emerald-600 bg-emerald-50 px-2 sm:px-3 py-1 rounded-full flex items-center">
+                  <span className="mr-1">🔧</span>
+                  {systemTools.length + connectors.length}
+                </span>
+              )}
+              <Link
+                href={ROUTES.SCHEMA_CONNECT}
+                className="hidden sm:inline text-gray-600 hover:text-gray-900"
+              >
+                Schema
+              </Link>
+              <Link
+                href={ROUTES.DASHBOARD}
+                className="text-gray-600 hover:text-gray-900 font-medium"
+              >
+                Dashboard
+              </Link>
+            </div>
           </div>
         </div>
       </header>
@@ -731,9 +733,9 @@ export default function SchemaAgentPage() {
       </div>
 
       {/* Footer info */}
-      <div className="bg-white border-t border-gray-200 px-4 py-2 flex-shrink-0">
-        <div className="max-w-7xl mx-auto text-center text-xs text-gray-500">
-          Read-only mode - Only SELECT queries are executed on your database
+      <div className="bg-white border-t border-gray-200 px-4 py-1.5 sm:py-2 flex-shrink-0">
+        <div className="max-w-7xl mx-auto text-center text-[10px] sm:text-xs text-gray-500">
+          Read-only mode - Only SELECT queries are executed
         </div>
       </div>
 
