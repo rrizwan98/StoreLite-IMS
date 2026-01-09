@@ -78,18 +78,18 @@ export default function POSPage() {
       {/* Stock Warning Overlay */}
       <StockWarning warning={stockWarning} />
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
         {/* Main Bill Area */}
-        <div className="lg:col-span-2 space-y-6">
+        <div className="lg:col-span-2 space-y-4 sm:space-y-6">
           {/* Search Section */}
-          <div className="bg-white rounded-lg shadow-md p-6">
-            <h2 className="text-2xl font-bold mb-4">Search Items</h2>
+          <div className="bg-white rounded-lg shadow-md p-4 sm:p-6">
+            <h2 className="text-xl sm:text-2xl font-bold mb-3 sm:mb-4">Search Items</h2>
             <ItemSearch onAddItem={handleAddItem} />
           </div>
 
           {/* Bill Items Section */}
           <div>
-            <h2 className="text-2xl font-bold mb-4 text-gray-900">Bill Items</h2>
+            <h2 className="text-xl sm:text-2xl font-bold mb-3 sm:mb-4 text-gray-900">Bill Items</h2>
             <BillItems
               items={items}
               onUpdateQuantity={handleUpdateQuantity}
@@ -100,7 +100,7 @@ export default function POSPage() {
 
         {/* Bill Summary Sidebar */}
         <div className="lg:col-span-1 space-y-4">
-          <div className="sticky top-6">
+          <div className="lg:sticky lg:top-6">
             <BillSummary items={items} subtotal={subtotal} total={total} />
 
             {/* Generate Bill Button */}
@@ -111,8 +111,8 @@ export default function POSPage() {
               />
             </div>
 
-            {/* Info */}
-            <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-900">
+            {/* Info - Hidden on mobile to save space */}
+            <div className="hidden sm:block mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-900">
               <p className="font-semibold mb-2">📝 Next Steps:</p>
               <ul className="list-disc list-inside space-y-1 text-xs">
                 <li>Edit quantities if needed</li>

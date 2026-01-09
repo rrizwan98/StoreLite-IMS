@@ -3,13 +3,13 @@
 /**
  * Navigation Component
  * Main navigation menu with links to Admin, POS, and Settings pages
- * Includes connected tools dropdown
+ * Includes connected tools dropdown and mobile hamburger menu
  */
 
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Settings, ChevronDown, Check, Server, Wrench } from 'lucide-react';
+import { Settings, ChevronDown, Check, Server, Wrench, Menu, X } from 'lucide-react';
 import { ROUTES } from '@/lib/constants';
 import { getAllTools, SystemTool } from '@/lib/tools-api';
 import { getConnectors, Connector } from '@/lib/connectors-api';
@@ -17,6 +17,7 @@ import { getConnectors, Connector } from '@/lib/connectors-api';
 export default function Navigation() {
   const pathname = usePathname();
   const [toolsOpen, setToolsOpen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [systemTools, setSystemTools] = useState<SystemTool[]>([]);
   const [connectors, setConnectors] = useState<Connector[]>([]);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -31,6 +32,18 @@ export default function Navigation() {
       ? `${base} bg-primary text-white`
       : `${base} text-gray-700 hover:bg-gray-100`;
   };
+
+  const mobileLinkClasses = (path: string) => {
+    const base = 'block px-4 py-3 rounded-lg transition-colors text-base';
+    return isActive(path)
+      ? `${base} bg-primary text-white`
+      : `${base} text-gray-700 hover:bg-gray-100`;
+  };
+
+  // Close mobile menu on route change
+  useEffect(() => {
+    setMobileMenuOpen(false);
+  }, [pathname]);
 
   // Load tools and connectors
   useEffect(() => {
@@ -66,8 +79,17 @@ export default function Navigation() {
     <nav className="bg-white border-b border-gray-200 shadow-sm">
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between py-2">
-          {/* Left side - Main navigation */}
-          <div className="flex space-x-2">
+          {/* Mobile menu button */}
+          <button
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            className="lg:hidden p-2 rounded-lg text-gray-600 hover:bg-gray-100 transition-colors"
+            aria-label="Toggle menu"
+          >
+            {mobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+          </button>
+
+          {/* Left side - Main navigation (hidden on mobile) */}
+          <div className="hidden lg:flex space-x-2">
             <Link href={ROUTES.HOME} className={linkClasses(ROUTES.HOME)}>
               Home
             </Link>
@@ -87,8 +109,8 @@ export default function Navigation() {
 
           {/* Right side - Tools dropdown and Settings */}
           <div className="flex items-center space-x-2">
-            {/* Connected Tools Dropdown */}
-            <div className="relative" ref={dropdownRef}>
+            {/* Connected Tools Dropdown (hidden on mobile) */}
+            <div className="hidden md:block relative" ref={dropdownRef}>
               <button
                 onClick={() => setToolsOpen(!toolsOpen)}
                 className={`
@@ -98,7 +120,7 @@ export default function Navigation() {
                 `}
               >
                 <Wrench className="h-4 w-4 mr-2" />
-                Tools
+                <span className="hidden sm:inline">Tools</span>
                 {connectedCount > 0 && (
                   <span className="ml-1.5 px-1.5 py-0.5 text-xs bg-green-100 text-green-700 rounded-full">
                     {connectedCount}
@@ -186,6 +208,42 @@ export default function Navigation() {
             </Link>
           </div>
         </div>
+
+        {/* Mobile Menu */}
+        {mobileMenuOpen && (
+          <div className="lg:hidden py-4 border-t border-gray-200">
+            <div className="space-y-2">
+              <Link href={ROUTES.HOME} className={mobileLinkClasses(ROUTES.HOME)}>
+                🏠 Home
+              </Link>
+              <Link href={ROUTES.ADMIN} className={mobileLinkClasses(ROUTES.ADMIN)}>
+                📦 Admin
+              </Link>
+              <Link href={ROUTES.POS} className={mobileLinkClasses(ROUTES.POS)}>
+                💳 POS
+              </Link>
+              <Link href={ROUTES.ANALYTICS} className={mobileLinkClasses(ROUTES.ANALYTICS)}>
+                📊 Analytics
+              </Link>
+              <Link href={ROUTES.DB_CONNECT} className={mobileLinkClasses(ROUTES.DB_CONNECT)}>
+                🔌 Connect DB
+              </Link>
+              <div className="border-t border-gray-200 mt-3 pt-3">
+                <Link href="/dashboard/settings" className={mobileLinkClasses('/dashboard/settings')}>
+                  <span className="flex items-center">
+                    <Wrench className="h-4 w-4 mr-2" />
+                    Tools & Settings
+                    {connectedCount > 0 && (
+                      <span className="ml-2 px-1.5 py-0.5 text-xs bg-green-100 text-green-700 rounded-full">
+                        {connectedCount}
+                      </span>
+                    )}
+                  </span>
+                </Link>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </nav>
   );
