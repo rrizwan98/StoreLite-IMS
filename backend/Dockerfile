@@ -1,6 +1,7 @@
 # Hugging Face Spaces Dockerfile for Schema Agent
 # Platform: Hugging Face Spaces (Free Tier)
 # SDK: Docker
+# Build: 2026-01-09-v2 (force rebuild for apscheduler)
 
 FROM python:3.12-slim
 
