@@ -100,214 +100,88 @@ RETELL_AI_TOOLS = [
 ]
 
 
-def _run_mcp_server_sync(api_key: str) -> Dict[str, Any]:
+async def _validate_via_http(api_key: str) -> Dict[str, Any]:
     """
-    Run MCP server synchronously using subprocess.
-    This is needed because Windows doesn't support asyncio subprocess well.
+    Validate Retell AI API key using direct HTTP API call.
 
-    Instead of using tools/list (which has a Zod v4 bug), we:
-    1. Initialize the MCP server
-    2. Call list_agents tool to validate the API key
-    3. Return the known tools list if successful
+    This is more reliable than using the MCP server via npx because:
+    1. No Node.js dependency required
+    2. Works in all environments (including Hugging Face Spaces)
+    3. Faster validation
+
+    Uses Retell AI's REST API to list agents as validation.
+    API Docs: https://docs.retellai.com/api-references/list-agents
     """
-    import subprocess
+    import httpx
 
-    print(f"[RetellAI] Starting MCP server validation...")
+    print(f"[RetellAI] Validating API key via HTTP...")
     print(f"[RetellAI] API key length: {len(api_key)}, starts with: {api_key[:8]}...")
 
-    env = {**dict(os.environ), "RETELL_API_KEY": api_key}
+    # Retell AI API endpoint
+    RETELL_API_BASE = "https://api.retellai.com"
 
     try:
-        # Start the MCP server process
-        process = subprocess.Popen(
-            ["npx", "-y", "@abhaybabbar/retellai-mcp-server"],
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            env=env,
-            shell=True,  # Needed for Windows to find npx
-        )
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            # Call list agents endpoint to validate API key
+            response = await client.get(
+                f"{RETELL_API_BASE}/list-agents",
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json"
+                }
+            )
 
-        # Send initialize request
-        init_request = {
-            "jsonrpc": "2.0",
-            "method": "initialize",
-            "id": 1,
-            "params": {
-                "protocolVersion": "2024-11-05",
-                "capabilities": {},
-                "clientInfo": {"name": "IMS-Agent", "version": "1.0"}
-            }
-        }
+            logger.info(f"[RetellAI] HTTP response status: {response.status_code}")
 
-        logger.info("[RetellAI] Sending initialize request...")
-        process.stdin.write((json.dumps(init_request) + "\n").encode())
-        process.stdin.flush()
+            if response.status_code == 200:
+                # API key is valid!
+                data = response.json()
+                agent_count = len(data) if isinstance(data, list) else 0
+                print(f"[RetellAI] SUCCESS! API key valid. Found {agent_count} agents.")
+                print(f"[RetellAI] Returning {len(RETELL_AI_TOOLS)} known tools.")
+                return {
+                    "success": True,
+                    "tools": RETELL_AI_TOOLS
+                }
 
-        # Read initialize response
-        init_response = process.stdout.readline()
-
-        if not init_response:
-            stderr = process.stderr.read().decode()
-            logger.error(f"[RetellAI] No init response. Stderr: {stderr[:500]}")
-            process.terminate()
-            return {
-                "success": False,
-                "error_code": "NO_RESPONSE",
-                "error_message": f"MCP server did not respond. {stderr[:200]}"
-            }
-
-        init_data = json.loads(init_response.decode())
-        print(f"[RetellAI] Init response: {str(init_data)[:200]}")
-
-        if "error" in init_data:
-            error = init_data["error"]
-            process.terminate()
-            return {
-                "success": False,
-                "error_code": "INIT_ERROR",
-                "error_message": f"Init failed: {error.get('message', str(error))}"
-            }
-
-        # Send initialized notification (required by MCP protocol)
-        initialized_notification = {
-            "jsonrpc": "2.0",
-            "method": "notifications/initialized",
-            "params": {}
-        }
-        logger.info("[RetellAI] Sending initialized notification...")
-        process.stdin.write((json.dumps(initialized_notification) + "\n").encode())
-        process.stdin.flush()
-
-        # Validate API key by calling list_agents tool
-        # This actually hits the Retell AI API and will fail if API key is invalid
-        call_tool_request = {
-            "jsonrpc": "2.0",
-            "method": "tools/call",
-            "id": 2,
-            "params": {
-                "name": "list_agents",
-                "arguments": {}
-            }
-        }
-
-        logger.info("[RetellAI] Calling list_agents to validate API key...")
-        process.stdin.write((json.dumps(call_tool_request) + "\n").encode())
-        process.stdin.flush()
-
-        # Read tool call response
-        tool_response = process.stdout.readline()
-
-        if not tool_response:
-            logger.error("[RetellAI] No tool response")
-            process.terminate()
-            return {
-                "success": False,
-                "error_code": "NO_RESPONSE",
-                "error_message": "MCP server did not respond to tool call"
-            }
-
-        tool_data = json.loads(tool_response.decode())
-        print(f"[RetellAI] Tool response: {str(tool_data)[:500]}")
-
-        # Terminate process
-        process.terminate()
-
-        if "error" in tool_data:
-            error = tool_data["error"]
-            error_msg = error.get('message', str(error)) if isinstance(error, dict) else str(error)
-            print(f"[RetellAI] Tool error: {error_msg}")
-
-            # Check for auth errors (401, 403, unauthorized, invalid key, etc.)
-            error_lower = str(error_msg).lower()
-
-            # Be more specific - only treat actual auth errors as auth failures
-            if any(x in error_lower for x in ["401", "403", "unauthorized", "authentication"]):
+            elif response.status_code == 401:
+                logger.error("[RetellAI] 401 Unauthorized - Invalid API key")
                 return {
                     "success": False,
                     "error_code": "AUTH_FAILED",
                     "error_message": "Invalid API key. Please check your Retell AI API key."
                 }
 
-            # For other errors (like "invalid" in different context), return the actual message
-            return {
-                "success": False,
-                "error_code": "TOOL_ERROR",
-                "error_message": f"Tool call failed: {error_msg}"
-            }
-
-        # Check result for authentication errors in content
-        result = tool_data.get("result", {})
-        content = result.get("content", [])
-        print(f"[RetellAI] Result: {result}")
-        print(f"[RetellAI] Content length: {len(content) if content else 0}")
-
-        # Check if isError flag is set
-        if result.get("isError") == True:
-            error_content = ""
-            if content and isinstance(content, list):
-                for item in content:
-                    if isinstance(item, dict) and item.get("type") == "text":
-                        error_content = item.get("text", "")
-                        break
-            print(f"[RetellAI] Tool returned isError=True: {error_content}")
-
-            # Check for specific auth errors
-            error_lower = error_content.lower()
-            if any(x in error_lower for x in ["401", "403", "unauthorized", "invalid api key"]):
+            elif response.status_code == 403:
+                logger.error("[RetellAI] 403 Forbidden - API key lacks permissions")
                 return {
                     "success": False,
                     "error_code": "AUTH_FAILED",
-                    "error_message": "Invalid API key. Please check your Retell AI API key."
+                    "error_message": "API key lacks required permissions."
                 }
-            return {
-                "success": False,
-                "error_code": "API_ERROR",
-                "error_message": error_content or "API call failed"
-            }
 
-        # If we have content with data, the API key is valid!
-        if content and isinstance(content, list) and len(content) > 0:
-            for item in content:
-                if isinstance(item, dict) and item.get("type") == "text":
-                    text = item.get("text", "")
-                    # If we got JSON array or object data, it's a success
-                    if text.startswith("[") or text.startswith("{"):
-                        print(f"[RetellAI] SUCCESS! Got valid data response")
-                        print(f"[RetellAI] API key validated. Returning {len(RETELL_AI_TOOLS)} known tools.")
-                        return {
-                            "success": True,
-                            "tools": RETELL_AI_TOOLS
-                        }
+            else:
+                error_text = response.text[:200]
+                logger.error(f"[RetellAI] HTTP error {response.status_code}: {error_text}")
+                return {
+                    "success": False,
+                    "error_code": "API_ERROR",
+                    "error_message": f"API error ({response.status_code}): {error_text}"
+                }
 
-        # Success! API key is valid (even if empty response)
-        print(f"[RetellAI] API key validated. Returning {len(RETELL_AI_TOOLS)} known tools.")
-
-        return {
-            "success": True,
-            "tools": RETELL_AI_TOOLS
-        }
-
-    except subprocess.TimeoutExpired:
-        logger.error("[RetellAI] Process timeout")
+    except httpx.TimeoutException:
+        logger.error("[RetellAI] HTTP timeout")
         return {
             "success": False,
             "error_code": "TIMEOUT",
-            "error_message": "Connection timed out"
+            "error_message": "Connection timed out. Please try again."
         }
-    except json.JSONDecodeError as e:
-        logger.error(f"[RetellAI] JSON decode error: {e}")
+    except httpx.ConnectError as e:
+        logger.error(f"[RetellAI] Connection error: {e}")
         return {
             "success": False,
-            "error_code": "INVALID_RESPONSE",
-            "error_message": "Invalid response from MCP server"
-        }
-    except FileNotFoundError:
-        logger.error("[RetellAI] npx not found")
-        return {
-            "success": False,
-            "error_code": "MISSING_DEPENDENCY",
-            "error_message": "Node.js/npx not found. Please install Node.js."
+            "error_code": "CONNECTION_FAILED",
+            "error_message": "Could not connect to Retell AI. Please check your internet connection."
         }
     except Exception as e:
         logger.error(f"[RetellAI] Error: {type(e).__name__}: {e}")
@@ -320,7 +194,7 @@ def _run_mcp_server_sync(api_key: str) -> Dict[str, Any]:
 
 async def validate_retell_api_key(api_key: str) -> Dict[str, Any]:
     """
-    Validate Retell AI API key by connecting to MCP server.
+    Validate Retell AI API key using direct HTTP API call.
 
     Args:
         api_key: Retell AI API key to validate
@@ -330,18 +204,8 @@ async def validate_retell_api_key(api_key: str) -> Dict[str, Any]:
     """
     logger.info("[RetellAI] Validating API key...")
 
-    # Run synchronous subprocess in a thread pool to avoid blocking
-    import concurrent.futures
-
-    loop = asyncio.get_event_loop()
-    with concurrent.futures.ThreadPoolExecutor() as executor:
-        result = await loop.run_in_executor(
-            executor,
-            _run_mcp_server_sync,
-            api_key
-        )
-
-    return result
+    # Use direct HTTP validation (works in all environments including HF Spaces)
+    return await _validate_via_http(api_key)
 
 
 # ============================================================================
