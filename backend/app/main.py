@@ -19,8 +19,8 @@ logger = logging.getLogger(__name__)
 # Initialize FastAPI app
 app = FastAPI(
     title="IMS REST API",
-    description="Inventory Management System REST API (Phase 2)",
-    version="0.1.0",
+    description="Inventory Management System REST API with Task Scheduler",
+    version="0.2.0",
 )
 
 # Add CORS middleware

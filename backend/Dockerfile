@@ -1,6 +1,7 @@
 # Hugging Face Spaces Dockerfile for Schema Agent
 # Platform: Hugging Face Spaces (Free Tier)
 # SDK: Docker
+# Build: 2026-01-09-v4 (fix apscheduler pre-release install)
 
 FROM python:3.12-slim
 
@@ -21,7 +22,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python dependencies directly (more reliable than pyproject.toml in Docker)
+# Install APScheduler 4.x (pre-release) FIRST with --pre flag
+# This is required because AsyncScheduler only exists in v4.x alpha
+RUN pip install --no-cache-dir --pre "apscheduler>=4.0.0a5"
+
+# Install other Python dependencies
 RUN pip install --no-cache-dir \
     # Core FastAPI
     fastapi>=0.104.0 \
