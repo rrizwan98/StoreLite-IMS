@@ -4,19 +4,32 @@ Task Executor Service - Scheduled Task Execution
 Executes scheduled tasks using the Schema Query Agent.
 Called by APScheduler at the scheduled time.
 
-Flow:
+SIMPLIFIED FLOW:
 1. Load task from database
 2. Create ChatKit thread for results
-3. Run Schema Agent with selected tools only
+3. Call schema_agent's chat function directly (same as ChatKit uses)
 4. Save result to thread and update task
+
+This uses the SAME schema_agent that ChatKit uses, ensuring
+all connector tools (gdrive, gmail, notion, etc.) work correctly.
 """
 
 import logging
 import json
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
+
+
 from typing import Optional, List, Any, Dict
 from urllib.parse import urlparse, parse_qs
+
+
+def _utc_now_naive() -> datetime:
+    """
+    Get current UTC time as naive datetime (without timezone info).
+    PostgreSQL TIMESTAMP WITHOUT TIME ZONE columns require naive datetimes.
+    """
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
@@ -63,11 +76,11 @@ async def execute_scheduled_task(task_id: str) -> None:
     """
     Execute a scheduled task - called by APScheduler at scheduled_time.
 
-    Flow:
+    SIMPLIFIED FLOW:
     1. Load task from DB
     2. Create new ChatKit thread
-    3. Run Schema Agent with ONLY selected tools
-    4. Save result to thread (ChatKit persists it)
+    3. Use SAME schema_agent logic that ChatKit uses (with all connector tools)
+    4. Save result to thread
     5. Update task with thread_id for user to view
 
     Args:
@@ -149,18 +162,16 @@ async def execute_scheduled_task(task_id: str) -> None:
             task.thread_id = thread_id
             await db.flush()  # Flush to save thread_id without committing
 
-            # 4. Build connector tools for ONLY selected tools
-            connector_tools = await _build_selected_tools(
-                task.selected_tools,
-                task.user_id,
-                db
-            )
-
-            logger.info(f"[TaskExecutor] Built {len(connector_tools)} connector tools for task")
-
-            # 5. Create and run Schema Agent with scheduler-specific LLM model
+            # 4. Use the SAME schema_agent that ChatKit uses
+            # This ensures all connector tools (gdrive, gmail, notion, etc.) work correctly
             from app.agents.schema_query_agent import create_schema_query_agent, get_scheduler_llm_model
+            from app.connector_agents import get_connector_agent_tools
 
+            # Get connector tools the same way ChatKit does (requires db session)
+            connector_tools = await get_connector_agent_tools(db, task.user_id)
+            logger.info(f"[TaskExecutor] Got {len(connector_tools)} connector tools from registry")
+
+            # Create agent with all connector tools (same as ChatKit)
             agent = await create_schema_query_agent(
                 database_uri=connection.database_uri,
                 schema_metadata=connection.schema_metadata or {},
@@ -170,18 +181,16 @@ async def execute_scheduled_task(task_id: str) -> None:
                 model_getter=get_scheduler_llm_model,  # Use scheduler-specific model
             )
 
-            # Prefix query with tool markers so agent knows which to use
-            prefixed_query = task.query
-            for tool_id in (task.selected_tools or []):
-                tool_upper = tool_id.upper().replace("_", "_")
-                prefixed_query = f"[TOOL:{tool_upper}] {prefixed_query}"
+            # Build query with tool hints so agent knows which tools user wants to use
+            tool_hints = _build_tool_hints(task.selected_tools or [])
+            enhanced_query = f"{tool_hints}\n\n{task.query}" if tool_hints else task.query
 
-            logger.info(f"[TaskExecutor] Running agent with query: {prefixed_query[:150]}...")
+            logger.info(f"[TaskExecutor] Running agent with query: {enhanced_query[:200]}...")
 
-            # Run the query
-            result = await agent.query(prefixed_query, thread_id=thread_id)
+            # Run the query (same as ChatKit's agent.query())
+            result = await agent.query(enhanced_query, thread_id=thread_id)
 
-            # 6. Save messages to ChatKit thread for viewing in UI
+            # 5. Save messages to ChatKit thread for viewing in UI
             response_text = result.get("response", "")
 
             # Create user message item
@@ -190,7 +199,7 @@ async def execute_scheduled_task(task_id: str) -> None:
                 "id": user_msg_id,
                 "type": "user_message",
                 "thread_id": thread_id,
-                "created_at": datetime.utcnow().isoformat(),
+                "created_at": _utc_now_naive().isoformat(),
                 "content": [{"type": "input_text", "text": task.query}],
                 "attachments": [],
                 "inference_options": {}
@@ -200,7 +209,7 @@ async def execute_scheduled_task(task_id: str) -> None:
                 thread_id=thread_id,
                 item_type="user_message",
                 content=json.dumps(user_msg_content),
-                created_at=datetime.utcnow(),
+                created_at=_utc_now_naive(),
             )
             db.add(user_msg_item)
 
@@ -210,7 +219,7 @@ async def execute_scheduled_task(task_id: str) -> None:
                 "id": assistant_msg_id,
                 "type": "assistant_message",
                 "thread_id": thread_id,
-                "created_at": datetime.utcnow().isoformat(),
+                "created_at": _utc_now_naive().isoformat(),
                 "content": [{"type": "output_text", "text": response_text, "annotations": []}]
             }
             assistant_msg_item = ChatKitThreadItem(
@@ -218,19 +227,19 @@ async def execute_scheduled_task(task_id: str) -> None:
                 thread_id=thread_id,
                 item_type="assistant_message",
                 content=json.dumps(assistant_msg_content),
-                created_at=datetime.utcnow(),
+                created_at=_utc_now_naive(),
             )
             db.add(assistant_msg_item)
 
             # Update thread's updated_at
-            chatkit_thread.updated_at = datetime.utcnow()
+            chatkit_thread.updated_at = _utc_now_naive()
 
             # 7. Update task with results
             task.status = "completed"
             # thread_id already set earlier
             task.result_summary = response_text[:500]  # First 500 chars
             # Use naive UTC datetime for PostgreSQL TIMESTAMP WITHOUT TIME ZONE
-            task.executed_at = datetime.utcnow()
+            task.executed_at = _utc_now_naive()
 
             await db.commit()
             logger.info(f"[TaskExecutor] Task {task_id} completed successfully with messages saved to thread")
@@ -280,12 +289,12 @@ async def execute_scheduled_task(task_id: str) -> None:
                                     "id": user_msg_id,
                                     "type": "user_message",
                                     "thread_id": task.thread_id,
-                                    "created_at": datetime.utcnow().isoformat(),
+                                    "created_at": _utc_now_naive().isoformat(),
                                     "content": [{"type": "input_text", "text": task.query}],
                                     "attachments": [],
                                     "inference_options": {}
                                 }),
-                                created_at=datetime.utcnow(),
+                                created_at=_utc_now_naive(),
                             )
                             db.add(user_msg_item)
 
@@ -299,10 +308,10 @@ async def execute_scheduled_task(task_id: str) -> None:
                                     "id": error_msg_id,
                                     "type": "assistant_message",
                                     "thread_id": task.thread_id,
-                                    "created_at": datetime.utcnow().isoformat(),
+                                    "created_at": _utc_now_naive().isoformat(),
                                     "content": [{"type": "output_text", "text": f"❌ **Task Failed**\n\nError: {error_message}", "annotations": []}]
                                 }),
-                                created_at=datetime.utcnow(),
+                                created_at=_utc_now_naive(),
                             )
                             db.add(error_msg_item)
                         except Exception as thread_error:
@@ -310,7 +319,7 @@ async def execute_scheduled_task(task_id: str) -> None:
 
                     task.status = "failed"
                     task.error_message = error_message
-                    task.executed_at = datetime.utcnow()
+                    task.executed_at = _utc_now_naive()
                     await db.commit()
             except Exception as commit_error:
                 logger.error(f"[TaskExecutor] Failed to update task status: {commit_error}")
@@ -319,95 +328,55 @@ async def execute_scheduled_task(task_id: str) -> None:
             await engine.dispose()
 
 
-async def _build_selected_tools(
-    selected_tool_ids: List[str],
-    user_id: int,
-    db: AsyncSession
-) -> List[Any]:
+def _build_tool_hints(selected_tool_ids: List[str]) -> str:
     """
-    Build connector tools for only the selected tool IDs.
+    Build a natural language hint for the agent about which tools to use.
+
+    This tells the agent which specific tools the user wants for this task,
+    so it prioritizes those tools in its response.
 
     Args:
-        selected_tool_ids: List of tool IDs (e.g., ["gmail", "analytics"])
-        user_id: User ID for tool context
-        db: Database session
+        selected_tool_ids: List of tool IDs (e.g., ["gmail", "gdrive", "analytics"])
 
     Returns:
-        List of function tools for the agent
+        A hint string to prepend to the user's query
     """
-    tools = []
-
     if not selected_tool_ids:
-        return tools
+        return ""
 
-    logger.info(f"[TaskExecutor] Building tools for: {selected_tool_ids}")
+    # Map tool IDs to their descriptions
+    tool_descriptions = {
+        "gmail": "Gmail (for sending emails)",
+        "gdrive": "Google Drive (for accessing files)",
+        "notion": "Notion (for accessing pages/databases)",
+        "analytics": "Analytics (for generating charts/visualizations)",
+        "google_search": "Google Search (for web searches)",
+        "file_search": "File Search (for searching uploaded files)",
+        "retell_ai": "Retell AI (for voice calls)",
+        "export": "Export (for exporting data)",
+    }
 
+    # Build tool list
+    tool_names = []
     for tool_id in selected_tool_ids:
         tool_id_lower = tool_id.lower()
+        if tool_id_lower in tool_descriptions:
+            tool_names.append(tool_descriptions[tool_id_lower])
+        else:
+            tool_names.append(tool_id)
 
-        try:
-            if tool_id_lower == "gmail":
-                # Gmail connector tool
-                from app.connector_agents.gmail_agent import create_gmail_connector_tool
-                gmail_tool = await create_gmail_connector_tool(user_id)
-                if gmail_tool:
-                    tools.append(gmail_tool)
-                    logger.info(f"[TaskExecutor] Added Gmail tool for user {user_id}")
+    tools_str = ", ".join(tool_names)
 
-            elif tool_id_lower == "analytics":
-                # Analytics tool
-                from app.mcp_server.tools_analytics import get_analytics_tool
-                analytics_tool = get_analytics_tool()
-                if analytics_tool:
-                    tools.append(analytics_tool)
-                    logger.info(f"[TaskExecutor] Added Analytics tool")
+    hint = f"""[SCHEDULED TASK - TOOL INSTRUCTIONS]
+This is a scheduled task. The user has specifically selected these tools: {tools_str}
 
-            elif tool_id_lower == "google_search":
-                # Google Search tool
-                from app.mcp_server.tools_google_search import get_google_search_tool
-                search_tool = get_google_search_tool()
-                if search_tool:
-                    tools.append(search_tool)
-                    logger.info(f"[TaskExecutor] Added Google Search tool")
+Please use the selected tools to complete the task. For example:
+- If "Google Drive" is selected, use the google_drive_connector tool
+- If "Gmail" is selected, use the gmail_connector tool
+- If "Notion" is selected, use the notion_connector tool
+- If "Analytics" is selected, generate visualizations/charts
 
-            elif tool_id_lower == "file_search":
-                # File Search tool
-                from app.mcp_server.tools_file_search import get_file_search_tool
-                file_tool = get_file_search_tool(user_id)
-                if file_tool:
-                    tools.append(file_tool)
-                    logger.info(f"[TaskExecutor] Added File Search tool")
+USER'S QUERY:"""
 
-            elif tool_id_lower == "notion":
-                # Notion connector tool
-                from app.connector_agents.notion_agent import create_notion_connector_tool
-                notion_tool = await create_notion_connector_tool(user_id)
-                if notion_tool:
-                    tools.append(notion_tool)
-                    logger.info(f"[TaskExecutor] Added Notion tool for user {user_id}")
-
-            elif tool_id_lower == "gdrive":
-                # Google Drive connector tool
-                from app.connector_agents.gdrive_agent import create_gdrive_connector_tool
-                gdrive_tool = await create_gdrive_connector_tool(user_id)
-                if gdrive_tool:
-                    tools.append(gdrive_tool)
-                    logger.info(f"[TaskExecutor] Added Google Drive tool for user {user_id}")
-
-            elif tool_id_lower == "retell_ai":
-                # Retell AI connector tool
-                from app.connector_agents.retellai_agent import create_retellai_connector_tool
-                retell_tool = await create_retellai_connector_tool(user_id)
-                if retell_tool:
-                    tools.append(retell_tool)
-                    logger.info(f"[TaskExecutor] Added Retell AI tool for user {user_id}")
-
-            else:
-                logger.warning(f"[TaskExecutor] Unknown tool ID: {tool_id}")
-
-        except ImportError as e:
-            logger.warning(f"[TaskExecutor] Could not import tool {tool_id}: {e}")
-        except Exception as e:
-            logger.warning(f"[TaskExecutor] Error creating tool {tool_id}: {e}")
-
-    return tools
+    logger.info(f"[TaskExecutor] Built tool hints for: {selected_tool_ids}")
+    return hint
