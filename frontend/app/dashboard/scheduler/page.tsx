@@ -21,6 +21,7 @@ import {
   CheckCircle, AlertCircle, Loader2, Timer
 } from 'lucide-react';
 import { ROUTES } from '@/lib/constants';
+import AnalogClockPicker from '@/components/ui/AnalogClockPicker';
 import { useAuth } from '@/lib/auth-context';
 import {
   getAvailableTools,
@@ -346,16 +347,13 @@ export default function SchedulerPage() {
                 />
               </div>
               <div>
-                <label htmlFor="time" className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
                   <Clock className="h-4 w-4 inline mr-1" />
                   Time
                 </label>
-                <input
-                  type="time"
-                  id="time"
+                <AnalogClockPicker
                   value={scheduledTime}
-                  onChange={(e) => setScheduledTime(e.target.value)}
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  onChange={(time) => setScheduledTime(time)}
                 />
               </div>
             </div>
