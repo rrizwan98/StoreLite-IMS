@@ -68,6 +68,8 @@ jobs:
             openpyxl>=3.1.0 \
             pdfplumber>=0.10.0 \
             Pillow>=10.0.0
+          # Install APScheduler 4.x (pre-release) with --pre flag
+          pip install --no-cache-dir --pre apscheduler>=4.0.0a5
 
       - name: Show installed packages
         run: pip list
