@@ -1168,15 +1168,15 @@ export default function Home() {
 
       {/* Header */}
       <header className="fixed top-0 left-0 right-0 z-50 bg-white/80 dark:bg-gray-950/80 backdrop-blur-md border-b border-gray-200 dark:border-gray-800/50 transition-colors">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
-          <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-cyan-500 rounded-xl flex items-center justify-center">
-              <Sparkles className="w-5 h-5 text-white" />
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 sm:py-4 flex justify-between items-center">
+          <div className="flex items-center space-x-2 sm:space-x-3">
+            <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gradient-to-br from-emerald-500 to-cyan-500 rounded-xl flex items-center justify-center">
+              <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
             </div>
-            <span className="text-xl font-bold">{APP_METADATA.NAME}</span>
+            <span className="text-lg sm:text-xl font-bold">{APP_METADATA.NAME}</span>
           </div>
 
-          {/* Navigation Links */}
+          {/* Navigation Links - Desktop */}
           <nav className="hidden md:flex items-center space-x-8">
             <a href="#features" className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors text-sm font-medium">
               Features
@@ -1189,19 +1189,20 @@ export default function Home() {
             </a>
           </nav>
 
-          <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-2 sm:space-x-4">
             <ThemeToggle />
             <Link
               href={ROUTES.LOGIN}
-              className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors font-medium"
+              className="hidden sm:block text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors font-medium text-sm"
             >
               Login
             </Link>
             <Link
               href={ROUTES.SIGNUP}
-              className="bg-gradient-to-r from-emerald-500 to-cyan-500 text-white px-5 py-2 rounded-lg hover:opacity-90 transition-opacity font-medium"
+              className="bg-gradient-to-r from-emerald-500 to-cyan-500 text-white px-3 sm:px-5 py-1.5 sm:py-2 rounded-lg hover:opacity-90 transition-opacity font-medium text-sm"
             >
-              Get Started Free
+              <span className="hidden sm:inline">Get Started Free</span>
+              <span className="sm:hidden">Start</span>
             </Link>
           </div>
         </div>
@@ -1278,15 +1279,16 @@ export default function Home() {
               </div>
 
               {/* Primary & Secondary CTAs */}
-              <div className="flex flex-col sm:flex-row items-center gap-4">
-                <Link href={ROUTES.SIGNUP}>
+              <div className="flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto">
+                <Link href={ROUTES.SIGNUP} className="w-full sm:w-auto">
                   <motion.button
-                    className="flex items-center space-x-2 bg-gradient-to-r from-emerald-500 to-cyan-500 text-white px-10 py-4 rounded-xl font-semibold text-lg hover:shadow-xl hover:shadow-emerald-500/30 transition-all shadow-lg shadow-emerald-500/25"
+                    className="w-full sm:w-auto flex items-center justify-center space-x-2 bg-gradient-to-r from-emerald-500 to-cyan-500 text-white px-6 sm:px-10 py-3 sm:py-4 rounded-xl font-semibold text-base sm:text-lg hover:shadow-xl hover:shadow-emerald-500/30 transition-all shadow-lg shadow-emerald-500/25"
                     whileHover={{ scale: 1.03, y: -2 }}
                     whileTap={{ scale: 0.98 }}
                   >
                     <Database className="w-5 h-5" />
-                    <span>Start Free - Connect Database</span>
+                    <span className="hidden sm:inline">Start Free - Connect Database</span>
+                    <span className="sm:hidden">Get Started Free</span>
                     <ArrowRight className="w-5 h-5" />
                   </motion.button>
                 </Link>
@@ -1692,7 +1694,7 @@ export default function Home() {
             </p>
           </motion.div>
 
-          <div className="grid md:grid-cols-4 gap-8 lg:gap-10">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6 lg:gap-10">
             {[
               { step: "01", title: "Connect Your Tools", desc: "Link your PostgreSQL database and authorize Gmail, Drive, Notion with secure OAuth 2.0", icon: Database, color: "from-emerald-500 to-cyan-500" },
               { step: "02", title: "Ask in Plain English", desc: "Type queries like 'Show me sales from last week' - no SQL or coding needed", icon: MessageSquare, color: "from-blue-500 to-cyan-500" },
@@ -1715,16 +1717,16 @@ export default function Home() {
                 </div>
 
                 {/* Card */}
-                <div className="bg-white dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-2xl p-6 pt-8 h-full hover:border-emerald-500/50 hover:shadow-lg transition-all">
+                <div className="bg-white dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-xl sm:rounded-2xl p-4 sm:p-6 pt-6 sm:pt-8 h-full hover:border-emerald-500/50 hover:shadow-lg transition-all">
                   <motion.div
-                    className={`w-16 h-16 mx-auto mb-5 rounded-2xl bg-gradient-to-br ${item.color} flex items-center justify-center shadow-lg`}
+                    className={`w-12 h-12 sm:w-16 sm:h-16 mx-auto mb-3 sm:mb-5 rounded-xl sm:rounded-2xl bg-gradient-to-br ${item.color} flex items-center justify-center shadow-lg`}
                     whileHover={{ scale: 1.1, rotate: 5 }}
                     transition={{ type: "spring", stiffness: 300 }}
                   >
-                    <item.icon className="w-7 h-7 text-white" />
+                    <item.icon className="w-5 h-5 sm:w-7 sm:h-7 text-white" />
                   </motion.div>
-                  <h3 className="text-lg font-semibold mb-3 group-hover:text-emerald-500 dark:group-hover:text-emerald-400 transition-colors">{item.title}</h3>
-                  <p className="text-gray-600 dark:text-gray-400 text-sm leading-relaxed">{item.desc}</p>
+                  <h3 className="text-sm sm:text-lg font-semibold mb-2 sm:mb-3 group-hover:text-emerald-500 dark:group-hover:text-emerald-400 transition-colors">{item.title}</h3>
+                  <p className="text-gray-600 dark:text-gray-400 text-xs sm:text-sm leading-relaxed hidden sm:block">{item.desc}</p>
                 </div>
 
                 {/* Connector Arrow */}
@@ -1759,7 +1761,7 @@ export default function Home() {
       </section>
 
       {/* CTA Section */}
-      <section className="py-20">
+      <section className="py-12 sm:py-20">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
@@ -1768,10 +1770,10 @@ export default function Home() {
             className="relative"
           >
             <div className="absolute -inset-4 bg-gradient-to-r from-emerald-500/20 to-cyan-500/20 rounded-3xl blur-2xl" />
-            <div className="relative bg-white dark:bg-gray-900/80 border border-gray-200 dark:border-gray-800 rounded-2xl p-12 shadow-xl">
+            <div className="relative bg-white dark:bg-gray-900/80 border border-gray-200 dark:border-gray-800 rounded-xl sm:rounded-2xl p-6 sm:p-12 shadow-xl">
               {/* Mini Testimonial */}
-              <div className="mb-8">
-                <div className="flex justify-center mb-4">
+              <div className="mb-6 sm:mb-8">
+                <div className="flex justify-center mb-3 sm:mb-4">
                   <div className="flex -space-x-2">
                     {[
                       { initials: 'JD', color: 'from-emerald-400 to-cyan-400' },
@@ -1780,49 +1782,49 @@ export default function Home() {
                     ].map((user, i) => (
                       <div
                         key={i}
-                        className={`w-10 h-10 rounded-full bg-gradient-to-br ${user.color} border-2 border-white dark:border-gray-900 flex items-center justify-center`}
+                        className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-gradient-to-br ${user.color} border-2 border-white dark:border-gray-900 flex items-center justify-center`}
                       >
-                        <span className="text-white text-xs font-bold">{user.initials}</span>
+                        <span className="text-white text-[10px] sm:text-xs font-bold">{user.initials}</span>
                       </div>
                     ))}
                   </div>
                 </div>
-                <blockquote className="text-gray-600 dark:text-gray-300 italic text-sm mb-2 max-w-lg mx-auto">
+                <blockquote className="text-gray-600 dark:text-gray-300 italic text-xs sm:text-sm mb-2 max-w-lg mx-auto px-2">
                   &quot;StoreLite saved us 15 hours/week on inventory reports. The AI understands exactly what we need.&quot;
                 </blockquote>
-                <p className="text-gray-500 dark:text-gray-500 text-xs">
+                <p className="text-gray-500 dark:text-gray-500 text-[10px] sm:text-xs">
                   — Sarah K., Operations Manager at TechFlow Inc.
                 </p>
               </div>
 
-              <h2 className="text-3xl sm:text-4xl font-bold mb-4 text-gray-900 dark:text-white">
+              <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-3 sm:mb-4 text-gray-900 dark:text-white">
                 Ready to Automate Your Workflow?
               </h2>
-              <p className="text-gray-600 dark:text-gray-400 mb-8 max-w-2xl mx-auto">
+              <p className="text-gray-600 dark:text-gray-400 mb-6 sm:mb-8 max-w-2xl mx-auto text-sm sm:text-base">
                 Join thousands of businesses using StoreLite to save time and boost productivity.
               </p>
 
               <Link href={ROUTES.SIGNUP}>
                 <motion.button
-                  className="inline-flex items-center space-x-2 bg-gradient-to-r from-emerald-500 to-cyan-500 text-white px-10 py-4 rounded-xl font-semibold text-lg hover:shadow-xl hover:shadow-emerald-500/30 transition-all shadow-lg shadow-emerald-500/25"
+                  className="inline-flex items-center space-x-2 bg-gradient-to-r from-emerald-500 to-cyan-500 text-white px-6 sm:px-10 py-3 sm:py-4 rounded-xl font-semibold text-base sm:text-lg hover:shadow-xl hover:shadow-emerald-500/30 transition-all shadow-lg shadow-emerald-500/25"
                   whileHover={{ scale: 1.03, y: -2 }}
                   whileTap={{ scale: 0.98 }}
                 >
                   <span>Get Started Free</span>
-                  <ArrowRight className="w-5 h-5" />
+                  <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5" />
                 </motion.button>
               </Link>
 
               {/* Trust Stats */}
-              <div className="mt-8 pt-8 border-t border-gray-200 dark:border-gray-700 grid grid-cols-3 gap-4">
+              <div className="mt-6 sm:mt-8 pt-6 sm:pt-8 border-t border-gray-200 dark:border-gray-700 grid grid-cols-3 gap-2 sm:gap-4">
                 {[
-                  { value: '500+', label: 'Active Users' },
-                  { value: '50K+', label: 'Queries Processed' },
+                  { value: '500+', label: 'Users' },
+                  { value: '50K+', label: 'Queries' },
                   { value: '99.9%', label: 'Uptime' },
                 ].map((stat, i) => (
                   <div key={i} className="text-center">
-                    <div className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">{stat.value}</div>
-                    <div className="text-xs text-gray-500 dark:text-gray-500">{stat.label}</div>
+                    <div className="text-xl sm:text-2xl font-bold text-emerald-600 dark:text-emerald-400">{stat.value}</div>
+                    <div className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-500">{stat.label}</div>
                   </div>
                 ))}
               </div>
@@ -1832,35 +1834,35 @@ export default function Home() {
       </section>
 
       {/* Footer */}
-      <footer className="border-t border-gray-200 dark:border-gray-800 py-16 bg-white dark:bg-gray-950">
+      <footer className="border-t border-gray-200 dark:border-gray-800 py-10 sm:py-16 bg-white dark:bg-gray-950">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           {/* Main Footer Content */}
-          <div className="grid md:grid-cols-4 gap-8 mb-12">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-6 sm:gap-8 mb-8 sm:mb-12">
             {/* Brand Column */}
-            <div className="md:col-span-2">
-              <div className="flex items-center space-x-3 mb-4">
-                <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-cyan-500 rounded-xl flex items-center justify-center shadow-lg shadow-emerald-500/20">
-                  <Sparkles className="w-5 h-5 text-white" />
+            <div className="col-span-2">
+              <div className="flex items-center space-x-2 sm:space-x-3 mb-3 sm:mb-4">
+                <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gradient-to-br from-emerald-500 to-cyan-500 rounded-xl flex items-center justify-center shadow-lg shadow-emerald-500/20">
+                  <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
                 </div>
-                <span className="text-xl font-bold text-gray-900 dark:text-white">{APP_METADATA.NAME}</span>
+                <span className="text-lg sm:text-xl font-bold text-gray-900 dark:text-white">{APP_METADATA.NAME}</span>
               </div>
-              <p className="text-gray-600 dark:text-gray-400 text-sm mb-6 max-w-md leading-relaxed">
+              <p className="text-gray-600 dark:text-gray-400 text-xs sm:text-sm mb-4 sm:mb-6 max-w-md leading-relaxed">
                 AI-powered inventory management and workflow automation. Connect your database,
                 ask in plain English, and let our AI handle the rest.
               </p>
               {/* Trust Indicators */}
-              <div className="flex flex-wrap gap-4">
-                <div className="flex items-center space-x-2 bg-gray-100 dark:bg-gray-800/50 rounded-full px-3 py-1.5">
-                  <Shield className="w-4 h-4 text-emerald-500" />
-                  <span className="text-gray-700 dark:text-gray-300 text-xs font-medium">SOC 2 Compliant</span>
+              <div className="flex flex-wrap gap-2 sm:gap-4">
+                <div className="flex items-center space-x-1.5 sm:space-x-2 bg-gray-100 dark:bg-gray-800/50 rounded-full px-2 sm:px-3 py-1 sm:py-1.5">
+                  <Shield className="w-3 h-3 sm:w-4 sm:h-4 text-emerald-500" />
+                  <span className="text-gray-700 dark:text-gray-300 text-[10px] sm:text-xs font-medium">SOC 2</span>
                 </div>
-                <div className="flex items-center space-x-2 bg-gray-100 dark:bg-gray-800/50 rounded-full px-3 py-1.5">
-                  <Lock className="w-4 h-4 text-emerald-500" />
-                  <span className="text-gray-700 dark:text-gray-300 text-xs font-medium">256-bit Encryption</span>
+                <div className="flex items-center space-x-1.5 sm:space-x-2 bg-gray-100 dark:bg-gray-800/50 rounded-full px-2 sm:px-3 py-1 sm:py-1.5">
+                  <Lock className="w-3 h-3 sm:w-4 sm:h-4 text-emerald-500" />
+                  <span className="text-gray-700 dark:text-gray-300 text-[10px] sm:text-xs font-medium">256-bit SSL</span>
                 </div>
-                <div className="flex items-center space-x-2 bg-gray-100 dark:bg-gray-800/50 rounded-full px-3 py-1.5">
-                  <Globe className="w-4 h-4 text-emerald-500" />
-                  <span className="text-gray-700 dark:text-gray-300 text-xs font-medium">GDPR Ready</span>
+                <div className="flex items-center space-x-1.5 sm:space-x-2 bg-gray-100 dark:bg-gray-800/50 rounded-full px-2 sm:px-3 py-1 sm:py-1.5">
+                  <Globe className="w-3 h-3 sm:w-4 sm:h-4 text-emerald-500" />
+                  <span className="text-gray-700 dark:text-gray-300 text-[10px] sm:text-xs font-medium">GDPR</span>
                 </div>
               </div>
             </div>
@@ -1920,25 +1922,25 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Customer Logos */}
-          <div className="mb-12 text-center">
+          {/* Customer Logos - Hidden on very small screens */}
+          <div className="mb-8 sm:mb-12 text-center hidden sm:block">
             <p className="text-xs text-gray-500 dark:text-gray-500 mb-4 uppercase tracking-wider">Trusted by innovative teams</p>
-            <div className="flex flex-wrap justify-center items-center gap-6 opacity-60 hover:opacity-80 transition-opacity">
+            <div className="flex flex-wrap justify-center items-center gap-3 sm:gap-6 opacity-60 hover:opacity-80 transition-opacity">
               {['TechCorp', 'DataFlow', 'CloudSync', 'InnovateLabs', 'ScaleUp'].map((company) => (
-                <div key={company} className="px-4 py-2 bg-gray-100 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
-                  <span className="text-gray-700 dark:text-gray-300 font-medium text-sm">{company}</span>
+                <div key={company} className="px-3 sm:px-4 py-1.5 sm:py-2 bg-gray-100 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+                  <span className="text-gray-700 dark:text-gray-300 font-medium text-xs sm:text-sm">{company}</span>
                 </div>
               ))}
             </div>
           </div>
 
           {/* Bottom Bar */}
-          <div className="border-t border-gray-200 dark:border-gray-800 pt-8 flex flex-col md:flex-row justify-between items-center">
-            <p className="text-gray-600 dark:text-gray-400 text-sm mb-4 md:mb-0">
+          <div className="border-t border-gray-200 dark:border-gray-800 pt-6 sm:pt-8 flex flex-col md:flex-row justify-between items-center gap-4">
+            <p className="text-gray-600 dark:text-gray-400 text-xs sm:text-sm text-center md:text-left">
               © 2025 {APP_METADATA.NAME}. All rights reserved.
             </p>
             {/* Social Proof */}
-            <div className="flex items-center space-x-6">
+            <div className="flex items-center">
               <div className="flex items-center space-x-2">
                 <div className="flex -space-x-2">
                   {[
@@ -1949,13 +1951,13 @@ export default function Home() {
                   ].map((item, i) => (
                     <div
                       key={i}
-                      className={`w-7 h-7 rounded-full bg-gradient-to-br ${item.color} border-2 border-white dark:border-gray-950 flex items-center justify-center`}
+                      className={`w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-gradient-to-br ${item.color} border-2 border-white dark:border-gray-950 flex items-center justify-center`}
                     >
-                      <Users className="w-3 h-3 text-white" />
+                      <Users className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-white" />
                     </div>
                   ))}
                 </div>
-                <span className="text-gray-700 dark:text-gray-300 text-sm font-medium">Join 500+ businesses</span>
+                <span className="text-gray-700 dark:text-gray-300 text-xs sm:text-sm font-medium">500+ businesses</span>
               </div>
             </div>
           </div>
