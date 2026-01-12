@@ -230,15 +230,15 @@ export default function ConnectorsList({
   if (loading) {
     return (
       <div className="flex items-center justify-center p-8">
-        <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
-        <span className="ml-2 text-gray-500">Loading connectors...</span>
+        <Loader2 className="h-6 w-6 animate-spin text-gray-400 dark:text-gray-500" />
+        <span className="ml-2 text-gray-500 dark:text-gray-400">Loading connectors...</span>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="flex items-center justify-center p-8 text-red-500">
+      <div className="flex items-center justify-center p-8 text-red-500 dark:text-red-400">
         <AlertCircle className="h-5 w-5 mr-2" />
         <span>{error}</span>
         <button
@@ -266,7 +266,7 @@ export default function ConnectorsList({
     <div className="space-y-6">
       {/* Available Connectors Section */}
       <div>
-        <h3 className="text-sm font-medium text-gray-500 mb-3">
+        <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-3">
           Available Connectors
         </h3>
 
@@ -281,9 +281,9 @@ export default function ConnectorsList({
             // Determine connection status: healthy, unhealthy, or checking
             const getStatusInfo = () => {
               if (!isConnected) return null;
-              if (isCheckingHealth) return { type: 'checking', label: 'Checking...', bgClass: 'bg-gray-100', textClass: 'text-gray-600' };
-              if (healthStatus && !isHealthy) return { type: 'unhealthy', label: 'Disconnected', bgClass: 'bg-red-100', textClass: 'text-red-700' };
-              return { type: 'healthy', label: 'Connected', bgClass: 'bg-green-100', textClass: 'text-green-700' };
+              if (isCheckingHealth) return { type: 'checking', label: 'Checking...', bgClass: 'bg-gray-100 dark:bg-gray-600', textClass: 'text-gray-600 dark:text-gray-300' };
+              if (healthStatus && !isHealthy) return { type: 'unhealthy', label: 'Disconnected', bgClass: 'bg-red-100 dark:bg-red-900/30', textClass: 'text-red-700 dark:text-red-400' };
+              return { type: 'healthy', label: 'Connected', bgClass: 'bg-green-100 dark:bg-green-900/30', textClass: 'text-green-700 dark:text-green-400' };
             };
             const statusInfo = getStatusInfo();
 
@@ -300,15 +300,15 @@ export default function ConnectorsList({
                 className={`
                   w-full flex items-center p-4 rounded-xl border transition-all text-left
                   ${isConnected && isHealthy
-                    ? 'bg-green-50 border-green-200 hover:border-green-300'
+                    ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800 hover:border-green-300 dark:hover:border-green-700'
                     : isConnected && !isHealthy
-                    ? 'bg-red-50 border-red-200 hover:border-red-300'
-                    : 'bg-white border-gray-200 hover:border-blue-300 hover:shadow-sm'
+                    ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 hover:border-red-300 dark:hover:border-red-700'
+                    : 'bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600 hover:border-blue-300 dark:hover:border-blue-500 hover:shadow-sm'
                   }
                 `}
               >
                 {/* Logo */}
-                <div className="w-12 h-12 rounded-xl overflow-hidden bg-white border border-gray-100 flex items-center justify-center shadow-sm flex-shrink-0">
+                <div className="w-12 h-12 rounded-xl overflow-hidden bg-white dark:bg-gray-600 border border-gray-100 dark:border-gray-500 flex items-center justify-center shadow-sm flex-shrink-0">
                   <Image
                     src={predefined.logo}
                     alt={predefined.name}
@@ -321,7 +321,7 @@ export default function ConnectorsList({
                 {/* Info */}
                 <div className="flex-1 ml-4 min-w-0">
                   <div className="flex items-center flex-wrap gap-2">
-                    <h4 className="font-medium text-gray-900">{predefined.name}</h4>
+                    <h4 className="font-medium text-gray-900 dark:text-white">{predefined.name}</h4>
                     {statusInfo && (
                       <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${statusInfo.bgClass} ${statusInfo.textClass}`}>
                         {statusInfo.type === 'checking' && <Loader2 className="h-3 w-3 mr-1 animate-spin" />}
@@ -333,23 +333,23 @@ export default function ConnectorsList({
                   </div>
                   {/* Show email and tools count for connected connectors */}
                   {isConnected && connectedConnector ? (
-                    <div className="text-sm text-gray-500 mt-0.5 space-y-0.5">
+                    <div className="text-sm text-gray-500 dark:text-gray-400 mt-0.5 space-y-0.5">
                       {connectedConnector.email && (
                         <p className="truncate">
-                          <span className="text-gray-400">Email:</span> {connectedConnector.email}
+                          <span className="text-gray-400 dark:text-gray-500">Email:</span> {connectedConnector.email}
                         </p>
                       )}
                       <p>
-                        <span className="text-gray-400">Tools:</span> {connectedConnector.tool_count || 0}
+                        <span className="text-gray-400 dark:text-gray-500">Tools:</span> {connectedConnector.tool_count || 0}
                       </p>
                       {healthStatus && !isHealthy && (
-                        <p className="text-red-500 text-xs">
+                        <p className="text-red-500 dark:text-red-400 text-xs">
                           {healthStatus.error_message || 'Connection failed - click Reconnect'}
                         </p>
                       )}
                     </div>
                   ) : (
-                    <p className="text-sm text-gray-500 mt-0.5 truncate">
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5 truncate">
                       {predefined.description}
                     </p>
                   )}
@@ -359,14 +359,14 @@ export default function ConnectorsList({
                 {isConnected && connectedConnector && (
                   <div className="flex items-center space-x-1 ml-2" onClick={e => e.stopPropagation()}>
                     {actionLoading === connectedConnector.id ? (
-                      <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
+                      <Loader2 className="h-4 w-4 animate-spin text-gray-400 dark:text-gray-500" />
                     ) : (
                       <>
                         {/* Show Reconnect button if unhealthy */}
                         {!isHealthy && (
                           <button
                             onClick={(e) => handleReconnect(connectedConnector, e)}
-                            className="p-1.5 rounded-lg hover:bg-blue-50 text-blue-500 hover:text-blue-700"
+                            className="p-1.5 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/30 text-blue-500 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300"
                             title="Reconnect"
                           >
                             <RefreshCw className="h-4 w-4" />
@@ -374,7 +374,7 @@ export default function ConnectorsList({
                         )}
                         <button
                           onClick={(e) => handleToggle(connectedConnector, e)}
-                          className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600"
+                          className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
                           title={connectedConnector.is_active ? 'Disable' : 'Enable'}
                         >
                           {connectedConnector.is_active ? (
@@ -385,7 +385,7 @@ export default function ConnectorsList({
                         </button>
                         <button
                           onClick={(e) => handleDelete(connectedConnector, e)}
-                          className="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-600"
+                          className="p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/30 text-gray-400 dark:text-gray-500 hover:text-red-600 dark:hover:text-red-400"
                           title="Disconnect"
                         >
                           <Trash2 className="h-4 w-4" />
@@ -397,7 +397,7 @@ export default function ConnectorsList({
 
                 {/* Arrow for unconnected */}
                 {!isConnected && (
-                  <ChevronRight className="h-5 w-5 text-gray-400 ml-2 flex-shrink-0" />
+                  <ChevronRight className="h-5 w-5 text-gray-400 dark:text-gray-500 ml-2 flex-shrink-0" />
                 )}
               </button>
             );
@@ -406,7 +406,7 @@ export default function ConnectorsList({
       </div>
 
       {/* Coming Soon */}
-      <div className="text-center text-sm text-gray-400 py-4">
+      <div className="text-center text-sm text-gray-400 dark:text-gray-500 py-4">
         More connectors coming soon...
       </div>
     </div>

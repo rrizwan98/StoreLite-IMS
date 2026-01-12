@@ -12,6 +12,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, Settings } from 'lucide-react';
 import { SystemToolsList, ConnectorsList, RetellAIConnectView } from '@/components/connectors';
+import { ThemeToggle } from '@/components/theme-toggle';
 import ConnectorDetailView from '@/components/connectors/ConnectorDetailView';
 import OAuthConfirmModal from '@/components/connectors/OAuthConfirmModal';
 import { initiateOAuth, connectNotion, connectGoogleDrive, connectGmail, getRetellAIStatus } from '@/lib/connectors-api';
@@ -129,22 +130,23 @@ export default function SettingsPage() {
   const isConnectorConnected = false; // Will be updated by ConnectorsList component
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       {/* Header */}
-      <header className="bg-white border-b border-gray-200 shadow-sm">
+      <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 shadow-sm dark:shadow-gray-900/50">
         <div className="container mx-auto px-4 py-3 sm:py-4">
           <div className="flex items-center justify-between">
             <Link
               href="/dashboard"
-              className="flex items-center text-gray-600 hover:text-gray-900 transition-colors text-sm sm:text-base"
+              className="flex items-center text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-colors text-sm sm:text-base"
             >
               <ArrowLeft className="h-4 w-4 sm:h-5 sm:w-5 mr-1 sm:mr-2" />
               <span className="hidden sm:inline">Back to Dashboard</span>
               <span className="sm:hidden">Back</span>
             </Link>
-            <div className="flex items-center space-x-2">
-              <Settings className="h-5 w-5 sm:h-6 sm:w-6 text-gray-600" />
-              <h1 className="text-lg sm:text-xl font-semibold text-gray-900">Settings</h1>
+            <div className="flex items-center space-x-3">
+              <Settings className="h-5 w-5 sm:h-6 sm:w-6 text-gray-600 dark:text-gray-400" />
+              <h1 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-white">Settings</h1>
+              <ThemeToggle />
             </div>
           </div>
         </div>
@@ -155,10 +157,10 @@ export default function SettingsPage() {
         {view === 'main' ? (
           <div className="space-y-4 sm:space-y-8">
             {/* System Tools Section */}
-            <section className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-              <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-200 bg-gray-50">
-                <h2 className="text-base sm:text-lg font-semibold text-gray-900">System Tools</h2>
-                <p className="text-xs sm:text-sm text-gray-500 mt-1">
+            <section className="bg-white dark:bg-gray-800 rounded-xl shadow-sm dark:shadow-gray-900/50 border border-gray-200 dark:border-gray-700 overflow-hidden">
+              <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/50">
+                <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white">System Tools</h2>
+                <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-1">
                   Connect to built-in tools like Gmail and Analytics
                 </p>
               </div>
@@ -168,11 +170,11 @@ export default function SettingsPage() {
             </section>
 
             {/* Connectors Section */}
-            <section className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-              <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-200 bg-gray-50">
+            <section className="bg-white dark:bg-gray-800 rounded-xl shadow-sm dark:shadow-gray-900/50 border border-gray-200 dark:border-gray-700 overflow-hidden">
+              <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/50">
                 <div>
-                  <h2 className="text-base sm:text-lg font-semibold text-gray-900">Connectors</h2>
-                  <p className="text-xs sm:text-sm text-gray-500 mt-1">
+                  <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white">Connectors</h2>
+                  <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-1">
                     Connect to external services like Notion
                   </p>
                 </div>
@@ -185,16 +187,16 @@ export default function SettingsPage() {
             </section>
 
             {/* File Retention Section */}
-            <section className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-              <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-200 bg-gray-50">
-                <h2 className="text-base sm:text-lg font-semibold text-gray-900">File retention</h2>
-                <p className="text-xs sm:text-sm text-gray-500 mt-1">
+            <section className="bg-white dark:bg-gray-800 rounded-xl shadow-sm dark:shadow-gray-900/50 border border-gray-200 dark:border-gray-700 overflow-hidden">
+              <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/50">
+                <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white">File retention</h2>
+                <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-1">
                   Control how long uploaded attachments remain available for thread replay.
                 </p>
               </div>
               <div className="p-4 sm:p-6">
                 {fileRetentionLoading ? (
-                  <p className="text-sm text-gray-500">Loading...</p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">Loading...</p>
                 ) : (
                   <div className="space-y-3">
                     <label className="flex items-start gap-3 cursor-pointer">
@@ -207,8 +209,8 @@ export default function SettingsPage() {
                         className="mt-1"
                       />
                       <div>
-                        <p className="text-sm font-medium text-gray-900">Keep 24h</p>
-                        <p className="text-xs text-gray-500">Best default. Attachments remain accessible for 24 hours.</p>
+                        <p className="text-sm font-medium text-gray-900 dark:text-white">Keep 24h</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">Best default. Attachments remain accessible for 24 hours.</p>
                       </div>
                     </label>
 
@@ -222,8 +224,8 @@ export default function SettingsPage() {
                         className="mt-1"
                       />
                       <div>
-                        <p className="text-sm font-medium text-gray-900">Keep 48h</p>
-                        <p className="text-xs text-gray-500">Useful if users revisit threads later.</p>
+                        <p className="text-sm font-medium text-gray-900 dark:text-white">Keep 48h</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">Useful if users revisit threads later.</p>
                       </div>
                     </label>
 
@@ -237,18 +239,18 @@ export default function SettingsPage() {
                         className="mt-1"
                       />
                       <div>
-                        <p className="text-sm font-medium text-gray-900">Delete immediately after response</p>
-                        <p className="text-xs text-gray-500">
+                        <p className="text-sm font-medium text-gray-900 dark:text-white">Delete immediately after response</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
                           Strong privacy. Attachments won&apos;t be available when reopening the thread.
                         </p>
                       </div>
                     </label>
 
                     {fileRetentionSaving && (
-                      <p className="text-xs text-gray-500">Saving...</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">Saving...</p>
                     )}
                     {fileRetentionError && (
-                      <p className="text-xs text-red-600">{fileRetentionError}</p>
+                      <p className="text-xs text-red-600 dark:text-red-400">{fileRetentionError}</p>
                     )}
                   </div>
                 )}
@@ -256,9 +258,9 @@ export default function SettingsPage() {
             </section>
 
             {/* Help Section */}
-            <section className="bg-blue-50 rounded-xl border border-blue-200 p-4 sm:p-6">
-              <h3 className="font-semibold text-blue-900 mb-2 text-sm sm:text-base">How it works</h3>
-              <ul className="text-xs sm:text-sm text-blue-800 space-y-2">
+            <section className="bg-blue-50 dark:bg-blue-900/30 rounded-xl border border-blue-200 dark:border-blue-800 p-4 sm:p-6">
+              <h3 className="font-semibold text-blue-900 dark:text-blue-300 mb-2 text-sm sm:text-base">How it works</h3>
+              <ul className="text-xs sm:text-sm text-blue-800 dark:text-blue-300 space-y-2">
                 <li>
                   <strong>System Tools:</strong> Built-in integrations like Gmail. Click &quot;Connect&quot; to enable.
                 </li>
@@ -274,7 +276,7 @@ export default function SettingsPage() {
             </section>
           </div>
         ) : view === 'connector-detail' && selectedConnector ? (
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden max-w-2xl mx-auto">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm dark:shadow-gray-900/50 border border-gray-200 dark:border-gray-700 overflow-hidden max-w-2xl mx-auto">
             <ConnectorDetailView
               connector={selectedConnector}
               onBack={handleBack}
@@ -284,7 +286,7 @@ export default function SettingsPage() {
             />
           </div>
         ) : view === 'retellai-connect' && selectedConnector ? (
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden max-w-2xl mx-auto">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm dark:shadow-gray-900/50 border border-gray-200 dark:border-gray-700 overflow-hidden max-w-2xl mx-auto">
             <RetellAIConnectView
               connector={selectedConnector}
               onBack={handleBack}
