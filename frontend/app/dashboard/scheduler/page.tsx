@@ -259,35 +259,35 @@ export default function SchedulerPage() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Left Column - Create Task Form */}
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md dark:shadow-gray-900/50 p-4 sm:p-6">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Schedule New Task</h2>
+            <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white mb-3 sm:mb-4">Schedule New Task</h2>
 
             {/* Error/Success Messages */}
             {error && (
-              <div className="mb-4 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-4 py-3 rounded-lg flex items-center">
-                <AlertCircle className="h-5 w-5 mr-2 flex-shrink-0" />
+              <div className="mb-3 sm:mb-4 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-3 sm:px-4 py-2 sm:py-3 rounded-lg flex items-center text-xs sm:text-sm">
+                <AlertCircle className="h-4 w-4 sm:h-5 sm:w-5 mr-2 flex-shrink-0" />
                 {error}
               </div>
             )}
             {success && (
-              <div className="mb-4 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 text-green-700 dark:text-green-400 px-4 py-3 rounded-lg flex items-center">
-                <CheckCircle className="h-5 w-5 mr-2 flex-shrink-0" />
+              <div className="mb-3 sm:mb-4 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 text-green-700 dark:text-green-400 px-3 sm:px-4 py-2 sm:py-3 rounded-lg flex items-center text-xs sm:text-sm">
+                <CheckCircle className="h-4 w-4 sm:h-5 sm:w-5 mr-2 flex-shrink-0" />
                 {success}
               </div>
             )}
 
             {/* Tool Selection */}
-            <div className="mb-6">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            <div className="mb-4 sm:mb-6">
+              <label className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Select Tools (max 3)
               </label>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              <div className="grid grid-cols-2 gap-2">
                 {availableTools.map(tool => (
                   <button
                     key={tool.id}
                     onClick={() => handleToolToggle(tool.id)}
                     disabled={!tool.available || (!selectedTools.includes(tool.id) && selectedTools.length >= 3)}
                     className={`
-                      flex items-center p-3 rounded-lg border-2 transition-all text-left
+                      flex items-center p-2 sm:p-3 rounded-lg border-2 transition-all text-left
                       ${selectedTools.includes(tool.id)
                         ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400'
                         : 'border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500 text-gray-700 dark:text-gray-300'
@@ -298,10 +298,10 @@ export default function SchedulerPage() {
                       }
                     `}
                   >
-                    <span className="mr-2">{toolIcons[tool.icon] || <Box className="h-5 w-5" />}</span>
-                    <span className="text-sm font-medium truncate">{tool.name}</span>
+                    <span className="mr-1.5 sm:mr-2">{toolIcons[tool.icon] || <Box className="h-4 w-4 sm:h-5 sm:w-5" />}</span>
+                    <span className="text-xs sm:text-sm font-medium truncate">{tool.name}</span>
                     {selectedTools.includes(tool.id) && (
-                      <CheckCircle className="h-4 w-4 ml-auto text-emerald-600 dark:text-emerald-400" />
+                      <CheckCircle className="h-3.5 w-3.5 sm:h-4 sm:w-4 ml-auto text-emerald-600 dark:text-emerald-400 flex-shrink-0" />
                     )}
                   </button>
                 ))}
@@ -312,8 +312,8 @@ export default function SchedulerPage() {
             </div>
 
             {/* Query Input */}
-            <div className="mb-6">
-              <label htmlFor="query" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            <div className="mb-4 sm:mb-6">
+              <label htmlFor="query" className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5 sm:mb-2">
                 Query
               </label>
               <textarea
@@ -321,16 +321,16 @@ export default function SchedulerPage() {
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="What would you like the agent to do? e.g., 'Generate a sales report for this week and email it to me'"
-                rows={4}
-                className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent resize-none placeholder-gray-400 dark:placeholder-gray-500"
+                rows={3}
+                className="w-full px-3 sm:px-4 py-2 sm:py-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent resize-none placeholder-gray-400 dark:placeholder-gray-500 text-sm"
               />
             </div>
 
             {/* Date/Time Selection */}
-            <div className="mb-6 grid grid-cols-2 gap-4">
+            <div className="mb-4 sm:mb-6 grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
               <div>
-                <label htmlFor="date" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  <Calendar className="h-4 w-4 inline mr-1" />
+                <label htmlFor="date" className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5 sm:mb-2">
+                  <Calendar className="h-3.5 w-3.5 sm:h-4 sm:w-4 inline mr-1" />
                   Date
                 </label>
                 <input
@@ -339,12 +339,12 @@ export default function SchedulerPage() {
                   value={scheduledDate}
                   onChange={(e) => setScheduledDate(e.target.value)}
                   min={minDate}
-                  className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  className="w-full px-3 sm:px-4 py-2 sm:py-2.5 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  <Clock className="h-4 w-4 inline mr-1" />
+                <label className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5 sm:mb-2">
+                  <Clock className="h-3.5 w-3.5 sm:h-4 sm:w-4 inline mr-1" />
                   Time
                 </label>
                 <AnalogClockPicker
@@ -358,16 +358,16 @@ export default function SchedulerPage() {
             <button
               onClick={handleSchedule}
               disabled={creating || selectedTools.length === 0 || !query.trim() || !scheduledDate || !scheduledTime}
-              className="w-full flex items-center justify-center px-6 py-3 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-semibold"
+              className="w-full flex items-center justify-center px-4 sm:px-6 py-2.5 sm:py-3 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-semibold text-sm sm:text-base"
             >
               {creating ? (
                 <>
-                  <Loader2 className="h-5 w-5 mr-2 animate-spin" />
+                  <Loader2 className="h-4 w-4 sm:h-5 sm:w-5 mr-2 animate-spin" />
                   Scheduling...
                 </>
               ) : (
                 <>
-                  <Play className="h-5 w-5 mr-2" />
+                  <Play className="h-4 w-4 sm:h-5 sm:w-5 mr-2" />
                   Schedule Task
                 </>
               )}
@@ -376,13 +376,13 @@ export default function SchedulerPage() {
 
           {/* Right Column - Task List */}
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md dark:shadow-gray-900/50 p-4 sm:p-6">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Scheduled Tasks</h2>
+            <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white mb-3 sm:mb-4">Scheduled Tasks</h2>
 
             {/* Tab Buttons */}
-            <div className="flex border-b border-gray-200 dark:border-gray-700 mb-4">
+            <div className="flex border-b border-gray-200 dark:border-gray-700 mb-3 sm:mb-4">
               <button
                 onClick={() => setActiveTab('pending')}
-                className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+                className={`px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-medium border-b-2 -mb-px transition-colors ${
                   activeTab === 'pending'
                     ? 'border-emerald-500 text-emerald-600 dark:text-emerald-400'
                     : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
@@ -392,7 +392,7 @@ export default function SchedulerPage() {
               </button>
               <button
                 onClick={() => setActiveTab('completed')}
-                className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+                className={`px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-medium border-b-2 -mb-px transition-colors ${
                   activeTab === 'completed'
                     ? 'border-emerald-500 text-emerald-600 dark:text-emerald-400'
                     : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
@@ -404,42 +404,42 @@ export default function SchedulerPage() {
 
             {/* Task List */}
             {tasksLoading ? (
-              <div className="flex items-center justify-center py-12">
-                <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+              <div className="flex items-center justify-center py-8 sm:py-12">
+                <Loader2 className="h-6 w-6 sm:h-8 sm:w-8 animate-spin text-gray-400" />
               </div>
             ) : filteredTasks.length === 0 ? (
-              <div className="text-center py-12 text-gray-500 dark:text-gray-400">
-                <Timer className="h-12 w-12 mx-auto mb-3 opacity-30" />
-                <p>No {activeTab} tasks</p>
+              <div className="text-center py-8 sm:py-12 text-gray-500 dark:text-gray-400">
+                <Timer className="h-10 w-10 sm:h-12 sm:w-12 mx-auto mb-2 sm:mb-3 opacity-30" />
+                <p className="text-sm">No {activeTab} tasks</p>
               </div>
             ) : (
-              <div className="space-y-3 max-h-[500px] overflow-y-auto">
+              <div className="space-y-2 sm:space-y-3 max-h-[400px] sm:max-h-[500px] overflow-y-auto">
                 {filteredTasks.map(task => {
                   const statusInfo = getStatusInfo(task.status);
                   return (
                     <div
                       key={task.id}
-                      className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                      className="border border-gray-200 dark:border-gray-700 rounded-lg p-3 sm:p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
                     >
-                      <div className="flex items-start justify-between mb-2">
-                        <p className="text-sm font-medium text-gray-900 dark:text-white line-clamp-2 flex-1 mr-2">
+                      <div className="flex items-start justify-between mb-2 gap-2">
+                        <p className="text-xs sm:text-sm font-medium text-gray-900 dark:text-white line-clamp-2 flex-1">
                           {task.query}
                         </p>
-                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${statusInfo.bgColor} ${statusInfo.color}`}>
+                        <span className={`px-1.5 sm:px-2 py-0.5 sm:py-1 text-[10px] sm:text-xs font-medium rounded-full flex-shrink-0 ${statusInfo.bgColor} ${statusInfo.color}`}>
                           {statusInfo.label}
                         </span>
                       </div>
 
-                      <div className="flex items-center text-xs text-gray-500 dark:text-gray-400 mb-2">
-                        <Clock className="h-3 w-3 mr-1" />
+                      <div className="flex items-center text-[10px] sm:text-xs text-gray-500 dark:text-gray-400 mb-2">
+                        <Clock className="h-2.5 w-2.5 sm:h-3 sm:w-3 mr-1" />
                         {formatScheduledTime(task.scheduled_time)}
                       </div>
 
-                      <div className="flex items-center flex-wrap gap-1 mb-3">
+                      <div className="flex items-center flex-wrap gap-1 mb-2 sm:mb-3">
                         {task.selected_tools.map(toolId => (
                           <span
                             key={toolId}
-                            className="px-2 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 text-xs rounded"
+                            className="px-1.5 sm:px-2 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 text-[10px] sm:text-xs rounded"
                           >
                             {toolId}
                           </span>
@@ -450,23 +450,23 @@ export default function SchedulerPage() {
                         {task.status === 'pending' && (
                           <button
                             onClick={() => handleCancelTask(task.id)}
-                            className="flex items-center px-3 py-1.5 text-xs text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors"
+                            className="flex items-center px-2 sm:px-3 py-1 sm:py-1.5 text-[10px] sm:text-xs text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors"
                           >
-                            <Trash2 className="h-3.5 w-3.5 mr-1" />
+                            <Trash2 className="h-3 w-3 sm:h-3.5 sm:w-3.5 mr-1" />
                             Cancel
                           </button>
                         )}
                         {task.status === 'completed' && task.thread_id && (
                           <button
                             onClick={() => handleViewResult(task)}
-                            className="flex items-center px-3 py-1.5 text-xs bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-200 dark:hover:bg-emerald-900/70 rounded-lg transition-colors"
+                            className="flex items-center px-2 sm:px-3 py-1 sm:py-1.5 text-[10px] sm:text-xs bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-200 dark:hover:bg-emerald-900/70 rounded-lg transition-colors"
                           >
-                            <Eye className="h-3.5 w-3.5 mr-1" />
+                            <Eye className="h-3 w-3 sm:h-3.5 sm:w-3.5 mr-1" />
                             View Result
                           </button>
                         )}
                         {task.status === 'failed' && task.error_message && (
-                          <span className="text-xs text-red-600 dark:text-red-400 truncate max-w-[200px]" title={task.error_message}>
+                          <span className="text-[10px] sm:text-xs text-red-600 dark:text-red-400 truncate max-w-[150px] sm:max-w-[200px]" title={task.error_message}>
                             {task.error_message}
                           </span>
                         )}
@@ -480,12 +480,12 @@ export default function SchedulerPage() {
         </div>
 
         {/* Info Notice */}
-        <div className="mt-6 bg-purple-50 dark:bg-purple-900/30 border border-purple-200 dark:border-purple-800 rounded-lg p-4">
-          <div className="flex items-start space-x-3">
-            <Timer className="h-5 w-5 text-purple-600 dark:text-purple-400 flex-shrink-0 mt-0.5" />
+        <div className="mt-4 sm:mt-6 bg-purple-50 dark:bg-purple-900/30 border border-purple-200 dark:border-purple-800 rounded-lg p-3 sm:p-4">
+          <div className="flex items-start space-x-2 sm:space-x-3">
+            <Timer className="h-4 w-4 sm:h-5 sm:w-5 text-purple-600 dark:text-purple-400 flex-shrink-0 mt-0.5" />
             <div>
-              <h4 className="font-semibold text-purple-800 dark:text-purple-300">How Scheduler Works</h4>
-              <p className="text-sm text-purple-700 dark:text-purple-400 mt-1">
+              <h4 className="font-semibold text-purple-800 dark:text-purple-300 text-sm sm:text-base">How Scheduler Works</h4>
+              <p className="text-xs sm:text-sm text-purple-700 dark:text-purple-400 mt-1">
                 Select up to 3 tools, write your query, and pick a time. At the scheduled time,
                 the AI Agent will run your query using only the selected tools. View results
                 in the chat interface when complete.

@@ -324,87 +324,89 @@ export default function DashboardConnectPage() {
 
       {/* Header */}
       <header className="bg-white dark:bg-gray-800 shadow-sm dark:shadow-gray-900/50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
-          <div className="flex items-center space-x-6">
-            <Link href={ROUTES.DASHBOARD} className="flex items-center space-x-3">
-              <div className="w-10 h-10 bg-blue-600 dark:bg-blue-500 rounded-lg flex items-center justify-center">
-                <span className="text-white text-xl font-bold">S</span>
-              </div>
-              <span className="text-xl font-bold text-gray-900 dark:text-white">{APP_METADATA.NAME}</span>
-            </Link>
-            <nav className="hidden md:flex space-x-4">
-              <Link href={ROUTES.DB_CONNECT} className="text-blue-600 dark:text-blue-400 font-medium">Connection</Link>
-              <Link href={ROUTES.ANALYTICS} className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white">Analytics</Link>
-            </nav>
-          </div>
-          <div className="flex items-center space-x-4">
-            <span className="px-2 py-1 bg-blue-100 dark:bg-blue-900/50 text-blue-800 dark:text-blue-300 text-xs rounded-full">Your Database</span>
-            <span className="text-gray-600 dark:text-gray-300 text-sm">{user?.email}</span>
-            <ThemeToggle />
-            <button onClick={logout} className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm">Logout</button>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 sm:py-4">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+            <div className="flex items-center space-x-3 sm:space-x-6 w-full sm:w-auto justify-between sm:justify-start">
+              <Link href={ROUTES.DASHBOARD} className="flex items-center space-x-2 sm:space-x-3">
+                <div className="w-8 h-8 sm:w-10 sm:h-10 bg-blue-600 dark:bg-blue-500 rounded-lg flex items-center justify-center">
+                  <span className="text-white text-lg sm:text-xl font-bold">S</span>
+                </div>
+                <span className="text-lg sm:text-xl font-bold text-gray-900 dark:text-white">{APP_METADATA.NAME}</span>
+              </Link>
+              <nav className="hidden md:flex space-x-4">
+                <Link href={ROUTES.DB_CONNECT} className="text-blue-600 dark:text-blue-400 font-medium text-sm">Connection</Link>
+                <Link href={ROUTES.ANALYTICS} className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm">Analytics</Link>
+              </nav>
+            </div>
+            <div className="flex items-center space-x-2 sm:space-x-4 w-full sm:w-auto justify-between sm:justify-end">
+              <span className="px-2 py-1 bg-blue-100 dark:bg-blue-900/50 text-blue-800 dark:text-blue-300 text-xs rounded-full">Your Database</span>
+              <span className="text-gray-600 dark:text-gray-300 text-xs sm:text-sm truncate max-w-[100px] sm:max-w-none">{user?.email}</span>
+              <ThemeToggle />
+              <button onClick={logout} className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-xs sm:text-sm">Logout</button>
+            </div>
           </div>
         </div>
       </header>
 
       {/* Main Content */}
-      <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="mb-6">
-          <h1 className="text-3xl font-bold mb-2 text-gray-900 dark:text-white">Your PostgreSQL Database</h1>
-          <p className="text-gray-600 dark:text-gray-400">Manage your database connection via MCP protocol.</p>
+      <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8">
+        <div className="mb-4 sm:mb-6">
+          <h1 className="text-2xl sm:text-3xl font-bold mb-2 text-gray-900 dark:text-white">Your PostgreSQL Database</h1>
+          <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400">Manage your database connection via MCP protocol.</p>
         </div>
 
         {/* Step indicator */}
-        <div className="flex items-center mb-8">
-          <div className={`flex items-center ${step === 'connect' ? 'text-blue-600 dark:text-blue-400' : 'text-green-600 dark:text-green-400'}`}>
-            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${step === 'connect' ? 'bg-blue-100 dark:bg-blue-900/50' : 'bg-green-100 dark:bg-green-900/50'}`}>
+        <div className="flex items-center mb-6 sm:mb-8 overflow-x-auto pb-2">
+          <div className={`flex items-center flex-shrink-0 ${step === 'connect' ? 'text-blue-600 dark:text-blue-400' : 'text-green-600 dark:text-green-400'}`}>
+            <div className={`w-6 h-6 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-xs sm:text-sm ${step === 'connect' ? 'bg-blue-100 dark:bg-blue-900/50' : 'bg-green-100 dark:bg-green-900/50'}`}>
               {step === 'connect' ? '1' : '✓'}
             </div>
-            <span className="ml-2 font-medium">Connect</span>
+            <span className="ml-1 sm:ml-2 font-medium text-xs sm:text-sm">Connect</span>
           </div>
-          <div className={`flex-1 h-1 mx-4 ${step !== 'connect' ? 'bg-green-400 dark:bg-green-600' : 'bg-gray-200 dark:bg-gray-700'}`} />
-          <div className={`flex items-center ${step === 'setup' ? 'text-blue-600 dark:text-blue-400' : step === 'chat' ? 'text-green-600 dark:text-green-400' : 'text-gray-400 dark:text-gray-500'}`}>
-            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${step === 'setup' ? 'bg-blue-100 dark:bg-blue-900/50' : step === 'chat' ? 'bg-green-100 dark:bg-green-900/50' : 'bg-gray-100 dark:bg-gray-700'}`}>
+          <div className={`flex-1 h-0.5 sm:h-1 mx-2 sm:mx-4 min-w-[20px] ${step !== 'connect' ? 'bg-green-400 dark:bg-green-600' : 'bg-gray-200 dark:bg-gray-700'}`} />
+          <div className={`flex items-center flex-shrink-0 ${step === 'setup' ? 'text-blue-600 dark:text-blue-400' : step === 'chat' ? 'text-green-600 dark:text-green-400' : 'text-gray-400 dark:text-gray-500'}`}>
+            <div className={`w-6 h-6 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-xs sm:text-sm ${step === 'setup' ? 'bg-blue-100 dark:bg-blue-900/50' : step === 'chat' ? 'bg-green-100 dark:bg-green-900/50' : 'bg-gray-100 dark:bg-gray-700'}`}>
               {step === 'chat' ? '✓' : '2'}
             </div>
-            <span className="ml-2 font-medium">Setup</span>
+            <span className="ml-1 sm:ml-2 font-medium text-xs sm:text-sm">Setup</span>
           </div>
-          <div className={`flex-1 h-1 mx-4 ${step === 'chat' ? 'bg-green-400 dark:bg-green-600' : 'bg-gray-200 dark:bg-gray-700'}`} />
-          <div className={`flex items-center ${step === 'chat' ? 'text-blue-600 dark:text-blue-400' : 'text-gray-400 dark:text-gray-500'}`}>
-            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${step === 'chat' ? 'bg-blue-100 dark:bg-blue-900/50' : 'bg-gray-100 dark:bg-gray-700'}`}>3</div>
-            <span className="ml-2 font-medium">Manage</span>
+          <div className={`flex-1 h-0.5 sm:h-1 mx-2 sm:mx-4 min-w-[20px] ${step === 'chat' ? 'bg-green-400 dark:bg-green-600' : 'bg-gray-200 dark:bg-gray-700'}`} />
+          <div className={`flex items-center flex-shrink-0 ${step === 'chat' ? 'text-blue-600 dark:text-blue-400' : 'text-gray-400 dark:text-gray-500'}`}>
+            <div className={`w-6 h-6 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-xs sm:text-sm ${step === 'chat' ? 'bg-blue-100 dark:bg-blue-900/50' : 'bg-gray-100 dark:bg-gray-700'}`}>3</div>
+            <span className="ml-1 sm:ml-2 font-medium text-xs sm:text-sm">Manage</span>
           </div>
         </div>
 
         {error && (
-          <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-4 py-3 rounded mb-6">{error}</div>
+          <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-3 sm:px-4 py-2 sm:py-3 rounded mb-4 sm:mb-6 text-sm">{error}</div>
         )}
 
         {/* Step 1: Connect */}
         {step === 'connect' && (
-          <div className="space-y-6">
+          <div className="space-y-4 sm:space-y-6">
             {checkingMcp ? (
-              <div className="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4 flex items-center">
-                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-gray-600 dark:border-gray-400 mr-3"></div>
-                <span className="text-gray-600 dark:text-gray-400">Checking MCP server status...</span>
+              <div className="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 sm:p-4 flex items-center">
+                <div className="animate-spin rounded-full h-4 w-4 sm:h-5 sm:w-5 border-b-2 border-gray-600 dark:border-gray-400 mr-2 sm:mr-3"></div>
+                <span className="text-gray-600 dark:text-gray-400 text-sm">Checking MCP server status...</span>
               </div>
             ) : mcpStatus?.postgres_mcp_installed ? (
-              <div className="bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded-lg p-4">
+              <div className="bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded-lg p-3 sm:p-4">
                 <div className="flex items-center">
-                  <span className="text-2xl mr-3">✅</span>
+                  <span className="text-xl sm:text-2xl mr-2 sm:mr-3">✅</span>
                   <div>
-                    <h3 className="font-semibold text-green-800 dark:text-green-300">MCP Server Ready</h3>
-                    <p className="text-green-700 dark:text-green-400 text-sm">postgres-mcp is installed and ready.</p>
+                    <h3 className="font-semibold text-green-800 dark:text-green-300 text-sm sm:text-base">MCP Server Ready</h3>
+                    <p className="text-green-700 dark:text-green-400 text-xs sm:text-sm">postgres-mcp is installed and ready.</p>
                   </div>
                 </div>
               </div>
             ) : (
-              <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg p-4">
+              <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg p-3 sm:p-4">
                 <div className="flex items-start">
-                  <span className="text-2xl mr-3">⚠️</span>
+                  <span className="text-xl sm:text-2xl mr-2 sm:mr-3">⚠️</span>
                   <div>
-                    <h3 className="font-semibold text-red-800 dark:text-red-300 mb-1">postgres-mcp Not Installed</h3>
-                    <p className="text-red-700 dark:text-red-400 text-sm mb-3">Install it on the server:</p>
-                    <code className="bg-red-100 dark:bg-red-900/50 px-3 py-2 rounded text-sm block font-mono text-red-800 dark:text-red-300">
+                    <h3 className="font-semibold text-red-800 dark:text-red-300 mb-1 text-sm sm:text-base">postgres-mcp Not Installed</h3>
+                    <p className="text-red-700 dark:text-red-400 text-xs sm:text-sm mb-2 sm:mb-3">Install it on the server:</p>
+                    <code className="bg-red-100 dark:bg-red-900/50 px-2 sm:px-3 py-1.5 sm:py-2 rounded text-xs sm:text-sm block font-mono text-red-800 dark:text-red-300 overflow-x-auto">
                       pipx install postgres-mcp
                     </code>
                   </div>
@@ -412,19 +414,19 @@ export default function DashboardConnectPage() {
               </div>
             )}
 
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md dark:shadow-gray-900/50 p-6">
-              <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Connect to Your Database</h2>
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md dark:shadow-gray-900/50 p-4 sm:p-6">
+              <h2 className="text-lg sm:text-xl font-semibold mb-3 sm:mb-4 text-gray-900 dark:text-white">Connect to Your Database</h2>
 
               {/* Show stored database option OR input field based on state */}
               {databaseUri && !useDifferentDb ? (
                 // User has stored database URI - show direct connect option
                 <>
-                  <div className="bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded-lg p-4 mb-4">
+                  <div className="bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded-lg p-3 sm:p-4 mb-3 sm:mb-4">
                     <div className="flex items-center">
-                      <span className="text-xl mr-2">🔐</span>
+                      <span className="text-lg sm:text-xl mr-2">🔐</span>
                       <div>
-                        <p className="text-green-800 dark:text-green-300 font-medium">Database URI Configured</p>
-                        <p className="text-green-600 dark:text-green-400 text-sm">Your connection details are securely stored.</p>
+                        <p className="text-green-800 dark:text-green-300 font-medium text-sm sm:text-base">Database URI Configured</p>
+                        <p className="text-green-600 dark:text-green-400 text-xs sm:text-sm">Your connection details are securely stored.</p>
                       </div>
                     </div>
                   </div>
@@ -432,14 +434,14 @@ export default function DashboardConnectPage() {
                   <button
                     onClick={() => connectDatabase(false)}
                     disabled={connecting || !mcpStatus?.postgres_mcp_installed}
-                    className="w-full bg-blue-600 text-white py-3 px-4 rounded-md hover:bg-blue-700 disabled:bg-blue-400 transition-colors font-medium mb-3"
+                    className="w-full bg-blue-600 text-white py-2.5 sm:py-3 px-4 rounded-md hover:bg-blue-700 disabled:bg-blue-400 transition-colors font-medium mb-2 sm:mb-3 text-sm sm:text-base"
                   >
                     {connecting ? 'Connecting via MCP...' : 'Connect to Database'}
                   </button>
 
                   <button
                     onClick={() => setUseDifferentDb(true)}
-                    className="w-full border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 py-2 px-4 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-sm"
+                    className="w-full border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 py-2 px-4 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-xs sm:text-sm"
                   >
                     Use Different Database
                   </button>
@@ -448,11 +450,11 @@ export default function DashboardConnectPage() {
                 // User wants to use different database OR no stored URI - show input field
                 <>
                   {useDifferentDb && (
-                    <div className="bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-800 rounded-lg p-3 mb-4">
-                      <div className="flex items-center justify-between">
+                    <div className="bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-800 rounded-lg p-2.5 sm:p-3 mb-3 sm:mb-4">
+                      <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center">
-                          <span className="text-lg mr-2">🔄</span>
-                          <p className="text-yellow-800 dark:text-yellow-300 text-sm">Enter a new database URI to connect</p>
+                          <span className="text-base sm:text-lg mr-2">🔄</span>
+                          <p className="text-yellow-800 dark:text-yellow-300 text-xs sm:text-sm">Enter a new database URI to connect</p>
                         </div>
                         <button
                           onClick={() => {
@@ -460,7 +462,7 @@ export default function DashboardConnectPage() {
                             setNewDatabaseUri('');
                             setError('');
                           }}
-                          className="text-yellow-700 dark:text-yellow-400 hover:text-yellow-900 dark:hover:text-yellow-300 text-sm underline"
+                          className="text-yellow-700 dark:text-yellow-400 hover:text-yellow-900 dark:hover:text-yellow-300 text-xs sm:text-sm underline flex-shrink-0"
                         >
                           Cancel
                         </button>
@@ -468,8 +470,8 @@ export default function DashboardConnectPage() {
                     </div>
                   )}
 
-                  <div className="mb-4">
-                    <label htmlFor="database-uri" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  <div className="mb-3 sm:mb-4">
+                    <label htmlFor="database-uri" className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5 sm:mb-2">
                       PostgreSQL Database URI
                     </label>
                     <input
@@ -478,7 +480,7 @@ export default function DashboardConnectPage() {
                       value={newDatabaseUri}
                       onChange={(e) => setNewDatabaseUri(e.target.value)}
                       placeholder="postgresql://user:password@host:port/database"
-                      className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-mono text-sm placeholder-gray-400 dark:placeholder-gray-500"
+                      className="w-full px-3 sm:px-4 py-2.5 sm:py-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-mono text-xs sm:text-sm placeholder-gray-400 dark:placeholder-gray-500"
                     />
                     <p className="text-gray-500 dark:text-gray-400 text-xs mt-1">
                       Your URI will be saved for future connections.
@@ -488,7 +490,7 @@ export default function DashboardConnectPage() {
                   <button
                     onClick={() => connectDatabase(true)}
                     disabled={connecting || !mcpStatus?.postgres_mcp_installed || !newDatabaseUri.trim()}
-                    className="w-full bg-blue-600 text-white py-3 px-4 rounded-md hover:bg-blue-700 disabled:bg-blue-400 transition-colors font-medium"
+                    className="w-full bg-blue-600 text-white py-2.5 sm:py-3 px-4 rounded-md hover:bg-blue-700 disabled:bg-blue-400 transition-colors font-medium text-sm sm:text-base"
                   >
                     {connecting ? 'Connecting via MCP...' : 'Connect with New Database'}
                   </button>
@@ -499,7 +501,7 @@ export default function DashboardConnectPage() {
             <div className="text-center">
               <button
                 onClick={handleDisconnectAndReset}
-                className="text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 text-sm"
+                className="text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 text-xs sm:text-sm"
               >
                 Switch to different service
               </button>
@@ -509,20 +511,20 @@ export default function DashboardConnectPage() {
 
         {/* Step 2: Setup */}
         {step === 'setup' && result && (
-          <div className="space-y-6">
-            <div className="bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded-lg p-6">
-              <div className="flex items-center mb-4">
-                <span className="text-3xl mr-3">✅</span>
+          <div className="space-y-4 sm:space-y-6">
+            <div className="bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded-lg p-4 sm:p-6">
+              <div className="flex items-center mb-3 sm:mb-4">
+                <span className="text-2xl sm:text-3xl mr-2 sm:mr-3">✅</span>
                 <div>
-                  <h2 className="text-xl font-semibold text-green-800 dark:text-green-300">Connected via MCP!</h2>
-                  <p className="text-green-600 dark:text-green-400">{result.message}</p>
+                  <h2 className="text-lg sm:text-xl font-semibold text-green-800 dark:text-green-300">Connected via MCP!</h2>
+                  <p className="text-green-600 dark:text-green-400 text-sm sm:text-base">{result.message}</p>
                 </div>
               </div>
 
               {result.mcp_info && (
-                <div className="bg-white dark:bg-gray-800 rounded-lg p-4 mt-4">
-                  <h3 className="font-semibold mb-2 text-gray-900 dark:text-white">MCP Server Information</h3>
-                  <div className="text-sm space-y-1 text-gray-900 dark:text-gray-300">
+                <div className="bg-white dark:bg-gray-800 rounded-lg p-3 sm:p-4 mt-3 sm:mt-4">
+                  <h3 className="font-semibold mb-2 text-gray-900 dark:text-white text-sm sm:text-base">MCP Server Information</h3>
+                  <div className="text-xs sm:text-sm space-y-1 text-gray-900 dark:text-gray-300">
                     <div><span className="text-gray-500 dark:text-gray-400">Server:</span> {result.mcp_info.server}</div>
                     <div><span className="text-gray-500 dark:text-gray-400">Mode:</span> {result.mcp_info.mode}</div>
                   </div>
@@ -530,14 +532,14 @@ export default function DashboardConnectPage() {
               )}
             </div>
 
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md dark:shadow-gray-900/50 p-6">
-              <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Setup Inventory Tables</h2>
-              <p className="text-gray-600 dark:text-gray-400 mb-4">Create standard inventory tables or skip if they already exist.</p>
-              <div className="flex gap-4">
-                <button onClick={setupTables} className="flex-1 bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 transition-colors">
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md dark:shadow-gray-900/50 p-4 sm:p-6">
+              <h2 className="text-lg sm:text-xl font-semibold mb-3 sm:mb-4 text-gray-900 dark:text-white">Setup Inventory Tables</h2>
+              <p className="text-gray-600 dark:text-gray-400 mb-3 sm:mb-4 text-sm sm:text-base">Create standard inventory tables or skip if they already exist.</p>
+              <div className="flex flex-col sm:flex-row gap-2 sm:gap-4">
+                <button onClick={setupTables} className="flex-1 bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 transition-colors text-sm sm:text-base">
                   Create Tables
                 </button>
-                <button onClick={skipSetup} className="px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                <button onClick={skipSetup} className="px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-sm sm:text-base">
                   Skip (tables exist)
                 </button>
               </div>
@@ -547,23 +549,25 @@ export default function DashboardConnectPage() {
 
         {/* Step 3: Chat */}
         {step === 'chat' && (
-          <div className="space-y-4">
-            <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-6 py-4 rounded-lg shadow-lg flex justify-between items-center">
-              <div>
-                <h2 className="text-xl font-semibold">Your Database Agent</h2>
-                <p className="text-blue-100 text-sm">Session: {sessionId} | Connected via MCP</p>
-              </div>
-              <div className="flex gap-2">
-                <Link href={ROUTES.ANALYTICS} className="bg-white text-blue-600 px-4 py-2 rounded-md hover:bg-gray-100 transition-colors font-medium">
-                  AI Analytics
-                </Link>
-                <button onClick={disconnect} className="bg-red-500 hover:bg-red-600 px-5 py-2.5 rounded-md transition-colors font-medium">
-                  Disconnect
-                </button>
+          <div className="space-y-3 sm:space-y-4">
+            <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-4 sm:px-6 py-3 sm:py-4 rounded-lg shadow-lg">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                <div>
+                  <h2 className="text-lg sm:text-xl font-semibold">Your Database Agent</h2>
+                  <p className="text-blue-100 text-xs sm:text-sm truncate max-w-[200px] sm:max-w-none">Session: {sessionId}</p>
+                </div>
+                <div className="flex gap-2 w-full sm:w-auto">
+                  <Link href={ROUTES.ANALYTICS} className="flex-1 sm:flex-none text-center bg-white text-blue-600 px-3 sm:px-4 py-2 rounded-md hover:bg-gray-100 transition-colors font-medium text-sm">
+                    AI Analytics
+                  </Link>
+                  <button onClick={disconnect} className="flex-1 sm:flex-none bg-red-500 hover:bg-red-600 px-3 sm:px-5 py-2 rounded-md transition-colors font-medium text-sm">
+                    Disconnect
+                  </button>
+                </div>
               </div>
             </div>
 
-            <div className="bg-white rounded-lg shadow-md overflow-hidden" style={{ height: '500px' }}>
+            <div className="bg-white rounded-lg shadow-md overflow-hidden" style={{ height: 'calc(100vh - 280px)', minHeight: '350px', maxHeight: '500px' }}>
               {isChatkitLoaded ? (
                 <openai-chatkit
                   ref={chatkitRef as any}
@@ -573,8 +577,8 @@ export default function DashboardConnectPage() {
               ) : (
                 <div className="flex items-center justify-center h-full">
                   <div className="text-center">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
-                    <p className="text-gray-600">Loading ChatKit...</p>
+                    <div className="animate-spin rounded-full h-6 w-6 sm:h-8 sm:w-8 border-b-2 border-blue-600 mx-auto mb-3 sm:mb-4"></div>
+                    <p className="text-gray-600 text-sm">Loading ChatKit...</p>
                   </div>
                 </div>
               )}
