@@ -17,10 +17,12 @@ import {
   Send, Bot, User, ArrowRight, Play, ChevronRight,
   Database, Zap, Shield, Clock, X, MessageSquare,
   Calendar, Wrench, CheckCircle, Users, Globe, Lock,
-  MessageCircle, Cpu, Timer
+MessageCircle, Cpu, Timer, Copy, Check, RotateCcw,
+  Plus, ChevronDown
 } from 'lucide-react';
+import { DemoMarkdown } from '@/components/landing/DemoMarkdown';
 
-// Tool Demo Data
+// Tool Demo Data with rich markdown responses
 const toolDemos = [
   {
     id: 'email',
@@ -30,9 +32,18 @@ const toolDemos = [
     bgGlow: 'bg-red-500/20',
     description: 'Send emails, read inbox, and manage communications directly through AI',
     demo: {
-      query: "Send an email to john@company.com with subject 'Monthly Sales Report' and attach the latest analytics summary",
-      response: "I've sent the email to john@company.com with the Monthly Sales Report. The email includes:\n\n📧 **Email Sent Successfully**\n- To: john@company.com\n- Subject: Monthly Sales Report\n- Attachment: analytics_summary_jan2025.pdf\n\nThe recipient will receive it shortly.",
-      steps: ['Composing email...', 'Attaching analytics...', 'Sending...', 'Delivered!']
+      query: "Send sales report to john@company.com",
+      response: `**Email Sent Successfully** ✅
+
+**To:** john@company.com
+**Subject:** Monthly Sales Report - January 2025
+**Attachment:** \`analytics_summary.pdf\`
+
+**Preview:**
+> Hi John, Please find attached the monthly sales report with key highlights including 23% revenue growth...
+
+📬 Delivered at 10:32 AM`,
+      steps: ['Composing email...', 'Attaching file...', 'Sending...', 'Delivered!']
     }
   },
   {
@@ -43,9 +54,20 @@ const toolDemos = [
     bgGlow: 'bg-blue-500/20',
     description: 'Search, read, and manage files in your Google Drive seamlessly',
     demo: {
-      query: "Find all documents related to 'Q4 Budget' in my Drive and summarize them",
-      response: "Found 3 documents matching 'Q4 Budget':\n\n📁 **Q4_Budget_2024.xlsx**\n- Total Budget: $450,000\n- Spent: $387,500 (86%)\n- Remaining: $62,500\n\n📁 **Q4_Budget_Proposal.docx**\n- Key highlights: Marketing expansion, New hires\n\n📁 **Q4_Budget_Review.pdf**\n- Status: Approved by Finance",
-      steps: ['Searching Drive...', 'Reading files...', 'Analyzing content...', 'Summary ready!']
+      query: "Find Q4 budget documents",
+      response: `**Found 3 documents** 📁
+
+| File | Size | Modified |
+|------|------|----------|
+| \`Q4_Budget_2024.xlsx\` | 2.4 MB | Dec 15 |
+| \`Q4_Proposal.docx\` | 890 KB | Dec 10 |
+| \`Q4_Review.pdf\` | 1.2 MB | Dec 20 |
+
+**Quick Summary:**
+- Total Budget: **$450,000**
+- Spent: $387,500 (86%)
+- Status: ✅ Approved`,
+      steps: ['Searching Drive...', 'Reading files...', 'Analyzing...', 'Done!']
     }
   },
   {
@@ -56,9 +78,23 @@ const toolDemos = [
     bgGlow: 'bg-gray-500/20',
     description: 'Access and manage your Notion pages, databases, and notes',
     demo: {
-      query: "Create a new project page in Notion for 'Website Redesign' with tasks and timeline",
-      response: "Created new Notion page:\n\n📝 **Website Redesign Project**\n\n**Tasks Created:**\n- [ ] Design mockups (Due: Jan 20)\n- [ ] Frontend development (Due: Feb 5)\n- [ ] Backend integration (Due: Feb 15)\n- [ ] Testing & QA (Due: Feb 25)\n- [ ] Launch (Due: Mar 1)\n\n🔗 Page link: notion.so/website-redesign",
-      steps: ['Creating page...', 'Adding tasks...', 'Setting timeline...', 'Page created!']
+      query: "Create project page for Website Redesign",
+      response: `**Page Created** 📝
+
+### Website Redesign Project
+
+**Tasks:**
+- [ ] Design mockups (Jan 20)
+- [ ] Frontend dev (Feb 5)
+- [ ] Backend integration (Feb 15)
+- [ ] Testing & QA (Feb 25)
+- [x] Project kickoff (Jan 10)
+
+**Team:** @design @engineering
+**Status:** 🟢 In Progress
+
+🔗 \`notion.so/website-redesign\``,
+      steps: ['Creating page...', 'Adding tasks...', 'Setting up...', 'Created!']
     }
   },
   {
@@ -69,9 +105,25 @@ const toolDemos = [
     bgGlow: 'bg-emerald-500/20',
     description: 'Generate charts, insights, and visualizations from your data',
     demo: {
-      query: "Show me a chart of sales trends for the last 6 months with predictions",
-      response: "Here's your sales analysis:\n\n📊 **6-Month Sales Trend**\n\n```\nJul: ████████░░ $82K\nAug: █████████░ $91K\nSep: ███████░░░ $78K\nOct: ██████████ $105K\nNov: ███████████ $118K\nDec: ████████████ $142K\n```\n\n📈 **Prediction:** Jan 2025 estimated at $156K (+10%)\n\n💡 **Insight:** Strong growth trend, Q4 peak season",
-      steps: ['Fetching data...', 'Analyzing trends...', 'Generating chart...', 'Predictions ready!']
+      query: "Show 6-month sales trend",
+      response: `**Sales Trend Analysis** 📊
+
+\`\`\`
+Jul  ████████░░  $82K
+Aug  █████████░  $91K  (+11%)
+Sep  ███████░░░  $78K  (-14%)
+Oct  ██████████  $105K (+35%)
+Nov  ██████████▌ $118K (+12%)
+Dec  ███████████ $142K (+20%)
+\`\`\`
+
+**Insights:**
+- 📈 Q4 growth: **+42%**
+- 🏆 Best month: December
+- 📅 Forecast Jan: **$156K**
+
+💡 Strong holiday season performance`,
+      steps: ['Fetching data...', 'Analyzing...', 'Generating chart...', 'Ready!']
     }
   },
   {
@@ -82,9 +134,23 @@ const toolDemos = [
     bgGlow: 'bg-purple-500/20',
     description: 'Make AI-powered voice calls and automate phone communications',
     demo: {
-      query: "Call the supplier at +1-555-0123 to confirm our order #12345 delivery date",
-      response: "Voice call completed:\n\n📞 **Call Summary**\n- Duration: 2:34\n- Recipient: ABC Supplies (+1-555-0123)\n\n**Key Points:**\n✅ Order #12345 confirmed\n✅ Delivery: January 18, 2025\n✅ Tracking number sent to email\n\n🎙️ Call recording saved to your account",
-      steps: ['Initiating call...', 'Connected...', 'Discussing order...', 'Call complete!']
+      query: "Call supplier about order #12345",
+      response: `**Call Completed** 📞
+
+**Duration:** 2:34
+**Recipient:** ABC Supplies
+
+### Summary:
+✅ Order #12345 confirmed
+✅ Delivery: **January 18, 2025**
+✅ Tracking: \`TRK-789456123\`
+
+**Action Items:**
+- Tracking sent to your email
+- Invoice ready for download
+
+🎙️ Recording saved`,
+      steps: ['Dialing...', 'Connected...', 'Discussing...', 'Complete!']
     }
   }
 ];
@@ -109,54 +175,204 @@ function TypeWriter({ text, speed = 30, onComplete }: { text: string; speed?: nu
   return <span>{displayText}</span>;
 }
 
-// Tool Demo Card Component - ChatKit-like inline demo (no popup)
-function ToolDemoCard({
-  tool,
-  index,
-}: {
-  tool: typeof toolDemos[0];
-  index: number;
-}) {
-  // Demo states: idle -> typing_in_input -> sent -> thinking -> streaming -> complete
+// Animated Cursor Component
+function AnimatedCursor({ x, y, clicking }: { x: number; y: number; clicking: boolean }) {
+  return (
+    <motion.div
+      className="absolute z-50 pointer-events-none"
+      animate={{ x, y }}
+      transition={{ type: "spring", stiffness: 200, damping: 25 }}
+    >
+      {/* Cursor SVG */}
+      <motion.svg
+        width="24"
+        height="24"
+        viewBox="0 0 24 24"
+        fill="none"
+        animate={{ scale: clicking ? 0.85 : 1 }}
+        transition={{ duration: 0.1 }}
+      >
+        <path
+          d="M5.5 3.21V20.8c0 .45.54.67.85.35l4.86-4.86a.5.5 0 0 1 .35-.15h6.87c.48 0 .72-.58.38-.92L6.35 2.85a.5.5 0 0 0-.85.36Z"
+          fill="#10b981"
+          stroke="#ffffff"
+          strokeWidth="1.5"
+        />
+      </motion.svg>
+      {/* Click ripple effect */}
+      {clicking && (
+        <motion.div
+          className="absolute top-0 left-0 w-6 h-6 bg-emerald-400/30 rounded-full"
+          initial={{ scale: 0.5, opacity: 1 }}
+          animate={{ scale: 2, opacity: 0 }}
+          transition={{ duration: 0.4 }}
+        />
+      )}
+    </motion.div>
+  );
+}
+
+// Unified Chat Panel - Single panel with tool selector and auto-tour
+function UnifiedChatPanel() {
+  const [selectedTool, setSelectedTool] = useState<typeof toolDemos[0] | null>(null);
+  const [showToolSelector, setShowToolSelector] = useState(false);
   const [demoState, setDemoState] = useState<'idle' | 'typing_in_input' | 'sent' | 'thinking' | 'streaming' | 'complete'>('idle');
-  const [inputText, setInputText] = useState(''); // Text in input box
+  const [inputText, setInputText] = useState('');
   const [streamedResponse, setStreamedResponse] = useState('');
   const [currentStep, setCurrentStep] = useState(0);
-  const ref = useRef(null);
+  const [copied, setCopied] = useState(false);
   const chatRef = useRef<HTMLDivElement>(null);
+  const ref = useRef(null);
   const isInView = useInView(ref, { once: true, margin: "-100px" });
 
-  const query = tool.demo.query;
-  const response = tool.demo.response;
-  const steps = tool.demo.steps;
+  // Auto-tour state - always active, non-stoppable
+  const [currentToolIndex, setCurrentToolIndex] = useState(0);
+  const [cursorPos, setCursorPos] = useState({ x: 200, y: 200 });
+  const [cursorClicking, setCursorClicking] = useState(false);
+  const [tourPhase, setTourPhase] = useState<'idle' | 'move_to_dropdown' | 'open_dropdown' | 'move_to_tool' | 'select_tool' | 'demo_running' | 'pause'>('idle');
+  const toolsButtonRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
 
-  // Auto-scroll chat area
+  // Auto-scroll
   useEffect(() => {
     if (chatRef.current) {
       chatRef.current.scrollTop = chatRef.current.scrollHeight;
     }
   }, [inputText, streamedResponse, demoState]);
 
+  // Select tool and start demo
+  const selectTool = (tool: typeof toolDemos[0]) => {
+    setSelectedTool(tool);
+    setShowToolSelector(false);
+    setDemoState('idle');
+    setInputText('');
+    setStreamedResponse('');
+    setCurrentStep(0);
+    setCopied(false);
+    // Auto-start demo after selection
+    setTimeout(() => startDemo(tool), 300);
+  };
+
   // Start demo
-  const startDemo = () => {
+  const startDemo = (tool: typeof toolDemos[0]) => {
     setDemoState('typing_in_input');
     setInputText('');
     setStreamedResponse('');
     setCurrentStep(0);
+    setCopied(false);
   };
 
-  // Reset demo
-  const resetDemo = () => {
+  // Reset to tool selection
+  const resetToSelection = () => {
+    setSelectedTool(null);
     setDemoState('idle');
     setInputText('');
     setStreamedResponse('');
     setCurrentStep(0);
   };
 
-  // Phase 1: Typing in input box
-  useEffect(() => {
-    if (demoState !== 'typing_in_input') return;
+  // Copy response
+  const copyResponse = async () => {
+    if (!selectedTool) return;
+    await navigator.clipboard.writeText(selectedTool.demo.response);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
 
+  // Auto-tour is always active - no stopping
+  // Removed user interaction stop
+
+  // Auto-tour controller - manages the automated demo sequence (always active)
+  useEffect(() => {
+    if (!isInView) return;
+
+    let timeout: NodeJS.Timeout;
+
+    // Start tour when component becomes visible
+    if (tourPhase === 'idle' && !selectedTool) {
+      timeout = setTimeout(() => {
+        setTourPhase('move_to_dropdown');
+        // Move cursor to Tools button area
+        setCursorPos({ x: 620, y: 35 });
+      }, 1500);
+    }
+
+    // Open dropdown
+    else if (tourPhase === 'move_to_dropdown') {
+      timeout = setTimeout(() => {
+        setCursorClicking(true);
+        setTimeout(() => {
+          setCursorClicking(false);
+          setShowToolSelector(true);
+          setTourPhase('move_to_tool');
+          // Move cursor to first tool in dropdown
+          const toolY = 95 + (currentToolIndex * 52);
+          setCursorPos({ x: 550, y: toolY });
+        }, 150);
+      }, 800);
+    }
+
+    // Select tool
+    else if (tourPhase === 'move_to_tool') {
+      timeout = setTimeout(() => {
+        setCursorClicking(true);
+        setTimeout(() => {
+          setCursorClicking(false);
+          // Select the tool
+          const tool = toolDemos[currentToolIndex];
+          setSelectedTool(tool);
+          setShowToolSelector(false);
+          setTourPhase('demo_running');
+          // Start demo
+          setDemoState('typing_in_input');
+          setInputText('');
+          setStreamedResponse('');
+          setCurrentStep(0);
+          // Move cursor to input area
+          setCursorPos({ x: 350, y: 450 });
+        }, 150);
+      }, 600);
+    }
+
+    return () => {
+      if (timeout) clearTimeout(timeout);
+    };
+  }, [isInView, tourPhase, currentToolIndex, selectedTool]);
+
+  // Watch for demo completion to move to next tool
+  useEffect(() => {
+
+    if (demoState === 'complete' && tourPhase === 'demo_running') {
+      // Wait 4 seconds then move to next tool
+      const timeout = setTimeout(() => {
+        setTourPhase('pause');
+        // Reset for next tool
+        setSelectedTool(null);
+        setDemoState('idle');
+        setInputText('');
+        setStreamedResponse('');
+
+        // Move to next tool (loop back to 0 after last)
+        const nextIndex = (currentToolIndex + 1) % toolDemos.length;
+        setCurrentToolIndex(nextIndex);
+
+        // Small pause then restart
+        setTimeout(() => {
+          setCursorPos({ x: 200, y: 200 });
+          setTourPhase('move_to_dropdown');
+          setCursorPos({ x: 620, y: 35 });
+        }, 500);
+      }, 4000);
+
+      return () => clearTimeout(timeout);
+    }
+  }, [demoState, tourPhase, currentToolIndex]);
+
+  // Phase 1: Typing
+  useEffect(() => {
+    if (demoState !== 'typing_in_input' || !selectedTool) return;
+
+    const query = selectedTool.demo.query;
     let i = 0;
     const interval = setInterval(() => {
       if (i < query.length) {
@@ -164,24 +380,21 @@ function ToolDemoCard({
         i++;
       } else {
         clearInterval(interval);
-        // Wait then "send" the message
         setTimeout(() => {
           setDemoState('sent');
-          // After message appears in chat, start thinking
-          setTimeout(() => {
-            setDemoState('thinking');
-          }, 300);
+          setTimeout(() => setDemoState('thinking'), 300);
         }, 500);
       }
-    }, 25);
+    }, 30);
 
     return () => clearInterval(interval);
-  }, [demoState, query]);
+  }, [demoState, selectedTool]);
 
-  // Phase 2: Thinking/processing steps
+  // Phase 2: Thinking
   useEffect(() => {
-    if (demoState !== 'thinking') return;
+    if (demoState !== 'thinking' || !selectedTool) return;
 
+    const steps = selectedTool.demo.steps;
     let stepIdx = 0;
     setCurrentStep(0);
 
@@ -191,18 +404,18 @@ function ToolDemoCard({
         setCurrentStep(stepIdx);
       } else {
         clearInterval(stepInterval);
-        // Start streaming after all thinking steps
         setTimeout(() => setDemoState('streaming'), 400);
       }
-    }, 700);
+    }, 600);
 
     return () => clearInterval(stepInterval);
-  }, [demoState, steps.length]);
+  }, [demoState, selectedTool]);
 
-  // Phase 3: Streaming response
+  // Phase 3: Streaming
   useEffect(() => {
-    if (demoState !== 'streaming') return;
+    if (demoState !== 'streaming' || !selectedTool) return;
 
+    const response = selectedTool.demo.response;
     let i = 0;
     const interval = setInterval(() => {
       if (i < response.length) {
@@ -212,12 +425,11 @@ function ToolDemoCard({
         clearInterval(interval);
         setDemoState('complete');
       }
-    }, 10);
+    }, 8);
 
     return () => clearInterval(interval);
-  }, [demoState, response]);
+  }, [demoState, selectedTool]);
 
-  const Icon = tool.icon;
   const showMessageInChat = demoState === 'sent' || demoState === 'thinking' || demoState === 'streaming' || demoState === 'complete';
 
   return (
@@ -225,187 +437,350 @@ function ToolDemoCard({
       ref={ref}
       initial={{ opacity: 0, y: 50 }}
       animate={isInView ? { opacity: 1, y: 0 } : {}}
-      transition={{ duration: 0.6, delay: index * 0.1 }}
-      className="relative group"
+      transition={{ duration: 0.6 }}
+      className="max-w-4xl mx-auto"
     >
       {/* Glow Effect */}
-      <div className={`absolute -inset-1 ${tool.bgGlow} rounded-2xl blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500`} />
+      <div className="relative" ref={panelRef}>
+        <div className="absolute -inset-2 bg-gradient-to-r from-emerald-500/20 via-cyan-500/20 to-blue-500/20 rounded-3xl blur-2xl" />
 
-      <div className="relative bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden hover:border-gray-700 transition-all duration-300">
-        {/* ChatKit-style Header */}
-        <div className="bg-gray-900 border-b border-gray-800 px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <div className={`w-9 h-9 rounded-lg bg-gradient-to-br ${tool.color} flex items-center justify-center`}>
-              <Icon className="w-5 h-5 text-white" />
-            </div>
-            <div>
-              <h3 className="text-sm font-semibold text-white">{tool.name}</h3>
-              <p className="text-xs text-gray-500">{tool.description.slice(0, 40)}...</p>
+        <div className="relative bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden">
+          {/* Animated Cursor for auto-tour - always visible when in view */}
+          {isInView && (
+            <AnimatedCursor x={cursorPos.x} y={cursorPos.y} clicking={cursorClicking} />
+          )}
+          {/* Header with Tool Selector */}
+          <div className="bg-gray-900/90 backdrop-blur-sm border-b border-gray-800 px-4 py-3">
+            <div className="flex items-center justify-between">
+              {/* Left: Tool selector or brand */}
+              <div className="flex items-center space-x-3">
+                {selectedTool ? (
+                  <>
+                    <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${selectedTool.color} flex items-center justify-center shadow-lg`}>
+                      <selectedTool.icon className="w-5 h-5 text-white" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-semibold text-white">{selectedTool.name}</h3>
+                      <p className="text-xs text-gray-500">AI-powered integration</p>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center shadow-lg">
+                      <Sparkles className="w-5 h-5 text-white" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-semibold text-white">AI Agent</h3>
+                      <p className="text-xs text-gray-500">Select a tool to see demo</p>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* Right: Actions */}
+              <div className="flex items-center space-x-2">
+                {/* Tool Selector Dropdown */}
+                <div className="relative">
+                  <button
+                    ref={toolsButtonRef}
+                    className="flex items-center space-x-2 bg-gray-800 hover:bg-gray-750 border border-gray-700 rounded-xl px-3 py-2 transition-colors pointer-events-none"
+                  >
+                    <Plus className="w-4 h-4 text-gray-400" />
+                    <span className="text-sm text-gray-300">Tools</span>
+                    <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${showToolSelector ? 'rotate-180' : ''}`} />
+                  </button>
+
+                  {/* Dropdown Menu */}
+                  <AnimatePresence>
+                    {showToolSelector && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -10, scale: 0.95 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: -10, scale: 0.95 }}
+                        transition={{ duration: 0.15 }}
+                        className="absolute right-0 top-full mt-2 w-64 bg-gray-800 border border-gray-700 rounded-xl shadow-2xl z-50 overflow-hidden"
+                      >
+                        <div className="p-2">
+                          <p className="text-xs text-gray-500 px-2 py-1 mb-1">Select a tool to demo</p>
+                          {toolDemos.map((tool) => (
+                            <div
+                              key={tool.id}
+                              className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg transition-colors pointer-events-none ${
+                                selectedTool?.id === tool.id
+                                  ? 'bg-emerald-500/20 border border-emerald-500/30'
+                                  : 'hover:bg-gray-700/50'
+                              }`}
+                            >
+                              <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${tool.color} flex items-center justify-center`}>
+                                <tool.icon className="w-4 h-4 text-white" />
+                              </div>
+                              <div className="text-left flex-1">
+                                <p className="text-sm font-medium text-white">{tool.name}</p>
+                                <p className="text-xs text-gray-500 truncate">{tool.description.slice(0, 35)}...</p>
+                              </div>
+                              {selectedTool?.id === tool.id && (
+                                <Check className="w-4 h-4 text-emerald-400" />
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+
+                {/* Online Status */}
+                <div className="flex items-center space-x-1.5 bg-emerald-500/10 px-2.5 py-1.5 rounded-full">
+                  <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse" />
+                  <span className="text-[10px] text-emerald-400 font-medium">ONLINE</span>
+                </div>
+
+                {/* Reset Button */}
+                {selectedTool && demoState === 'complete' && (
+                  <button
+                    onClick={resetToSelection}
+                    className="p-2 hover:bg-gray-800 rounded-lg transition-colors"
+                    title="Try another tool"
+                  >
+                    <X className="w-4 h-4 text-gray-400" />
+                  </button>
+                )}
+              </div>
             </div>
           </div>
-          <div className="flex items-center space-x-1">
-            <span className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse" />
-            <span className="text-xs text-emerald-400">Online</span>
+
+          {/* Chat Area */}
+          <div
+            ref={chatRef}
+            className="h-[380px] overflow-y-auto p-6 space-y-4 bg-[#0a0a0f]"
+            style={{
+              backgroundImage: 'radial-gradient(circle at 50% 0%, rgba(16, 185, 129, 0.04) 0%, transparent 50%)'
+            }}
+          >
+            {/* Initial state - no tool selected */}
+            {!selectedTool && (
+              <div className="h-full flex flex-col items-center justify-center text-center px-4">
+                <motion.div
+                  className="w-16 h-16 rounded-2xl bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center mb-5 shadow-lg"
+                  animate={{ scale: [1, 1.05, 1] }}
+                  transition={{ duration: 2, repeat: Infinity }}
+                >
+                  <Sparkles className="w-8 h-8 text-white" />
+                </motion.div>
+                <h4 className="text-white font-semibold text-lg mb-2">Try Our Integrations</h4>
+                <p className="text-gray-500 text-sm mb-6 max-w-sm leading-relaxed">
+                  Select a tool from the dropdown above or click one below to see how our AI agent works with your favorite services.
+                </p>
+
+                {/* Quick Tool Select Grid - Display only */}
+                <div className="flex flex-wrap justify-center gap-2 pointer-events-none">
+                  {toolDemos.map((tool) => (
+                    <div
+                      key={tool.id}
+                      className={`flex items-center space-x-2 px-4 py-2 bg-gray-800/80 border border-gray-700/50 rounded-xl`}
+                    >
+                      <div className={`w-6 h-6 rounded-lg bg-gradient-to-br ${tool.color} flex items-center justify-center`}>
+                        <tool.icon className="w-3.5 h-3.5 text-white" />
+                      </div>
+                      <span className="text-sm text-gray-300">{tool.name.split(' ')[0]}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Tool selected - show demo */}
+            {selectedTool && (
+              <>
+                {/* User Message */}
+                {showMessageInChat && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    className="flex justify-end"
+                  >
+                    <div className="max-w-[80%]">
+                      <div className="bg-gradient-to-br from-blue-600 to-blue-700 text-white rounded-2xl rounded-br-md px-4 py-3 text-sm shadow-lg shadow-blue-600/20">
+                        {selectedTool.demo.query}
+                      </div>
+                      <div className="text-[10px] text-gray-600 text-right mt-1.5 mr-1">Just now</div>
+                    </div>
+                  </motion.div>
+                )}
+
+                {/* Thinking indicator */}
+                {demoState === 'thinking' && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="flex items-start space-x-3"
+                  >
+                    <div className={`w-9 h-9 rounded-full bg-gradient-to-br ${selectedTool.color} flex items-center justify-center flex-shrink-0 shadow-lg`}>
+                      <Bot className="w-4.5 h-4.5 text-white" />
+                    </div>
+                    <div className="bg-gray-800/90 backdrop-blur-sm rounded-2xl rounded-bl-md px-4 py-3 border border-gray-700/50">
+                      <div className="flex items-center space-x-3">
+                        <div className="flex space-x-1">
+                          {[0, 1, 2].map(i => (
+                            <motion.span
+                              key={i}
+                              className={`w-2 h-2 rounded-full bg-gradient-to-r ${selectedTool.color}`}
+                              animate={{
+                                scale: [1, 1.4, 1],
+                                opacity: [0.4, 1, 0.4]
+                              }}
+                              transition={{
+                                duration: 0.8,
+                                repeat: Infinity,
+                                delay: i * 0.15
+                              }}
+                            />
+                          ))}
+                        </div>
+                        <span className="text-xs text-gray-400 font-medium">
+                          {selectedTool.demo.steps[currentStep]}
+                        </span>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+
+                {/* AI Response */}
+                {(demoState === 'streaming' || demoState === 'complete') && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="flex items-start space-x-3"
+                  >
+                    <div className={`w-9 h-9 rounded-full bg-gradient-to-br ${selectedTool.color} flex items-center justify-center flex-shrink-0 shadow-lg`}>
+                      <Bot className="w-4.5 h-4.5 text-white" />
+                    </div>
+                    <div className="flex-1 max-w-[85%]">
+                      <div className="bg-gray-800/90 backdrop-blur-sm rounded-2xl rounded-bl-md px-4 py-3 border border-gray-700/50">
+                        <DemoMarkdown
+                          content={streamedResponse}
+                          isStreaming={demoState === 'streaming'}
+                        />
+                      </div>
+
+                      {/* Message actions */}
+                      {demoState === 'complete' && (
+                        <motion.div
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          transition={{ delay: 0.3 }}
+                          className="flex items-center space-x-3 mt-2 ml-1"
+                        >
+                          <button
+                            onClick={copyResponse}
+                            className="flex items-center space-x-1 text-[10px] text-gray-500 hover:text-gray-300 transition-colors px-2 py-1 rounded-md hover:bg-gray-800/50"
+                          >
+                            {copied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                            <span>{copied ? 'Copied!' : 'Copy'}</span>
+                          </button>
+                          <span className="text-gray-700">•</span>
+                          <span className="text-[10px] text-gray-600">Just now</span>
+                        </motion.div>
+                      )}
+                    </div>
+                  </motion.div>
+                )}
+              </>
+            )}
           </div>
-        </div>
 
-        {/* ChatKit-style Chat Area */}
-        <div
-          ref={chatRef}
-          className="h-[280px] overflow-y-auto p-4 space-y-3 bg-[#0a0a0f]"
-          style={{
-            backgroundImage: 'radial-gradient(circle at 50% 0%, rgba(16, 185, 129, 0.03) 0%, transparent 50%)'
-          }}
-        >
-          {/* Initial state - show prompt */}
-          {demoState === 'idle' && (
-            <div className="h-full flex flex-col items-center justify-center text-center px-4">
-              <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${tool.color} flex items-center justify-center mb-3`}>
-                <Icon className="w-6 h-6 text-white" />
-              </div>
-              <h4 className="text-white font-medium mb-1 text-sm">Try {tool.name}</h4>
-              <p className="text-gray-500 text-xs mb-4 max-w-[220px]">
-                See how this integration works
-              </p>
-              <motion.button
-                onClick={startDemo}
-                className={`flex items-center space-x-2 px-4 py-2 bg-gradient-to-r ${tool.color} text-white rounded-lg font-medium text-sm shadow-lg`}
-                whileHover={{ scale: 1.03 }}
-                whileTap={{ scale: 0.97 }}
-              >
-                <Play className="w-3.5 h-3.5" />
-                <span>Watch Demo</span>
-              </motion.button>
-            </div>
-          )}
-
-          {/* User Message - shown after sent */}
-          {showMessageInChat && (
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="flex justify-end"
-            >
-              <div className="max-w-[85%]">
-                <div className="bg-blue-600 text-white rounded-2xl rounded-br-sm px-3.5 py-2 text-sm">
-                  {query}
+          {/* Input Area */}
+          <div className="border-t border-gray-800 p-4 bg-gray-900/90 backdrop-blur-sm">
+            <div className="flex items-center space-x-3">
+              {/* Tool quick-select in input */}
+              {selectedTool && (
+                <div className={`flex items-center space-x-1.5 px-2.5 py-1.5 rounded-lg bg-gradient-to-r ${selectedTool.color} bg-opacity-20 border border-gray-700/50`}>
+                  <selectedTool.icon className="w-3.5 h-3.5 text-white/80" />
+                  <span className="text-xs text-white/80 font-medium">{selectedTool.name.split(' ')[0]}</span>
                 </div>
-              </div>
-            </motion.div>
-          )}
+              )}
 
-          {/* Thinking/Processing indicator with steps */}
-          {demoState === 'thinking' && (
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="flex items-start space-x-2"
-            >
-              <div className="w-7 h-7 rounded-full bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center flex-shrink-0">
-                <Bot className="w-3.5 h-3.5 text-white" />
-              </div>
-              <div className="bg-gray-800/80 rounded-2xl rounded-bl-sm px-3.5 py-2.5">
-                <div className="flex items-center space-x-2">
-                  {/* Animated dots */}
-                  <div className="flex space-x-0.5">
-                    {[0, 1, 2].map(i => (
-                      <motion.span
-                        key={i}
-                        className="w-1.5 h-1.5 bg-emerald-400 rounded-full"
-                        animate={{
-                          scale: [1, 1.3, 1],
-                          opacity: [0.5, 1, 0.5]
-                        }}
-                        transition={{
-                          duration: 0.6,
-                          repeat: Infinity,
-                          delay: i * 0.15
-                        }}
-                      />
-                    ))}
-                  </div>
-                  <span className="text-xs text-gray-400">{steps[currentStep]}</span>
-                </div>
-              </div>
-            </motion.div>
-          )}
-
-          {/* AI Response - streaming */}
-          {(demoState === 'streaming' || demoState === 'complete') && (
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="flex items-start space-x-2"
-            >
-              <div className="w-7 h-7 rounded-full bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center flex-shrink-0">
-                <Bot className="w-3.5 h-3.5 text-white" />
-              </div>
-              <div className="max-w-[85%] bg-gray-800/80 rounded-2xl rounded-bl-sm px-3.5 py-2.5">
-                <div className="text-sm text-gray-100 whitespace-pre-wrap leading-relaxed">
-                  {streamedResponse}
-                  {demoState === 'streaming' && (
+              <div className="flex-1 bg-gray-800/80 rounded-xl px-4 py-3 min-h-[48px] flex items-center border border-gray-700/50">
+                {demoState === 'typing_in_input' && selectedTool ? (
+                  <span className="text-white text-sm">
+                    {inputText}
                     <motion.span
                       className="inline-block w-0.5 h-4 bg-emerald-400 ml-0.5 align-middle rounded-full"
                       animate={{ opacity: [1, 0, 1] }}
-                      transition={{ duration: 0.8, repeat: Infinity }}
+                      transition={{ duration: 0.5, repeat: Infinity }}
                     />
-                  )}
-                </div>
+                  </span>
+                ) : (
+                  <span className="text-gray-500 text-sm">
+                    {selectedTool ? 'Ask anything...' : 'Select a tool to start...'}
+                  </span>
+                )}
               </div>
-            </motion.div>
-          )}
-        </div>
 
-        {/* ChatKit-style Input Area */}
-        <div className="border-t border-gray-800 p-3 bg-gray-900">
-          <div className="flex items-center space-x-2">
-            <div className="flex-1 bg-gray-800 rounded-xl px-3.5 py-2.5 min-h-[40px] flex items-center">
-              {demoState === 'typing_in_input' ? (
-                <span className="text-white text-sm">
-                  {inputText}
-                  <motion.span
-                    className="inline-block w-0.5 h-4 bg-white ml-0.5 align-middle rounded-full"
-                    animate={{ opacity: [1, 0, 1] }}
-                    transition={{ duration: 0.5, repeat: Infinity }}
-                  />
-                </span>
-              ) : demoState === 'idle' ? (
-                <span className="text-gray-500 text-sm">Message AI Agent...</span>
-              ) : (
-                <span className="text-gray-500 text-sm">Message AI Agent...</span>
-              )}
-            </div>
-            <motion.button
-              className={`p-2.5 rounded-xl transition-all ${
-                demoState === 'typing_in_input' && inputText.length > 0
-                  ? 'bg-emerald-500 text-white'
-                  : 'bg-gray-800 text-gray-500'
-              }`}
-              animate={demoState === 'typing_in_input' && inputText.length > 0 ? { scale: [1, 1.05, 1] } : {}}
-              transition={{ duration: 0.3 }}
-            >
-              <Send className="w-4 h-4" />
-            </motion.button>
-          </div>
-
-          {/* Replay button */}
-          {demoState === 'complete' && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="flex justify-center mt-2"
-            >
-              <button
-                onClick={resetDemo}
-                className="text-xs text-emerald-400 hover:text-emerald-300 transition-colors flex items-center space-x-1"
+              <motion.button
+                className={`p-3 rounded-xl transition-all ${
+                  demoState === 'typing_in_input' && inputText.length > 0
+                    ? 'bg-gradient-to-r from-emerald-500 to-cyan-500 text-white shadow-lg'
+                    : 'bg-gray-800 text-gray-500 border border-gray-700/50'
+                }`}
+                animate={demoState === 'typing_in_input' && inputText.length > 0 ? { scale: [1, 1.05, 1] } : {}}
               >
-                <span>↻</span>
-                <span>Replay Demo</span>
-              </button>
-            </motion.div>
-          )}
+                <Send className="w-5 h-5" />
+              </motion.button>
+            </div>
+
+            {/* Try another tool */}
+            {demoState === 'complete' && selectedTool && (
+              <motion.div
+                initial={{ opacity: 0, y: 5 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="flex justify-center mt-4"
+              >
+                <button
+                  onClick={resetToSelection}
+                  className="flex items-center space-x-2 text-sm text-gray-400 hover:text-white transition-colors px-4 py-2 rounded-xl hover:bg-gray-800/50"
+                >
+                  <RotateCcw className="w-4 h-4" />
+                  <span>Try Another Tool</span>
+                </button>
+              </motion.div>
+            )}
+          </div>
         </div>
       </div>
+
+      {/* Tool chips below panel - Shows current tool highlighted */}
+      <div className="flex flex-wrap justify-center gap-2 mt-6">
+        {toolDemos.map((tool) => (
+          <div
+            key={tool.id}
+            className={`flex items-center space-x-2 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
+              selectedTool?.id === tool.id
+                ? `bg-gradient-to-r ${tool.color} text-white shadow-lg`
+                : 'bg-gray-800/60 text-gray-400 border border-gray-700/50'
+            }`}
+          >
+            <tool.icon className="w-3.5 h-3.5" />
+            <span>{tool.name.split(' ')[0]}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* Auto-tour indicator */}
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        className="flex justify-center mt-4"
+      >
+        <div className="flex items-center space-x-2 text-xs text-gray-500 bg-gray-800/50 px-3 py-1.5 rounded-full">
+          <motion.div
+            className="w-2 h-2 bg-emerald-400 rounded-full"
+            animate={{ opacity: [0.5, 1, 0.5] }}
+            transition={{ duration: 1.5, repeat: Infinity }}
+          />
+          <span>Live demo • Cycling through all integrations</span>
+        </div>
+      </motion.div>
     </motion.div>
   );
 }
@@ -838,15 +1213,15 @@ export default function Home() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6 }}
           >
-            {/* Compact, Emotional Tagline */}
-            <h1 className="text-xl sm:text-2xl lg:text-3xl font-medium mb-2 text-gray-200">
+            {/* Compact Headline */}
+            <h1 className="text-xl sm:text-2xl lg:text-3xl font-semibold mb-2 text-gray-200">
               Your Database.{' '}
-              <span className="bg-gradient-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent font-semibold">
+              <span className="bg-gradient-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent font-bold">
                 Now Intelligent.
               </span>
             </h1>
 
-            <p className="text-sm text-gray-500 mb-8">
+            <p className="text-sm sm:text-base text-gray-500 mb-8 max-w-xl mx-auto">
               Connect PostgreSQL. Ask in plain English. Get instant answers.
             </p>
 
@@ -860,23 +1235,41 @@ export default function Home() {
               transition={{ duration: 0.6, delay: 0.4 }}
               className="mt-10 flex flex-col items-center"
             >
-              {/* Quick Benefits */}
-              <div className="flex flex-wrap justify-center gap-4 mb-6 text-sm text-gray-400">
-                <div className="flex items-center space-x-2">
-                  <CheckCircle className="w-4 h-4 text-emerald-400" />
-                  <span>Automate inventory queries</span>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <CheckCircle className="w-4 h-4 text-emerald-400" />
-                  <span>Generate reports instantly</span>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <CheckCircle className="w-4 h-4 text-emerald-400" />
-                  <span>Schedule recurring tasks</span>
-                </div>
+              {/* Feature Badges with Icons & Links */}
+              <div className="flex flex-wrap justify-center gap-3 mb-8">
+                <a
+                  href="#features"
+                  className="group flex items-center space-x-2 bg-gray-800/60 hover:bg-gray-800 border border-gray-700/50 hover:border-emerald-500/50 rounded-full px-4 py-2 transition-all"
+                >
+                  <div className="w-6 h-6 rounded-full bg-emerald-500/20 flex items-center justify-center">
+                    <Database className="w-3.5 h-3.5 text-emerald-400" />
+                  </div>
+                  <span className="text-sm text-gray-300 group-hover:text-white">Automate inventory queries</span>
+                  <ChevronRight className="w-3.5 h-3.5 text-gray-500 group-hover:text-emerald-400 transition-colors" />
+                </a>
+                <a
+                  href="#tools"
+                  className="group flex items-center space-x-2 bg-gray-800/60 hover:bg-gray-800 border border-gray-700/50 hover:border-cyan-500/50 rounded-full px-4 py-2 transition-all"
+                >
+                  <div className="w-6 h-6 rounded-full bg-cyan-500/20 flex items-center justify-center">
+                    <BarChart3 className="w-3.5 h-3.5 text-cyan-400" />
+                  </div>
+                  <span className="text-sm text-gray-300 group-hover:text-white">Generate reports instantly</span>
+                  <ChevronRight className="w-3.5 h-3.5 text-gray-500 group-hover:text-cyan-400 transition-colors" />
+                </a>
+                <a
+                  href="#schedule"
+                  className="group flex items-center space-x-2 bg-gray-800/60 hover:bg-gray-800 border border-gray-700/50 hover:border-purple-500/50 rounded-full px-4 py-2 transition-all"
+                >
+                  <div className="w-6 h-6 rounded-full bg-purple-500/20 flex items-center justify-center">
+                    <Calendar className="w-3.5 h-3.5 text-purple-400" />
+                  </div>
+                  <span className="text-sm text-gray-300 group-hover:text-white">Schedule recurring tasks</span>
+                  <ChevronRight className="w-3.5 h-3.5 text-gray-500 group-hover:text-purple-400 transition-colors" />
+                </a>
               </div>
 
-              {/* Primary CTA */}
+              {/* Primary & Secondary CTAs */}
               <div className="flex flex-col sm:flex-row items-center gap-4">
                 <Link href={ROUTES.SIGNUP}>
                   <motion.button
@@ -888,10 +1281,19 @@ export default function Home() {
                     <span>Connect My Database</span>
                   </motion.button>
                 </Link>
-                <div className="flex items-center space-x-2 text-gray-500 text-sm">
-                  <Lock className="w-4 h-4" />
-                  <span>256-bit encryption • SOC 2 compliant</span>
-                </div>
+                <a
+                  href="mailto:demo@storelite.ai?subject=Schedule%20a%20Demo"
+                  className="flex items-center space-x-2 text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 px-6 py-3 rounded-xl transition-all"
+                >
+                  <Play className="w-4 h-4" />
+                  <span className="font-medium">Schedule a Demo</span>
+                </a>
+              </div>
+
+              {/* Trust Indicators */}
+              <div className="flex items-center space-x-2 text-gray-500 text-sm mt-4">
+                <Lock className="w-4 h-4" />
+                <span>256-bit encryption • SOC 2 compliant</span>
               </div>
             </motion.div>
           </motion.div>
@@ -1018,27 +1420,157 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Tool Demos Section */}
+      {/* Tool Demos Section - Unified Chat Panel */}
       <section id="tools" className="py-20 bg-gray-900/30">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <motion.div
             initial={{ opacity: 0, y: 30 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
-            className="text-center mb-16"
+            className="text-center mb-12"
           >
             <h2 className="text-3xl sm:text-4xl font-bold mb-4">
               Powerful <span className="text-emerald-400">Integrations</span>
             </h2>
             <p className="text-gray-400 max-w-2xl mx-auto">
-              See how our AI agent connects with your favorite tools. Click &quot;Watch Demo&quot; to see it in action.
+              One AI agent, multiple tools. Select any integration below to see how our agent
+              automates tasks across Gmail, Drive, Notion, and more.
             </p>
           </motion.div>
 
-          <div className="grid lg:grid-cols-2 gap-8">
-            {toolDemos.map((tool, index) => (
-              <ToolDemoCard key={tool.id} tool={tool} index={index} />
-            ))}
+          {/* Unified Chat Panel */}
+          <UnifiedChatPanel />
+        </div>
+      </section>
+
+      {/* Schedule Your Tasks Section */}
+      <section id="schedule" className="py-20">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="grid lg:grid-cols-2 gap-12 items-center">
+            {/* Left: Content */}
+            <motion.div
+              initial={{ opacity: 0, x: -30 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true }}
+            >
+              <div className="inline-flex items-center space-x-2 bg-emerald-500/10 border border-emerald-500/20 rounded-full px-4 py-1.5 mb-6">
+                <Timer className="w-4 h-4 text-emerald-400" />
+                <span className="text-emerald-400 text-sm font-medium">New Feature</span>
+              </div>
+              <h2 className="text-3xl sm:text-4xl font-bold mb-4">
+                Schedule Your <span className="text-emerald-400">Tasks</span>
+              </h2>
+              <p className="text-gray-400 mb-8 leading-relaxed">
+                Set up automated workflows that run on your schedule. Whether it&apos;s daily inventory reports,
+                weekly sales summaries, or monthly analytics - let the AI handle it while you focus on growing
+                your business.
+              </p>
+              <ul className="space-y-4 mb-8">
+                {[
+                  "Schedule queries for any date and time",
+                  "Set up recurring tasks (daily, weekly, monthly)",
+                  "Receive results via email or in-app notifications",
+                  "Combine multiple tools in scheduled workflows"
+                ].map((item, i) => (
+                  <motion.li
+                    key={i}
+                    initial={{ opacity: 0, x: -20 }}
+                    whileInView={{ opacity: 1, x: 0 }}
+                    viewport={{ once: true }}
+                    transition={{ delay: i * 0.1 }}
+                    className="flex items-center space-x-3"
+                  >
+                    <CheckCircle className="w-5 h-5 text-emerald-400 flex-shrink-0" />
+                    <span className="text-gray-300">{item}</span>
+                  </motion.li>
+                ))}
+              </ul>
+              <Link href={ROUTES.SIGNUP}>
+                <motion.button
+                  className="flex items-center space-x-2 bg-gradient-to-r from-emerald-500 to-cyan-500 text-white px-6 py-3 rounded-xl font-semibold hover:opacity-90 transition-opacity"
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                >
+                  <Calendar className="w-5 h-5" />
+                  <span>Start Scheduling</span>
+                </motion.button>
+              </Link>
+            </motion.div>
+
+            {/* Right: Calendar UI Preview */}
+            <motion.div
+              initial={{ opacity: 0, x: 30 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true }}
+              className="relative"
+            >
+              <div className="absolute -inset-4 bg-gradient-to-r from-emerald-500/20 to-cyan-500/20 rounded-3xl blur-2xl" />
+              <div className="relative bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden">
+                {/* Calendar Header */}
+                <div className="bg-gray-800/50 px-6 py-4 border-b border-gray-700 flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    <Calendar className="w-5 h-5 text-emerald-400" />
+                    <span className="font-medium">Schedule Task</span>
+                  </div>
+                  <span className="text-sm text-gray-400">January 2026</span>
+                </div>
+
+                {/* Mock Calendar Grid - January 2026 starts on Thursday (offset 4) */}
+                <div className="p-6">
+                  <div className="grid grid-cols-7 gap-2 mb-4">
+                    {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, i) => (
+                      <div key={i} className="text-center text-xs text-gray-500 font-medium py-2">
+                        {day}
+                      </div>
+                    ))}
+                    {Array.from({ length: 35 }, (_, i) => {
+                      const day = i - 3; // January 2026 starts on Thursday (index 4, so offset is 3)
+                      const isValid = day >= 1 && day <= 31;
+                      const isSelected = day === 15;
+                      const hasTask = [5, 12, 19, 26].includes(day); // Mondays in Jan 2026
+                      return (
+                        <motion.div
+                          key={i}
+                          className={`text-center py-2 rounded-lg text-sm ${
+                            !isValid ? 'text-gray-700' :
+                            isSelected ? 'bg-emerald-500 text-white font-medium' :
+                            hasTask ? 'bg-emerald-500/20 text-emerald-400' :
+                            'text-gray-400 hover:bg-gray-800'
+                          } ${isValid ? 'cursor-pointer' : ''}`}
+                          whileHover={isValid && !isSelected ? { scale: 1.1 } : {}}
+                        >
+                          {isValid ? day : ''}
+                        </motion.div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Time Selection */}
+                  <div className="border-t border-gray-800 pt-4 mt-4">
+                    <div className="flex items-center justify-between mb-4">
+                      <span className="text-sm text-gray-400">Selected: Jan 15, 2026</span>
+                      <div className="flex items-center space-x-2 bg-gray-800 rounded-lg px-3 py-1.5">
+                        <Clock className="w-4 h-4 text-emerald-400" />
+                        <span className="text-sm">09:00 AM</span>
+                      </div>
+                    </div>
+
+                    {/* Task Preview */}
+                    <div className="bg-gray-800/50 rounded-xl p-4 border border-gray-700">
+                      <div className="flex items-start space-x-3">
+                        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center flex-shrink-0">
+                          <Mail className="w-4 h-4 text-white" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-white">Weekly Sales Report</p>
+                          <p className="text-xs text-gray-400 mt-1">Repeats every Monday at 9:00 AM</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
           </div>
         </div>
       </section>
