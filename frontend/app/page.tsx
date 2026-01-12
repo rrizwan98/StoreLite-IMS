@@ -15,7 +15,9 @@ import { useAuth } from '@/lib/auth-context';
 import {
   Mail, Cloud, FileText, BarChart3, Phone, Sparkles,
   Send, Bot, User, ArrowRight, Play, ChevronRight,
-  Database, Zap, Shield, Clock, X, MessageSquare
+  Database, Zap, Shield, Clock, X, MessageSquare,
+  Calendar, Wrench, CheckCircle, Users, Globe, Lock,
+  MessageCircle, Cpu, Timer
 } from 'lucide-react';
 
 // Tool Demo Data
@@ -797,6 +799,20 @@ export default function Home() {
             </div>
             <span className="text-xl font-bold">{APP_METADATA.NAME}</span>
           </div>
+
+          {/* Navigation Links */}
+          <nav className="hidden md:flex items-center space-x-8">
+            <a href="#features" className="text-gray-400 hover:text-white transition-colors text-sm font-medium">
+              Features
+            </a>
+            <a href="#tools" className="text-gray-400 hover:text-white transition-colors text-sm font-medium">
+              Integrations
+            </a>
+            <a href="#schedule" className="text-gray-400 hover:text-white transition-colors text-sm font-medium">
+              Schedule Tasks
+            </a>
+          </nav>
+
           <div className="flex items-center space-x-4">
             <Link
               href={ROUTES.LOGIN}
@@ -808,7 +824,7 @@ export default function Home() {
               href={ROUTES.SIGNUP}
               className="bg-gradient-to-r from-emerald-500 to-cyan-500 text-white px-5 py-2 rounded-lg hover:opacity-90 transition-opacity font-medium"
             >
-              Get Started
+              Get Started Free
             </Link>
           </div>
         </div>
@@ -836,6 +852,48 @@ export default function Home() {
 
             {/* Hero Demo Video - Large, auto-play simulated screen */}
             <HeroDemoVideo />
+
+            {/* Benefits & CTA below hero */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.4 }}
+              className="mt-10 flex flex-col items-center"
+            >
+              {/* Quick Benefits */}
+              <div className="flex flex-wrap justify-center gap-4 mb-6 text-sm text-gray-400">
+                <div className="flex items-center space-x-2">
+                  <CheckCircle className="w-4 h-4 text-emerald-400" />
+                  <span>Automate inventory queries</span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <CheckCircle className="w-4 h-4 text-emerald-400" />
+                  <span>Generate reports instantly</span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <CheckCircle className="w-4 h-4 text-emerald-400" />
+                  <span>Schedule recurring tasks</span>
+                </div>
+              </div>
+
+              {/* Primary CTA */}
+              <div className="flex flex-col sm:flex-row items-center gap-4">
+                <Link href={ROUTES.SIGNUP}>
+                  <motion.button
+                    className="flex items-center space-x-2 bg-gradient-to-r from-emerald-500 to-cyan-500 text-white px-8 py-3.5 rounded-xl font-semibold hover:opacity-90 transition-opacity shadow-lg shadow-emerald-500/25"
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                  >
+                    <Database className="w-5 h-5" />
+                    <span>Connect My Database</span>
+                  </motion.button>
+                </Link>
+                <div className="flex items-center space-x-2 text-gray-500 text-sm">
+                  <Lock className="w-4 h-4" />
+                  <span>256-bit encryption • SOC 2 compliant</span>
+                </div>
+              </div>
+            </motion.div>
           </motion.div>
         </div>
       </section>
@@ -844,16 +902,79 @@ export default function Home() {
       <section className="py-16 border-y border-gray-800">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
-            <StatCounter value={5} label="Integrated Tools" suffix="+" />
-            <StatCounter value={10000} label="Tasks Automated" suffix="+" />
-            <StatCounter value={99} label="Uptime" suffix="%" />
-            <StatCounter value={24} label="Support" suffix="/7" />
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              className="text-center"
+            >
+              <div className="flex justify-center mb-3">
+                <div className="w-12 h-12 rounded-xl bg-emerald-500/10 flex items-center justify-center">
+                  <Wrench className="w-6 h-6 text-emerald-400" />
+                </div>
+              </div>
+              <div className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent">
+                5+
+              </div>
+              <div className="text-gray-400 mt-2">Integrated Tools</div>
+            </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ delay: 0.1 }}
+              className="text-center"
+            >
+              <div className="flex justify-center mb-3">
+                <div className="w-12 h-12 rounded-xl bg-blue-500/10 flex items-center justify-center">
+                  <Cpu className="w-6 h-6 text-blue-400" />
+                </div>
+              </div>
+              <StatCounter value={10000} label="Tasks Automated" suffix="+" />
+            </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ delay: 0.2 }}
+              className="text-center"
+            >
+              <div className="flex justify-center mb-3">
+                <div className="w-12 h-12 rounded-xl bg-purple-500/10 flex items-center justify-center">
+                  <Shield className="w-6 h-6 text-purple-400" />
+                </div>
+              </div>
+              <div className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent">
+                99.9%
+              </div>
+              <div className="text-gray-400 mt-2">Uptime Guaranteed</div>
+            </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ delay: 0.3 }}
+              className="text-center"
+            >
+              <div className="flex justify-center mb-3">
+                <div className="w-12 h-12 rounded-xl bg-orange-500/10 flex items-center justify-center">
+                  <MessageCircle className="w-6 h-6 text-orange-400" />
+                </div>
+              </div>
+              <div className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent">
+                24/7
+              </div>
+              <div className="text-gray-400 mt-2">Support Available</div>
+            </motion.div>
           </div>
         </div>
       </section>
 
       {/* Features Section */}
-      <section className="py-20">
+      <section id="features" className="py-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <motion.div
             initial={{ opacity: 0, y: 30 }}
@@ -869,12 +990,14 @@ export default function Home() {
             </p>
           </motion.div>
 
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
             {[
-              { icon: Database, title: "Your Data, Your Control", desc: "Connect your own database or use our platform" },
-              { icon: Zap, title: "Instant Automation", desc: "Set up workflows in seconds, not hours" },
-              { icon: Shield, title: "Enterprise Security", desc: "OAuth 2.0 & encrypted connections" },
-              { icon: Clock, title: "24/7 Scheduling", desc: "Automate tasks at any time" },
+              { icon: Database, title: "Your Data, Your Control", desc: "Connect your own PostgreSQL database or use our secure cloud platform. Your data never leaves your infrastructure." },
+              { icon: MessageSquare, title: "Natural Language Queries", desc: "Ask questions in plain English. No SQL knowledge required - just describe what you need." },
+              { icon: Wrench, title: "Multi-Tool Automation", desc: "Connect Gmail, Drive, Notion and more. Automate workflows across all your favorite tools." },
+              { icon: Calendar, title: "Task Scheduling", desc: "Schedule queries and automations for any date/time. Set recurring tasks that run automatically." },
+              { icon: Shield, title: "Enterprise Security", desc: "OAuth 2.0, 256-bit encryption, and SOC 2 compliance. Your data is always protected." },
+              { icon: Zap, title: "Instant Setup", desc: "Get started in under 5 minutes. No complex configuration or coding required." },
             ].map((feature, i) => (
               <motion.div
                 key={feature.title}
@@ -882,11 +1005,13 @@ export default function Home() {
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
                 transition={{ delay: i * 0.1 }}
-                className="bg-gray-900/50 border border-gray-800 rounded-xl p-6 hover:border-emerald-500/50 transition-colors"
+                className="bg-gray-900/50 border border-gray-800 rounded-xl p-6 hover:border-emerald-500/50 transition-colors group"
               >
-                <feature.icon className="w-10 h-10 text-emerald-400 mb-4" />
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-500/20 to-cyan-500/20 flex items-center justify-center mb-4 group-hover:from-emerald-500/30 group-hover:to-cyan-500/30 transition-colors">
+                  <feature.icon className="w-6 h-6 text-emerald-400" />
+                </div>
                 <h3 className="text-lg font-semibold mb-2">{feature.title}</h3>
-                <p className="text-gray-400 text-sm">{feature.desc}</p>
+                <p className="text-gray-400 text-sm leading-relaxed">{feature.desc}</p>
               </motion.div>
             ))}
           </div>
@@ -918,8 +1043,140 @@ export default function Home() {
         </div>
       </section>
 
+      {/* Schedule Your Tasks Section */}
+      <section id="schedule" className="py-20">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="grid lg:grid-cols-2 gap-12 items-center">
+            {/* Left: Content */}
+            <motion.div
+              initial={{ opacity: 0, x: -30 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true }}
+            >
+              <div className="inline-flex items-center space-x-2 bg-emerald-500/10 border border-emerald-500/20 rounded-full px-4 py-1.5 mb-6">
+                <Timer className="w-4 h-4 text-emerald-400" />
+                <span className="text-emerald-400 text-sm font-medium">New Feature</span>
+              </div>
+              <h2 className="text-3xl sm:text-4xl font-bold mb-4">
+                Schedule Your <span className="text-emerald-400">Tasks</span>
+              </h2>
+              <p className="text-gray-400 mb-8 leading-relaxed">
+                Set up automated workflows that run on your schedule. Whether it&apos;s daily inventory reports,
+                weekly sales summaries, or monthly analytics - let the AI handle it while you focus on growing
+                your business.
+              </p>
+              <ul className="space-y-4 mb-8">
+                {[
+                  "Schedule queries for any date and time",
+                  "Set up recurring tasks (daily, weekly, monthly)",
+                  "Receive results via email or in-app notifications",
+                  "Combine multiple tools in scheduled workflows"
+                ].map((item, i) => (
+                  <motion.li
+                    key={i}
+                    initial={{ opacity: 0, x: -20 }}
+                    whileInView={{ opacity: 1, x: 0 }}
+                    viewport={{ once: true }}
+                    transition={{ delay: i * 0.1 }}
+                    className="flex items-center space-x-3"
+                  >
+                    <CheckCircle className="w-5 h-5 text-emerald-400 flex-shrink-0" />
+                    <span className="text-gray-300">{item}</span>
+                  </motion.li>
+                ))}
+              </ul>
+              <Link href={ROUTES.SIGNUP}>
+                <motion.button
+                  className="flex items-center space-x-2 bg-gradient-to-r from-emerald-500 to-cyan-500 text-white px-6 py-3 rounded-xl font-semibold hover:opacity-90 transition-opacity"
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                >
+                  <Calendar className="w-5 h-5" />
+                  <span>Start Scheduling</span>
+                </motion.button>
+              </Link>
+            </motion.div>
+
+            {/* Right: Calendar UI Preview */}
+            <motion.div
+              initial={{ opacity: 0, x: 30 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true }}
+              className="relative"
+            >
+              <div className="absolute -inset-4 bg-gradient-to-r from-emerald-500/20 to-cyan-500/20 rounded-3xl blur-2xl" />
+              <div className="relative bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden">
+                {/* Calendar Header */}
+                <div className="bg-gray-800/50 px-6 py-4 border-b border-gray-700 flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    <Calendar className="w-5 h-5 text-emerald-400" />
+                    <span className="font-medium">Schedule Task</span>
+                  </div>
+                  <span className="text-sm text-gray-400">January 2025</span>
+                </div>
+
+                {/* Mock Calendar Grid */}
+                <div className="p-6">
+                  <div className="grid grid-cols-7 gap-2 mb-4">
+                    {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, i) => (
+                      <div key={i} className="text-center text-xs text-gray-500 font-medium py-2">
+                        {day}
+                      </div>
+                    ))}
+                    {Array.from({ length: 35 }, (_, i) => {
+                      const day = i - 2; // Start offset
+                      const isValid = day >= 1 && day <= 31;
+                      const isSelected = day === 15;
+                      const hasTask = [8, 15, 22, 29].includes(day);
+                      return (
+                        <motion.div
+                          key={i}
+                          className={`text-center py-2 rounded-lg text-sm ${
+                            !isValid ? 'text-gray-700' :
+                            isSelected ? 'bg-emerald-500 text-white font-medium' :
+                            hasTask ? 'bg-emerald-500/20 text-emerald-400' :
+                            'text-gray-400 hover:bg-gray-800'
+                          } ${isValid ? 'cursor-pointer' : ''}`}
+                          whileHover={isValid && !isSelected ? { scale: 1.1 } : {}}
+                        >
+                          {isValid ? day : ''}
+                        </motion.div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Time Selection */}
+                  <div className="border-t border-gray-800 pt-4 mt-4">
+                    <div className="flex items-center justify-between mb-4">
+                      <span className="text-sm text-gray-400">Selected: Jan 15, 2025</span>
+                      <div className="flex items-center space-x-2 bg-gray-800 rounded-lg px-3 py-1.5">
+                        <Clock className="w-4 h-4 text-emerald-400" />
+                        <span className="text-sm">09:00 AM</span>
+                      </div>
+                    </div>
+
+                    {/* Task Preview */}
+                    <div className="bg-gray-800/50 rounded-xl p-4 border border-gray-700">
+                      <div className="flex items-start space-x-3">
+                        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center flex-shrink-0">
+                          <Mail className="w-4 h-4 text-white" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-white">Weekly Sales Report</p>
+                          <p className="text-xs text-gray-400 mt-1">Repeats every Monday at 9:00 AM</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        </div>
+      </section>
+
       {/* How It Works Section */}
-      <section className="py-20">
+      <section className="py-20 bg-gray-900/30">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <motion.div
             initial={{ opacity: 0, y: 30 }}
@@ -932,25 +1189,29 @@ export default function Home() {
             </h2>
           </motion.div>
 
-          <div className="grid md:grid-cols-3 gap-8">
+          <div className="grid md:grid-cols-4 gap-6">
             {[
-              { step: "01", title: "Connect Your Tools", desc: "Link Gmail, Drive, Notion, and more with secure OAuth" },
-              { step: "02", title: "Ask in Natural Language", desc: "Simply describe what you want done - no coding needed" },
-              { step: "03", title: "Watch It Work", desc: "Our AI executes the task and reports back with results" },
+              { step: "01", title: "Connect Your Tools", desc: "Link Gmail, Drive, Notion, and more with secure OAuth", icon: Wrench },
+              { step: "02", title: "Ask in Natural Language", desc: "Simply describe what you want done - no coding needed", icon: MessageSquare },
+              { step: "03", title: "Schedule or Run Now", desc: "Execute immediately or schedule for later with recurring options", icon: Calendar },
+              { step: "04", title: "Watch It Work", desc: "Our AI executes the task and reports back with results", icon: Zap },
             ].map((item, i) => (
               <motion.div
                 key={item.step}
                 initial={{ opacity: 0, y: 30 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
-                transition={{ delay: i * 0.2 }}
+                transition={{ delay: i * 0.15 }}
                 className="relative text-center"
               >
-                <div className="text-6xl font-bold text-emerald-500/20 mb-4">{item.step}</div>
-                <h3 className="text-xl font-semibold mb-2">{item.title}</h3>
-                <p className="text-gray-400">{item.desc}</p>
-                {i < 2 && (
-                  <ChevronRight className="hidden md:block absolute top-8 -right-4 w-8 h-8 text-gray-700" />
+                <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-emerald-500/20 to-cyan-500/20 border border-emerald-500/30 flex items-center justify-center">
+                  <item.icon className="w-7 h-7 text-emerald-400" />
+                </div>
+                <div className="text-5xl font-bold text-emerald-500/20 mb-2">{item.step}</div>
+                <h3 className="text-lg font-semibold mb-2">{item.title}</h3>
+                <p className="text-gray-400 text-sm">{item.desc}</p>
+                {i < 3 && (
+                  <ChevronRight className="hidden md:block absolute top-10 -right-3 w-6 h-6 text-gray-700" />
                 )}
               </motion.div>
             ))}
@@ -991,18 +1252,115 @@ export default function Home() {
       </section>
 
       {/* Footer */}
-      <footer className="border-t border-gray-800 py-12">
+      <footer className="border-t border-gray-800 py-16 bg-gray-950">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex flex-col md:flex-row justify-between items-center">
-            <div className="flex items-center space-x-3 mb-4 md:mb-0">
-              <div className="w-8 h-8 bg-gradient-to-br from-emerald-500 to-cyan-500 rounded-lg flex items-center justify-center">
-                <Sparkles className="w-4 h-4 text-white" />
+          {/* Main Footer Content */}
+          <div className="grid md:grid-cols-4 gap-8 mb-12">
+            {/* Brand Column */}
+            <div className="md:col-span-2">
+              <div className="flex items-center space-x-3 mb-4">
+                <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-cyan-500 rounded-xl flex items-center justify-center">
+                  <Sparkles className="w-5 h-5 text-white" />
+                </div>
+                <span className="text-xl font-bold">{APP_METADATA.NAME}</span>
               </div>
-              <span className="font-semibold">{APP_METADATA.NAME}</span>
+              <p className="text-gray-400 text-sm mb-6 max-w-md">
+                AI-powered inventory management and workflow automation. Connect your database,
+                ask in plain English, and let our AI handle the rest.
+              </p>
+              {/* Trust Indicators */}
+              <div className="flex flex-wrap gap-4">
+                <div className="flex items-center space-x-2 text-gray-500 text-xs">
+                  <Shield className="w-4 h-4 text-emerald-400" />
+                  <span>SOC 2 Compliant</span>
+                </div>
+                <div className="flex items-center space-x-2 text-gray-500 text-xs">
+                  <Lock className="w-4 h-4 text-emerald-400" />
+                  <span>256-bit Encryption</span>
+                </div>
+                <div className="flex items-center space-x-2 text-gray-500 text-xs">
+                  <Globe className="w-4 h-4 text-emerald-400" />
+                  <span>GDPR Ready</span>
+                </div>
+              </div>
             </div>
-            <p className="text-gray-500 text-sm">
-              © 2025 {APP_METADATA.NAME}. AI-Powered Inventory & Workflow Automation.
+
+            {/* Product Links */}
+            <div>
+              <h4 className="font-semibold mb-4 text-white">Product</h4>
+              <ul className="space-y-3">
+                <li>
+                  <a href="#features" className="text-gray-400 hover:text-emerald-400 text-sm transition-colors">
+                    Features
+                  </a>
+                </li>
+                <li>
+                  <a href="#tools" className="text-gray-400 hover:text-emerald-400 text-sm transition-colors">
+                    Integrations
+                  </a>
+                </li>
+                <li>
+                  <a href="#schedule" className="text-gray-400 hover:text-emerald-400 text-sm transition-colors">
+                    Scheduling
+                  </a>
+                </li>
+                <li>
+                  <Link href={ROUTES.LOGIN} className="text-gray-400 hover:text-emerald-400 text-sm transition-colors">
+                    Login
+                  </Link>
+                </li>
+              </ul>
+            </div>
+
+            {/* Legal Links */}
+            <div>
+              <h4 className="font-semibold mb-4 text-white">Legal</h4>
+              <ul className="space-y-3">
+                <li>
+                  <a href="#" className="text-gray-400 hover:text-emerald-400 text-sm transition-colors">
+                    Privacy Policy
+                  </a>
+                </li>
+                <li>
+                  <a href="#" className="text-gray-400 hover:text-emerald-400 text-sm transition-colors">
+                    Terms of Service
+                  </a>
+                </li>
+                <li>
+                  <a href="#" className="text-gray-400 hover:text-emerald-400 text-sm transition-colors">
+                    Cookie Policy
+                  </a>
+                </li>
+                <li>
+                  <a href="mailto:support@storelite.ai" className="text-gray-400 hover:text-emerald-400 text-sm transition-colors">
+                    Contact Us
+                  </a>
+                </li>
+              </ul>
+            </div>
+          </div>
+
+          {/* Bottom Bar */}
+          <div className="border-t border-gray-800 pt-8 flex flex-col md:flex-row justify-between items-center">
+            <p className="text-gray-500 text-sm mb-4 md:mb-0">
+              © 2025 {APP_METADATA.NAME}. All rights reserved.
             </p>
+            {/* Social Proof */}
+            <div className="flex items-center space-x-6">
+              <div className="flex items-center space-x-2">
+                <div className="flex -space-x-2">
+                  {[1, 2, 3, 4].map((i) => (
+                    <div
+                      key={i}
+                      className="w-7 h-7 rounded-full bg-gradient-to-br from-gray-600 to-gray-700 border-2 border-gray-950 flex items-center justify-center"
+                    >
+                      <Users className="w-3 h-3 text-gray-400" />
+                    </div>
+                  ))}
+                </div>
+                <span className="text-gray-400 text-sm">Join 500+ businesses</span>
+              </div>
+            </div>
           </div>
         </div>
       </footer>
