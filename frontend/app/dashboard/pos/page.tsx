@@ -12,6 +12,7 @@ import { Item, Bill } from '@/lib/types';
 import { useBill, useStockMonitor } from '@/lib/hooks';
 import { ROUTES, APP_METADATA } from '@/lib/constants';
 import { useAuth } from '@/lib/auth-context';
+import { ThemeToggle } from '@/components/theme-toggle';
 import ItemSearch from '@/components/pos/ItemSearch';
 import BillItems from '@/components/pos/BillItems';
 import BillSummary from '@/components/pos/BillSummary';
@@ -62,8 +63,8 @@ export default function DashboardPOSPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 dark:border-blue-400"></div>
       </div>
     );
   }
@@ -71,18 +72,19 @@ export default function DashboardPOSPage() {
   // Show invoice view if bill is generated
   if (generatedBill) {
     return (
-      <div className="min-h-screen bg-gray-50">
-        <header className="bg-white shadow-sm">
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+        <header className="bg-white dark:bg-gray-800 shadow-sm dark:shadow-gray-900/50">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
             <div className="flex items-center space-x-6">
               <Link href={ROUTES.DASHBOARD} className="flex items-center space-x-3">
-                <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
+                <div className="w-10 h-10 bg-blue-600 dark:bg-blue-500 rounded-lg flex items-center justify-center">
                   <span className="text-white text-xl font-bold">S</span>
                 </div>
-                <span className="text-xl font-bold text-gray-900">{APP_METADATA.NAME}</span>
+                <span className="text-xl font-bold text-gray-900 dark:text-white">{APP_METADATA.NAME}</span>
               </Link>
             </div>
-            <span className="text-gray-600 text-sm">{user?.email}</span>
+            <span className="text-gray-600 dark:text-gray-300 text-sm">{user?.email}</span>
+            <ThemeToggle />
           </div>
         </header>
         <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -100,26 +102,27 @@ export default function DashboardPOSPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       {/* Header */}
-      <header className="bg-white shadow-sm">
+      <header className="bg-white dark:bg-gray-800 shadow-sm dark:shadow-gray-900/50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
           <div className="flex items-center space-x-6">
             <Link href={ROUTES.DASHBOARD} className="flex items-center space-x-3">
-              <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
+              <div className="w-10 h-10 bg-blue-600 dark:bg-blue-500 rounded-lg flex items-center justify-center">
                 <span className="text-white text-xl font-bold">S</span>
               </div>
-              <span className="text-xl font-bold text-gray-900">{APP_METADATA.NAME}</span>
+              <span className="text-xl font-bold text-gray-900 dark:text-white">{APP_METADATA.NAME}</span>
             </Link>
             <nav className="hidden md:flex space-x-4">
-              <Link href={ROUTES.ADMIN} className="text-gray-600 hover:text-gray-900">Admin</Link>
-              <Link href={ROUTES.POS} className="text-blue-600 font-medium">POS</Link>
-              <Link href={ROUTES.ANALYTICS} className="text-gray-600 hover:text-gray-900">Analytics</Link>
+              <Link href={ROUTES.ADMIN} className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white">Admin</Link>
+              <Link href={ROUTES.POS} className="text-blue-600 dark:text-blue-400 font-medium">POS</Link>
+              <Link href={ROUTES.ANALYTICS} className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white">Analytics</Link>
             </nav>
           </div>
           <div className="flex items-center space-x-4">
-            <span className="text-gray-600 text-sm">{user?.email}</span>
-            <button onClick={logout} className="text-gray-600 hover:text-gray-900 text-sm">
+            <span className="text-gray-600 dark:text-gray-300 text-sm">{user?.email}</span>
+            <ThemeToggle />
+            <button onClick={logout} className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm">
               Logout
             </button>
           </div>
@@ -135,14 +138,14 @@ export default function DashboardPOSPage() {
             {/* Main Bill Area */}
             <div className="lg:col-span-2 space-y-6">
               {/* Search Section */}
-              <div className="bg-white rounded-lg shadow-md p-6">
-                <h2 className="text-2xl font-bold mb-4">Search Items</h2>
+              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md dark:shadow-gray-900/50 p-6">
+                <h2 className="text-2xl font-bold mb-4 text-gray-900 dark:text-white">Search Items</h2>
                 <ItemSearch onAddItem={handleAddItem} />
               </div>
 
               {/* Bill Items Section */}
               <div>
-                <h2 className="text-2xl font-bold mb-4 text-gray-900">Bill Items</h2>
+                <h2 className="text-2xl font-bold mb-4 text-gray-900 dark:text-white">Bill Items</h2>
                 <BillItems
                   items={items}
                   onUpdateQuantity={handleUpdateQuantity}
@@ -163,7 +166,7 @@ export default function DashboardPOSPage() {
                   />
                 </div>
 
-                <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-900">
+                <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-lg text-sm text-blue-900 dark:text-blue-300">
                   <p className="font-semibold mb-2">Next Steps:</p>
                   <ul className="list-disc list-inside space-y-1 text-xs">
                     <li>Edit quantities if needed</li>

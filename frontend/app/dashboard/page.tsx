@@ -17,6 +17,7 @@ import { ROUTES, APP_METADATA, API_BASE_URL } from '@/lib/constants';
 import { useAuth } from '@/lib/auth-context';
 import { getAccessToken } from '@/lib/auth-api';
 import ConnectToolsSection from './components/ConnectToolsSection';
+import { ThemeToggle } from '@/components/theme-toggle';
 
 export default function DashboardPage() {
   const {
@@ -286,8 +287,8 @@ export default function DashboardPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 dark:border-blue-400"></div>
       </div>
     );
   }
@@ -300,26 +301,27 @@ export default function DashboardPage() {
   const needsSetup = !connectionStatus || connectionStatus.needs_setup;
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       {/* Header */}
-      <header className="bg-white shadow-sm">
+      <header className="bg-white dark:bg-gray-800 shadow-sm dark:shadow-gray-900/50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col sm:flex-row justify-between items-center gap-3">
           <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
+            <div className="w-10 h-10 bg-blue-600 dark:bg-blue-500 rounded-lg flex items-center justify-center">
               <span className="text-white text-xl font-bold">S</span>
             </div>
-            <span className="text-xl font-bold text-gray-900">{APP_METADATA.NAME}</span>
+            <span className="text-xl font-bold text-gray-900 dark:text-white">{APP_METADATA.NAME}</span>
           </div>
-          <div className="flex items-center space-x-4">
-            <span className="text-gray-600 text-sm sm:text-base truncate max-w-[150px] sm:max-w-none">
+          <div className="flex items-center space-x-3 sm:space-x-4">
+            <span className="text-gray-600 dark:text-gray-300 text-sm sm:text-base truncate max-w-[100px] sm:max-w-none">
               {user.full_name || user.email}
             </span>
+            <ThemeToggle />
             <button
               onClick={() => {
                 localStorage.removeItem('ims_auth_tokens');
                 window.location.href = ROUTES.HOME;
               }}
-              className="text-gray-600 hover:text-gray-900 font-medium text-sm sm:text-base"
+              className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white font-medium text-sm sm:text-base"
             >
               Logout
             </button>
@@ -332,23 +334,23 @@ export default function DashboardPage() {
           /* Service Selection for First-Time Users */
           <div className="max-w-4xl mx-auto">
             <div className="text-center mb-6 sm:mb-10">
-              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2 sm:mb-3">
+              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white mb-2 sm:mb-3">
                 Welcome, {user.full_name || 'there'}!
               </h1>
-              <p className="text-lg sm:text-xl text-gray-600">
+              <p className="text-lg sm:text-xl text-gray-600 dark:text-gray-300">
                 How would you like to use {APP_METADATA.NAME}?
               </p>
             </div>
 
             {error && (
-              <div className="mb-6 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-center">
+              <div className="mb-6 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-4 py-3 rounded-lg text-center">
                 {error}
               </div>
             )}
 
             {/* Database URI Input (shared between options 1 and 3) */}
-            <div className="bg-white rounded-xl shadow-md p-4 sm:p-6 mb-6 sm:mb-8">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md dark:shadow-gray-900/50 p-4 sm:p-6 mb-6 sm:mb-8">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 PostgreSQL Database URI (for options 1 or 3)
               </label>
               <input
@@ -356,23 +358,23 @@ export default function DashboardPage() {
                 value={databaseUri}
                 onChange={(e) => setDatabaseUri(e.target.value)}
                 placeholder="postgresql://user:pass@host:5432/db"
-                className="w-full px-3 sm:px-4 py-2 sm:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-xs sm:text-sm"
+                className="w-full px-3 sm:px-4 py-2 sm:py-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-xs sm:text-sm placeholder-gray-400 dark:placeholder-gray-500"
               />
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
               {/* Option 1: Full IMS Connection */}
-              <div className="bg-white rounded-2xl shadow-lg p-6 border-2 border-blue-200 flex flex-col">
+              <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg dark:shadow-gray-900/50 p-6 border-2 border-blue-200 dark:border-blue-800 flex flex-col">
                 <div className="text-center mb-4">
                   <div className="text-5xl mb-3">🔌</div>
-                  <h2 className="text-xl font-bold text-gray-900">Full IMS Connection</h2>
-                  <p className="text-gray-600 mt-2 text-sm">
+                  <h2 className="text-xl font-bold text-gray-900 dark:text-white">Full IMS Connection</h2>
+                  <p className="text-gray-600 dark:text-gray-400 mt-2 text-sm">
                     Complete system with Admin, POS & AI
                   </p>
                 </div>
 
                 <div className="flex-grow">
-                  <ul className="space-y-2 text-sm text-gray-600 mb-4">
+                  <ul className="space-y-2 text-sm text-gray-600 dark:text-gray-400 mb-4">
                     <li className="flex items-center">
                       <span className="text-green-500 mr-2">✓</span>
                       Inventory Admin Panel
@@ -387,7 +389,7 @@ export default function DashboardPage() {
                     </li>
                     <li className="flex items-center">
                       <span className="text-yellow-500 mr-2">!</span>
-                      <span className="text-yellow-700">Creates IMS tables</span>
+                      <span className="text-yellow-700 dark:text-yellow-400">Creates IMS tables</span>
                     </li>
                   </ul>
                 </div>
@@ -402,17 +404,17 @@ export default function DashboardPage() {
               </div>
 
               {/* Option 2: Use Our Platform */}
-              <div className="bg-white rounded-2xl shadow-lg p-6 border-2 border-purple-200 flex flex-col">
+              <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg dark:shadow-gray-900/50 p-6 border-2 border-purple-200 dark:border-purple-800 flex flex-col">
                 <div className="text-center mb-4">
                   <div className="text-5xl mb-3">☁️</div>
-                  <h2 className="text-xl font-bold text-gray-900">Use Our Platform</h2>
-                  <p className="text-gray-600 mt-2 text-sm">
+                  <h2 className="text-xl font-bold text-gray-900 dark:text-white">Use Our Platform</h2>
+                  <p className="text-gray-600 dark:text-gray-400 mt-2 text-sm">
                     Hosted database, no setup needed
                   </p>
                 </div>
 
                 <div className="flex-grow">
-                  <ul className="space-y-2 text-sm text-gray-600 mb-4">
+                  <ul className="space-y-2 text-sm text-gray-600 dark:text-gray-400 mb-4">
                     <li className="flex items-center">
                       <span className="text-green-500 mr-2">✓</span>
                       Inventory Admin Panel
@@ -442,17 +444,17 @@ export default function DashboardPage() {
               </div>
 
               {/* Option 3: Agent + Analytics Only */}
-              <div className="bg-white rounded-2xl shadow-lg p-6 border-2 border-emerald-200 flex flex-col">
+              <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg dark:shadow-gray-900/50 p-6 border-2 border-emerald-200 dark:border-emerald-800 flex flex-col">
                 <div className="text-center mb-4">
                   <div className="text-5xl mb-3">🧠</div>
-                  <h2 className="text-xl font-bold text-gray-900">Agent + Analytics</h2>
-                  <p className="text-gray-600 mt-2 text-sm">
+                  <h2 className="text-xl font-bold text-gray-900 dark:text-white">Agent + Analytics</h2>
+                  <p className="text-gray-600 dark:text-gray-400 mt-2 text-sm">
                     Query your existing database with AI
                   </p>
                 </div>
 
                 <div className="flex-grow">
-                  <ul className="space-y-2 text-sm text-gray-600 mb-4">
+                  <ul className="space-y-2 text-sm text-gray-600 dark:text-gray-400 mb-4">
                     <li className="flex items-center">
                       <span className="text-green-500 mr-2">✓</span>
                       AI-powered queries
@@ -463,11 +465,11 @@ export default function DashboardPage() {
                     </li>
                     <li className="flex items-center">
                       <span className="text-green-500 mr-2">✓</span>
-                      <span className="text-emerald-700 font-medium">NO table modifications</span>
+                      <span className="text-emerald-700 dark:text-emerald-400 font-medium">NO table modifications</span>
                     </li>
                     <li className="flex items-center">
-                      <span className="text-gray-400 mr-2">✗</span>
-                      <span className="text-gray-400">No Admin/POS</span>
+                      <span className="text-gray-400 dark:text-gray-500 mr-2">✗</span>
+                      <span className="text-gray-400 dark:text-gray-500">No Admin/POS</span>
                     </li>
                   </ul>
                 </div>
@@ -487,27 +489,27 @@ export default function DashboardPage() {
           <div>
             <div className="flex justify-between items-center mb-8">
               <div>
-                <h1 className="text-2xl font-bold text-gray-900">Your Database Dashboard</h1>
-                <p className="text-gray-600">Connected to your PostgreSQL database via MCP</p>
+                <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Your Database Dashboard</h1>
+                <p className="text-gray-600 dark:text-gray-400">Connected to your PostgreSQL database via MCP</p>
               </div>
               <button
                 onClick={handleDisconnect}
-                className="text-red-600 hover:text-red-700 font-medium"
+                className="text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 font-medium"
               >
                 Disconnect
               </button>
             </div>
 
             {/* Status Card */}
-            <div className="bg-white rounded-xl shadow-md p-6 mb-8">
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md dark:shadow-gray-900/50 p-6 mb-8">
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-4">
                   <div className={`w-4 h-4 rounded-full ${
                     connectionStatus.mcp_status === 'connected' ? 'bg-green-500' : 'bg-yellow-500'
                   }`} />
                   <div>
-                    <h3 className="font-semibold text-gray-900">MCP Server Status</h3>
-                    <p className="text-sm text-gray-600 capitalize">{connectionStatus.mcp_status || 'Unknown'}</p>
+                    <h3 className="font-semibold text-gray-900 dark:text-white">MCP Server Status</h3>
+                    <p className="text-sm text-gray-600 dark:text-gray-400 capitalize">{connectionStatus.mcp_status || 'Unknown'}</p>
                   </div>
                 </div>
                 {connectionStatus.mcp_status !== 'connected' && (
@@ -524,49 +526,49 @@ export default function DashboardPage() {
             {/* Feature Cards - Full Features for Own Database Users */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
               <Link href={connectionStatus.mcp_status === 'connected' ? ROUTES.MCP_ADMIN : ROUTES.DB_CONNECT}>
-                <div className="bg-white rounded-xl shadow-md p-6 hover:shadow-lg transition-shadow cursor-pointer">
+                <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md dark:shadow-gray-900/50 p-6 hover:shadow-lg dark:hover:shadow-gray-900/70 transition-shadow cursor-pointer">
                   <div className="text-4xl mb-4">📦</div>
-                  <h2 className="text-xl font-semibold mb-2">Inventory Admin</h2>
-                  <p className="text-gray-600">
+                  <h2 className="text-xl font-semibold mb-2 text-gray-900 dark:text-white">Inventory Admin</h2>
+                  <p className="text-gray-600 dark:text-gray-400">
                     Manage products, stock levels, and categories in your database.
                   </p>
                   {connectionStatus.mcp_status !== 'connected' && (
-                    <span className="text-xs text-yellow-600 mt-2 block">Connect MCP first</span>
+                    <span className="text-xs text-yellow-600 dark:text-yellow-400 mt-2 block">Connect MCP first</span>
                   )}
                 </div>
               </Link>
 
               <Link href={connectionStatus.mcp_status === 'connected' ? ROUTES.MCP_POS : ROUTES.DB_CONNECT}>
-                <div className="bg-white rounded-xl shadow-md p-6 hover:shadow-lg transition-shadow cursor-pointer">
+                <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md dark:shadow-gray-900/50 p-6 hover:shadow-lg dark:hover:shadow-gray-900/70 transition-shadow cursor-pointer">
                   <div className="text-4xl mb-4">💳</div>
-                  <h2 className="text-xl font-semibold mb-2">Point of Sale</h2>
-                  <p className="text-gray-600">
+                  <h2 className="text-xl font-semibold mb-2 text-gray-900 dark:text-white">Point of Sale</h2>
+                  <p className="text-gray-600 dark:text-gray-400">
                     Create bills, search products, and process sales.
                   </p>
                   {connectionStatus.mcp_status !== 'connected' && (
-                    <span className="text-xs text-yellow-600 mt-2 block">Connect MCP first</span>
+                    <span className="text-xs text-yellow-600 dark:text-yellow-400 mt-2 block">Connect MCP first</span>
                   )}
                 </div>
               </Link>
 
               <Link href={connectionStatus.mcp_status === 'connected' ? ROUTES.ANALYTICS : ROUTES.DB_CONNECT}>
-                <div className="bg-white rounded-xl shadow-md p-6 hover:shadow-lg transition-shadow cursor-pointer">
+                <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md dark:shadow-gray-900/50 p-6 hover:shadow-lg dark:hover:shadow-gray-900/70 transition-shadow cursor-pointer">
                   <div className="text-4xl mb-4">📊</div>
-                  <h2 className="text-xl font-semibold mb-2">AI Analytics</h2>
-                  <p className="text-gray-600">
+                  <h2 className="text-xl font-semibold mb-2 text-gray-900 dark:text-white">AI Analytics</h2>
+                  <p className="text-gray-600 dark:text-gray-400">
                     Ask questions about YOUR data and get smart visualizations.
                   </p>
                   {connectionStatus.mcp_status !== 'connected' && (
-                    <span className="text-xs text-yellow-600 mt-2 block">Connect MCP first</span>
+                    <span className="text-xs text-yellow-600 dark:text-yellow-400 mt-2 block">Connect MCP first</span>
                   )}
                 </div>
               </Link>
 
               <Link href={ROUTES.DB_CONNECT}>
-                <div className="bg-white rounded-xl shadow-md p-6 hover:shadow-lg transition-shadow cursor-pointer border-2 border-blue-200">
+                <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md dark:shadow-gray-900/50 p-6 hover:shadow-lg dark:hover:shadow-gray-900/70 transition-shadow cursor-pointer border-2 border-blue-200 dark:border-blue-800">
                   <div className="text-4xl mb-4">🔌</div>
-                  <h2 className="text-xl font-semibold mb-2">DB Connection</h2>
-                  <p className="text-gray-600">
+                  <h2 className="text-xl font-semibold mb-2 text-gray-900 dark:text-white">DB Connection</h2>
+                  <p className="text-gray-600 dark:text-gray-400">
                     Manage MCP connection and run direct queries.
                   </p>
                 </div>
@@ -578,27 +580,27 @@ export default function DashboardPage() {
           <div>
             <div className="flex justify-between items-center mb-8">
               <div>
-                <h1 className="text-2xl font-bold text-gray-900">AI Analytics Dashboard</h1>
-                <p className="text-gray-600">Query your database with natural language</p>
+                <h1 className="text-2xl font-bold text-gray-900 dark:text-white">AI Analytics Dashboard</h1>
+                <p className="text-gray-600 dark:text-gray-400">Query your database with natural language</p>
               </div>
               <button
                 onClick={handleDisconnect}
-                className="text-red-600 hover:text-red-700 font-medium"
+                className="text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 font-medium"
               >
                 Disconnect
               </button>
             </div>
 
             {/* Status Card */}
-            <div className="bg-white rounded-xl shadow-md p-6 mb-8">
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md dark:shadow-gray-900/50 p-6 mb-8">
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-4">
                   <div className={`w-4 h-4 rounded-full ${
                     connectionStatus.schema_status === 'ready' ? 'bg-green-500' : 'bg-yellow-500'
                   }`} />
                   <div>
-                    <h3 className="font-semibold text-gray-900">Schema Status</h3>
-                    <p className="text-sm text-gray-600 capitalize">{connectionStatus.schema_status || 'Not Discovered'}</p>
+                    <h3 className="font-semibold text-gray-900 dark:text-white">Schema Status</h3>
+                    <p className="text-sm text-gray-600 dark:text-gray-400 capitalize">{connectionStatus.schema_status || 'Not Discovered'}</p>
                   </div>
                 </div>
                 {connectionStatus.schema_status !== 'ready' && (
@@ -615,49 +617,36 @@ export default function DashboardPage() {
             {/* Feature Cards - Agent, Analytics, Scheduler, Connection */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
               <Link href={connectionStatus.schema_status === 'ready' ? ROUTES.SCHEMA_AGENT : ROUTES.SCHEMA_CONNECT}>
-                <div className="bg-white rounded-xl shadow-md p-6 hover:shadow-lg transition-shadow cursor-pointer border-2 border-emerald-200">
+                <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md dark:shadow-gray-900/50 p-6 hover:shadow-lg dark:hover:shadow-gray-900/70 transition-shadow cursor-pointer border-2 border-emerald-200 dark:border-emerald-800">
                   <div className="text-4xl mb-4">🧠</div>
-                  <h2 className="text-xl font-semibold mb-2">AI Agent</h2>
-                  <p className="text-gray-600">
+                  <h2 className="text-xl font-semibold mb-2 text-gray-900 dark:text-white">AI Agent</h2>
+                  <p className="text-gray-600 dark:text-gray-400">
                     Ask questions about your data in natural language.
                   </p>
                   {connectionStatus.schema_status !== 'ready' && (
-                    <span className="text-xs text-yellow-600 mt-2 block">Discover schema first</span>
-                  )}
-                </div>
-              </Link>
-
-              <Link href={connectionStatus.schema_status === 'ready' ? ROUTES.SCHEMA_ANALYTICS : ROUTES.SCHEMA_CONNECT}>
-                <div className="bg-white rounded-xl shadow-md p-6 hover:shadow-lg transition-shadow cursor-pointer">
-                  <div className="text-4xl mb-4">📊</div>
-                  <h2 className="text-xl font-semibold mb-2">Analytics</h2>
-                  <p className="text-gray-600">
-                    Visualize your data with AI-powered charts.
-                  </p>
-                  {connectionStatus.schema_status !== 'ready' && (
-                    <span className="text-xs text-yellow-600 mt-2 block">Discover schema first</span>
+                    <span className="text-xs text-yellow-600 dark:text-yellow-400 mt-2 block">Discover schema first</span>
                   )}
                 </div>
               </Link>
 
               <Link href={connectionStatus.schema_status === 'ready' ? ROUTES.SCHEDULER : ROUTES.SCHEMA_CONNECT}>
-                <div className="bg-white rounded-xl shadow-md p-6 hover:shadow-lg transition-shadow cursor-pointer border-2 border-purple-200">
+                <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md dark:shadow-gray-900/50 p-6 hover:shadow-lg dark:hover:shadow-gray-900/70 transition-shadow cursor-pointer border-2 border-purple-200 dark:border-purple-800">
                   <div className="text-4xl mb-4">⏰</div>
-                  <h2 className="text-xl font-semibold mb-2">Scheduler</h2>
-                  <p className="text-gray-600">
+                  <h2 className="text-xl font-semibold mb-2 text-gray-900 dark:text-white">Scheduler</h2>
+                  <p className="text-gray-600 dark:text-gray-400">
                     Schedule automated tasks to run at specific times.
                   </p>
                   {connectionStatus.schema_status !== 'ready' && (
-                    <span className="text-xs text-yellow-600 mt-2 block">Discover schema first</span>
+                    <span className="text-xs text-yellow-600 dark:text-yellow-400 mt-2 block">Discover schema first</span>
                   )}
                 </div>
               </Link>
 
               <Link href={ROUTES.SCHEMA_CONNECT}>
-                <div className="bg-white rounded-xl shadow-md p-6 hover:shadow-lg transition-shadow cursor-pointer">
+                <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md dark:shadow-gray-900/50 p-6 hover:shadow-lg dark:hover:shadow-gray-900/70 transition-shadow cursor-pointer">
                   <div className="text-4xl mb-4">🔌</div>
-                  <h2 className="text-xl font-semibold mb-2">Connection</h2>
-                  <p className="text-gray-600">
+                  <h2 className="text-xl font-semibold mb-2 text-gray-900 dark:text-white">Connection</h2>
+                  <p className="text-gray-600 dark:text-gray-400">
                     View schema, refresh metadata, or upgrade mode.
                   </p>
                 </div>
@@ -668,12 +657,12 @@ export default function DashboardPage() {
             <ConnectToolsSection className="mt-8" />
 
             {/* Read-Only Notice */}
-            <div className="mt-8 bg-emerald-50 border border-emerald-200 rounded-lg p-4">
+            <div className="mt-8 bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-800 rounded-lg p-4">
               <div className="flex items-start space-x-3">
-                <span className="text-emerald-600 text-xl">🛡️</span>
+                <span className="text-emerald-600 dark:text-emerald-400 text-xl">🛡️</span>
                 <div>
-                  <h4 className="font-semibold text-emerald-800">Read-Only Mode</h4>
-                  <p className="text-sm text-emerald-700">
+                  <h4 className="font-semibold text-emerald-800 dark:text-emerald-300">Read-Only Mode</h4>
+                  <p className="text-sm text-emerald-700 dark:text-emerald-400">
                     Your data is safe. This connection only allows SELECT queries - no modifications to your database.
                   </p>
                 </div>
@@ -685,12 +674,12 @@ export default function DashboardPage() {
           <div>
             <div className="flex justify-between items-center mb-8">
               <div>
-                <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-                <p className="text-gray-600">Manage your inventory with {APP_METADATA.NAME}</p>
+                <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Dashboard</h1>
+                <p className="text-gray-600 dark:text-gray-400">Manage your inventory with {APP_METADATA.NAME}</p>
               </div>
               <button
                 onClick={handleDisconnect}
-                className="text-gray-600 hover:text-gray-900 font-medium"
+                className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white font-medium"
               >
                 Change Service
               </button>
@@ -699,40 +688,40 @@ export default function DashboardPage() {
             {/* Feature Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
               <Link href={ROUTES.ADMIN}>
-                <div className="bg-white rounded-xl shadow-md p-6 hover:shadow-lg transition-shadow cursor-pointer">
+                <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md dark:shadow-gray-900/50 p-6 hover:shadow-lg dark:hover:shadow-gray-900/70 transition-shadow cursor-pointer">
                   <div className="text-4xl mb-4">📦</div>
-                  <h2 className="text-xl font-semibold mb-2">Inventory Admin</h2>
-                  <p className="text-gray-600">
+                  <h2 className="text-xl font-semibold mb-2 text-gray-900 dark:text-white">Inventory Admin</h2>
+                  <p className="text-gray-600 dark:text-gray-400">
                     Manage items, categories, and stock levels.
                   </p>
                 </div>
               </Link>
 
               <Link href={ROUTES.POS}>
-                <div className="bg-white rounded-xl shadow-md p-6 hover:shadow-lg transition-shadow cursor-pointer">
+                <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md dark:shadow-gray-900/50 p-6 hover:shadow-lg dark:hover:shadow-gray-900/70 transition-shadow cursor-pointer">
                   <div className="text-4xl mb-4">💳</div>
-                  <h2 className="text-xl font-semibold mb-2">Point of Sale</h2>
-                  <p className="text-gray-600">
+                  <h2 className="text-xl font-semibold mb-2 text-gray-900 dark:text-white">Point of Sale</h2>
+                  <p className="text-gray-600 dark:text-gray-400">
                     Process sales and generate invoices.
                   </p>
                 </div>
               </Link>
 
               <Link href={ROUTES.ANALYTICS}>
-                <div className="bg-white rounded-xl shadow-md p-6 hover:shadow-lg transition-shadow cursor-pointer">
+                <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md dark:shadow-gray-900/50 p-6 hover:shadow-lg dark:hover:shadow-gray-900/70 transition-shadow cursor-pointer">
                   <div className="text-4xl mb-4">📊</div>
-                  <h2 className="text-xl font-semibold mb-2">AI Analytics</h2>
-                  <p className="text-gray-600">
+                  <h2 className="text-xl font-semibold mb-2 text-gray-900 dark:text-white">AI Analytics</h2>
+                  <p className="text-gray-600 dark:text-gray-400">
                     Ask questions and get smart visualizations.
                   </p>
                 </div>
               </Link>
 
               <Link href={ROUTES.DB_CONNECT}>
-                <div className="bg-white rounded-xl shadow-md p-6 hover:shadow-lg transition-shadow cursor-pointer border-2 border-dashed border-gray-300">
+                <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md dark:shadow-gray-900/50 p-6 hover:shadow-lg dark:hover:shadow-gray-900/70 transition-shadow cursor-pointer border-2 border-dashed border-gray-300 dark:border-gray-600">
                   <div className="text-4xl mb-4">🔌</div>
-                  <h2 className="text-xl font-semibold mb-2">Connect Own DB</h2>
-                  <p className="text-gray-600">
+                  <h2 className="text-xl font-semibold mb-2 text-gray-900 dark:text-white">Connect Own DB</h2>
+                  <p className="text-gray-600 dark:text-gray-400">
                     Switch to your own PostgreSQL database.
                   </p>
                 </div>

@@ -15,6 +15,7 @@ import Script from 'next/script';
 import { ROUTES, APP_METADATA, API_BASE_URL } from '@/lib/constants';
 import { useAuth } from '@/lib/auth-context';
 import { getAccessToken } from '@/lib/auth-api';
+import { ThemeToggle } from '@/components/theme-toggle';
 import ErrorBoundary from '@/components/shared/ErrorBoundary';
 import {
   BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
@@ -437,15 +438,15 @@ export default function DashboardAnalyticsPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 dark:border-blue-400"></div>
       </div>
     );
   }
 
   return (
     <ErrorBoundary>
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
         {/* Load ChatKit */}
         <Script
           src="https://cdn.platform.openai.com/deployments/chatkit/chatkit.js"
@@ -454,36 +455,37 @@ export default function DashboardAnalyticsPage() {
         />
 
         {/* Header */}
-        <header className="bg-white shadow-sm">
+        <header className="bg-white dark:bg-gray-800 shadow-sm dark:shadow-gray-900/50">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
             <div className="flex items-center space-x-6">
               <Link href={ROUTES.DASHBOARD} className="flex items-center space-x-3">
-                <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
+                <div className="w-10 h-10 bg-blue-600 dark:bg-blue-500 rounded-lg flex items-center justify-center">
                   <span className="text-white text-xl font-bold">S</span>
                 </div>
-                <span className="text-xl font-bold text-gray-900">{APP_METADATA.NAME}</span>
+                <span className="text-xl font-bold text-gray-900 dark:text-white">{APP_METADATA.NAME}</span>
               </Link>
               <nav className="hidden md:flex space-x-4">
                 {!isOwnDatabase && (
                   <>
-                    <Link href={ROUTES.ADMIN} className="text-gray-600 hover:text-gray-900">Admin</Link>
-                    <Link href={ROUTES.POS} className="text-gray-600 hover:text-gray-900">POS</Link>
+                    <Link href={ROUTES.ADMIN} className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white">Admin</Link>
+                    <Link href={ROUTES.POS} className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white">POS</Link>
                   </>
                 )}
-                <Link href={ROUTES.ANALYTICS} className="text-blue-600 font-medium">Analytics</Link>
+                <Link href={ROUTES.ANALYTICS} className="text-blue-600 dark:text-blue-400 font-medium">Analytics</Link>
                 {isOwnDatabase && (
-                  <Link href={ROUTES.DB_CONNECT} className="text-gray-600 hover:text-gray-900">Connection</Link>
+                  <Link href={ROUTES.DB_CONNECT} className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white">Connection</Link>
                 )}
               </nav>
             </div>
             <div className="flex items-center space-x-4">
               {isOwnDatabase && (
-                <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
+                <span className="px-2 py-1 bg-blue-100 dark:bg-blue-900/50 text-blue-800 dark:text-blue-300 text-xs rounded-full">
                   Your Database
                 </span>
               )}
-              <span className="text-gray-600 text-sm">{user?.email}</span>
-              <button onClick={logout} className="text-gray-600 hover:text-gray-900 text-sm">
+              <span className="text-gray-600 dark:text-gray-300 text-sm">{user?.email}</span>
+              <ThemeToggle />
+              <button onClick={logout} className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm">
                 Logout
               </button>
             </div>

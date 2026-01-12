@@ -131,15 +131,15 @@ export default function SystemToolsList({ onToolClick, showBeta = true }: System
   if (loading) {
     return (
       <div className="flex items-center justify-center p-8">
-        <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
-        <span className="ml-2 text-gray-500">Loading tools...</span>
+        <Loader2 className="h-6 w-6 animate-spin text-gray-400 dark:text-gray-500" />
+        <span className="ml-2 text-gray-500 dark:text-gray-400">Loading tools...</span>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="flex items-center justify-center p-8 text-red-500">
+      <div className="flex items-center justify-center p-8 text-red-500 dark:text-red-400">
         <AlertCircle className="h-5 w-5 mr-2" />
         <span>{error}</span>
         <button
@@ -166,7 +166,7 @@ export default function SystemToolsList({ onToolClick, showBeta = true }: System
     <div className="space-y-6">
       {Object.entries(groupedTools).map(([category, categoryTools]) => (
         <div key={category}>
-          <h3 className="text-sm font-medium text-gray-500 mb-3">
+          <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-3">
             {categoryLabels[category] || category}
           </h3>
           <div className="space-y-2">
@@ -186,7 +186,7 @@ export default function SystemToolsList({ onToolClick, showBeta = true }: System
       ))}
 
       {tools.length === 0 && (
-        <div className="text-center text-gray-500 py-8">
+        <div className="text-center text-gray-500 dark:text-gray-400 py-8">
           No system tools available
         </div>
       )}
@@ -213,8 +213,8 @@ function ToolCard({ tool, onClick, onConnect, onDisconnect, loading, connectedEm
       className={`
         flex items-center p-4 rounded-lg border transition-colors
         ${tool.is_enabled && !tool.is_beta
-          ? 'bg-white border-gray-200 hover:border-blue-300'
-          : 'bg-gray-50 border-gray-200 opacity-60'
+          ? 'bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600 hover:border-blue-300 dark:hover:border-blue-500'
+          : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 opacity-60'
         }
       `}
     >
@@ -222,12 +222,12 @@ function ToolCard({ tool, onClick, onConnect, onDisconnect, loading, connectedEm
       <div
         className={`
           flex items-center justify-center w-10 h-10 rounded-lg mr-4
-          ${tool.is_connected ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-500'}
+          ${tool.is_connected ? 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400' : 'bg-gray-100 dark:bg-gray-600 text-gray-500 dark:text-gray-400'}
           ${isClickable ? 'cursor-pointer' : ''}
         `}
         onClick={isClickable ? onClick : undefined}
       >
-        {iconMap[tool.icon] || <div className="w-5 h-5 bg-gray-300 rounded" />}
+        {iconMap[tool.icon] || <div className="w-5 h-5 bg-gray-300 dark:bg-gray-500 rounded" />}
       </div>
 
       {/* Info */}
@@ -237,38 +237,38 @@ function ToolCard({ tool, onClick, onConnect, onDisconnect, loading, connectedEm
         style={{ cursor: isClickable ? 'pointer' : 'default' }}
       >
         <div className="flex items-center">
-          <h4 className="font-medium text-gray-900">{tool.name}</h4>
+          <h4 className="font-medium text-gray-900 dark:text-white">{tool.name}</h4>
           {tool.is_beta && (
-            <span className="ml-2 px-2 py-0.5 text-xs font-medium bg-yellow-100 text-yellow-800 rounded">
+            <span className="ml-2 px-2 py-0.5 text-xs font-medium bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-400 rounded">
               Coming Soon
             </span>
           )}
         </div>
-        <p className="text-sm text-gray-500 truncate">{tool.description}</p>
+        <p className="text-sm text-gray-500 dark:text-gray-400 truncate">{tool.description}</p>
       </div>
 
       {/* Status & Actions */}
       <div className="flex items-center ml-4 space-x-3">
         {/* Status indicator */}
         {tool.is_beta ? (
-          <span className="text-sm text-gray-400">Beta</span>
+          <span className="text-sm text-gray-400 dark:text-gray-500">Beta</span>
         ) : tool.is_connected ? (
           <div className="flex flex-col items-end">
-            <div className="flex items-center text-green-600">
+            <div className="flex items-center text-green-600 dark:text-green-400">
               <Check className="h-4 w-4 mr-1" />
               <span className="text-sm">Connected</span>
             </div>
             {/* Show connected email for Gmail */}
             {tool.id === 'gmail' && connectedEmail && (
-              <span className="text-xs text-gray-500 mt-0.5">{connectedEmail}</span>
+              <span className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{connectedEmail}</span>
             )}
           </div>
         ) : tool.auth_type === 'none' ? (
-          <div className="flex items-center text-blue-600">
+          <div className="flex items-center text-blue-600 dark:text-blue-400">
             <span className="text-sm">Ready</span>
           </div>
         ) : (
-          <div className="flex items-center text-gray-400">
+          <div className="flex items-center text-gray-400 dark:text-gray-500">
             <X className="h-4 w-4 mr-1" />
             <span className="text-sm">Not connected</span>
           </div>
@@ -278,14 +278,14 @@ function ToolCard({ tool, onClick, onConnect, onDisconnect, loading, connectedEm
         {!tool.is_beta && tool.is_enabled && (
           <>
             {loading ? (
-              <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
+              <Loader2 className="h-4 w-4 animate-spin text-gray-400 dark:text-gray-500" />
             ) : canDisconnect ? (
               <button
                 onClick={(e) => {
                   e.stopPropagation();
                   onDisconnect?.(tool);
                 }}
-                className="flex items-center px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                className="flex items-center px-3 py-1.5 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors"
                 title="Disconnect"
               >
                 <Unlink className="h-4 w-4 mr-1" />
@@ -299,7 +299,7 @@ function ToolCard({ tool, onClick, onConnect, onDisconnect, loading, connectedEm
                     e.stopPropagation();
                     onConnect?.(tool);
                   }}
-                  className="flex items-center px-4 py-2 text-sm font-medium text-white bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors shadow-sm"
+                  className="flex items-center px-4 py-2 text-sm font-medium bg-white dark:bg-gray-600 border border-gray-300 dark:border-gray-500 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-500 transition-colors shadow-sm"
                   title="Sign in with Google"
                 >
                   {/* Google Logo */}
@@ -321,7 +321,7 @@ function ToolCard({ tool, onClick, onConnect, onDisconnect, loading, connectedEm
                       d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
                     />
                   </svg>
-                  <span className="text-gray-700">Sign in with Google</span>
+                  <span className="text-gray-700 dark:text-gray-200">Sign in with Google</span>
                 </button>
               ) : (
                 <button
@@ -329,7 +329,7 @@ function ToolCard({ tool, onClick, onConnect, onDisconnect, loading, connectedEm
                     e.stopPropagation();
                     onConnect?.(tool);
                   }}
-                  className="flex items-center px-3 py-1.5 text-sm text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                  className="flex items-center px-3 py-1.5 text-sm text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition-colors"
                   title="Connect"
                 >
                   <Link className="h-4 w-4 mr-1" />
