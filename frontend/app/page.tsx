@@ -445,13 +445,13 @@ function UnifiedChatPanel() {
       <div className="relative" ref={panelRef}>
         <div className="absolute -inset-2 bg-gradient-to-r from-emerald-500/20 via-cyan-500/20 to-blue-500/20 rounded-3xl blur-2xl" />
 
-        <div className="relative bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden">
+        <div className="relative bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl overflow-hidden">
           {/* Animated Cursor for auto-tour - always visible when in view */}
           {isInView && (
             <AnimatedCursor x={cursorPos.x} y={cursorPos.y} clicking={cursorClicking} />
           )}
           {/* Header with Tool Selector */}
-          <div className="bg-gray-900/90 backdrop-blur-sm border-b border-gray-800 px-4 py-3">
+          <div className="bg-gray-50 dark:bg-gray-900/90 backdrop-blur-sm border-b border-gray-200 dark:border-gray-800 px-4 py-3">
             <div className="flex items-center justify-between">
               {/* Left: Tool selector or brand */}
               <div className="flex items-center space-x-3">
@@ -461,7 +461,7 @@ function UnifiedChatPanel() {
                       <selectedTool.icon className="w-5 h-5 text-white" />
                     </div>
                     <div>
-                      <h3 className="text-sm font-semibold text-white">{selectedTool.name}</h3>
+                      <h3 className="text-sm font-semibold">{selectedTool.name}</h3>
                       <p className="text-xs text-gray-500">AI-powered integration</p>
                     </div>
                   </>
@@ -471,7 +471,7 @@ function UnifiedChatPanel() {
                       <Sparkles className="w-5 h-5 text-white" />
                     </div>
                     <div>
-                      <h3 className="text-sm font-semibold text-white">AI Agent</h3>
+                      <h3 className="text-sm font-semibold">AI Agent</h3>
                       <p className="text-xs text-gray-500">Select a tool to see demo</p>
                     </div>
                   </>
@@ -484,11 +484,11 @@ function UnifiedChatPanel() {
                 <div className="relative">
                   <button
                     ref={toolsButtonRef}
-                    className="flex items-center space-x-2 bg-gray-800 hover:bg-gray-750 border border-gray-700 rounded-xl px-3 py-2 transition-colors pointer-events-none"
+                    className="flex items-center space-x-2 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-750 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2 transition-colors pointer-events-none"
                   >
-                    <Plus className="w-4 h-4 text-gray-400" />
-                    <span className="text-sm text-gray-300">Tools</span>
-                    <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${showToolSelector ? 'rotate-180' : ''}`} />
+                    <Plus className="w-4 h-4 text-gray-500 dark:text-gray-400" />
+                    <span className="text-sm text-gray-700 dark:text-gray-300">Tools</span>
+                    <ChevronDown className={`w-4 h-4 text-gray-500 dark:text-gray-400 transition-transform ${showToolSelector ? 'rotate-180' : ''}`} />
                   </button>
 
                   {/* Dropdown Menu */}
@@ -499,7 +499,7 @@ function UnifiedChatPanel() {
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: -10, scale: 0.95 }}
                         transition={{ duration: 0.15 }}
-                        className="absolute right-0 top-full mt-2 w-64 bg-gray-800 border border-gray-700 rounded-xl shadow-2xl z-50 overflow-hidden"
+                        className="absolute right-0 top-full mt-2 w-64 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-2xl z-50 overflow-hidden"
                       >
                         <div className="p-2">
                           <p className="text-xs text-gray-500 px-2 py-1 mb-1">Select a tool to demo</p>
@@ -509,18 +509,18 @@ function UnifiedChatPanel() {
                               className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg transition-colors pointer-events-none ${
                                 selectedTool?.id === tool.id
                                   ? 'bg-emerald-500/20 border border-emerald-500/30'
-                                  : 'hover:bg-gray-700/50'
+                                  : 'hover:bg-gray-100 dark:hover:bg-gray-700/50'
                               }`}
                             >
                               <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${tool.color} flex items-center justify-center`}>
                                 <tool.icon className="w-4 h-4 text-white" />
                               </div>
                               <div className="text-left flex-1">
-                                <p className="text-sm font-medium text-white">{tool.name}</p>
+                                <p className="text-sm font-medium">{tool.name}</p>
                                 <p className="text-xs text-gray-500 truncate">{tool.description.slice(0, 35)}...</p>
                               </div>
                               {selectedTool?.id === tool.id && (
-                                <Check className="w-4 h-4 text-emerald-400" />
+                                <Check className="w-4 h-4 text-emerald-500 dark:text-emerald-400" />
                               )}
                             </div>
                           ))}
@@ -540,10 +540,10 @@ function UnifiedChatPanel() {
                 {selectedTool && demoState === 'complete' && (
                   <button
                     onClick={resetToSelection}
-                    className="p-2 hover:bg-gray-800 rounded-lg transition-colors"
+                    className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
                     title="Try another tool"
                   >
-                    <X className="w-4 h-4 text-gray-400" />
+                    <X className="w-4 h-4 text-gray-500 dark:text-gray-400" />
                   </button>
                 )}
               </div>
@@ -553,7 +553,7 @@ function UnifiedChatPanel() {
           {/* Chat Area */}
           <div
             ref={chatRef}
-            className="h-[380px] overflow-y-auto p-6 space-y-4 bg-[#0a0a0f]"
+            className="h-[380px] overflow-y-auto p-6 space-y-4 bg-gray-50 dark:bg-[#0a0a0f]"
             style={{
               backgroundImage: 'radial-gradient(circle at 50% 0%, rgba(16, 185, 129, 0.04) 0%, transparent 50%)'
             }}
@@ -568,7 +568,7 @@ function UnifiedChatPanel() {
                 >
                   <Sparkles className="w-8 h-8 text-white" />
                 </motion.div>
-                <h4 className="text-white font-semibold text-lg mb-2">Try Our Integrations</h4>
+                <h4 className="font-semibold text-lg mb-2">Try Our Integrations</h4>
                 <p className="text-gray-500 text-sm mb-6 max-w-sm leading-relaxed">
                   Select a tool from the dropdown above or click one below to see how our AI agent works with your favorite services.
                 </p>
@@ -578,12 +578,12 @@ function UnifiedChatPanel() {
                   {toolDemos.map((tool) => (
                     <div
                       key={tool.id}
-                      className={`flex items-center space-x-2 px-4 py-2 bg-gray-800/80 border border-gray-700/50 rounded-xl`}
+                      className={`flex items-center space-x-2 px-4 py-2 bg-gray-100 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700/50 rounded-xl`}
                     >
                       <div className={`w-6 h-6 rounded-lg bg-gradient-to-br ${tool.color} flex items-center justify-center`}>
                         <tool.icon className="w-3.5 h-3.5 text-white" />
                       </div>
-                      <span className="text-sm text-gray-300">{tool.name.split(' ')[0]}</span>
+                      <span className="text-sm text-gray-700 dark:text-gray-300">{tool.name.split(' ')[0]}</span>
                     </div>
                   ))}
                 </div>
@@ -619,7 +619,7 @@ function UnifiedChatPanel() {
                     <div className={`w-9 h-9 rounded-full bg-gradient-to-br ${selectedTool.color} flex items-center justify-center flex-shrink-0 shadow-lg`}>
                       <Bot className="w-4.5 h-4.5 text-white" />
                     </div>
-                    <div className="bg-gray-800/90 backdrop-blur-sm rounded-2xl rounded-bl-md px-4 py-3 border border-gray-700/50">
+                    <div className="bg-gray-100 dark:bg-gray-800/90 backdrop-blur-sm rounded-2xl rounded-bl-md px-4 py-3 border border-gray-200 dark:border-gray-700/50">
                       <div className="flex items-center space-x-3">
                         <div className="flex space-x-1">
                           {[0, 1, 2].map(i => (
@@ -638,7 +638,7 @@ function UnifiedChatPanel() {
                             />
                           ))}
                         </div>
-                        <span className="text-xs text-gray-400 font-medium">
+                        <span className="text-xs text-gray-600 dark:text-gray-400 font-medium">
                           {selectedTool.demo.steps[currentStep]}
                         </span>
                       </div>
@@ -657,7 +657,7 @@ function UnifiedChatPanel() {
                       <Bot className="w-4.5 h-4.5 text-white" />
                     </div>
                     <div className="flex-1 max-w-[85%]">
-                      <div className="bg-gray-800/90 backdrop-blur-sm rounded-2xl rounded-bl-md px-4 py-3 border border-gray-700/50">
+                      <div className="bg-gray-100 dark:bg-gray-800/90 backdrop-blur-sm rounded-2xl rounded-bl-md px-4 py-3 border border-gray-200 dark:border-gray-700/50">
                         <DemoMarkdown
                           content={streamedResponse}
                           isStreaming={demoState === 'streaming'}
@@ -674,13 +674,13 @@ function UnifiedChatPanel() {
                         >
                           <button
                             onClick={copyResponse}
-                            className="flex items-center space-x-1 text-[10px] text-gray-500 hover:text-gray-300 transition-colors px-2 py-1 rounded-md hover:bg-gray-800/50"
+                            className="flex items-center space-x-1 text-[10px] text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition-colors px-2 py-1 rounded-md hover:bg-gray-200/50 dark:hover:bg-gray-800/50"
                           >
                             {copied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
                             <span>{copied ? 'Copied!' : 'Copy'}</span>
                           </button>
-                          <span className="text-gray-700">•</span>
-                          <span className="text-[10px] text-gray-600">Just now</span>
+                          <span className="text-gray-400 dark:text-gray-700">•</span>
+                          <span className="text-[10px] text-gray-500 dark:text-gray-600">Just now</span>
                         </motion.div>
                       )}
                     </div>
@@ -691,19 +691,19 @@ function UnifiedChatPanel() {
           </div>
 
           {/* Input Area */}
-          <div className="border-t border-gray-800 p-4 bg-gray-900/90 backdrop-blur-sm">
+          <div className="border-t border-gray-200 dark:border-gray-800 p-4 bg-gray-50 dark:bg-gray-900/90 backdrop-blur-sm">
             <div className="flex items-center space-x-3">
               {/* Tool quick-select in input */}
               {selectedTool && (
-                <div className={`flex items-center space-x-1.5 px-2.5 py-1.5 rounded-lg bg-gradient-to-r ${selectedTool.color} bg-opacity-20 border border-gray-700/50`}>
+                <div className={`flex items-center space-x-1.5 px-2.5 py-1.5 rounded-lg bg-gradient-to-r ${selectedTool.color} bg-opacity-20 border border-gray-200 dark:border-gray-700/50`}>
                   <selectedTool.icon className="w-3.5 h-3.5 text-white/80" />
                   <span className="text-xs text-white/80 font-medium">{selectedTool.name.split(' ')[0]}</span>
                 </div>
               )}
 
-              <div className="flex-1 bg-gray-800/80 rounded-xl px-4 py-3 min-h-[48px] flex items-center border border-gray-700/50">
+              <div className="flex-1 bg-gray-100 dark:bg-gray-800/80 rounded-xl px-4 py-3 min-h-[48px] flex items-center border border-gray-200 dark:border-gray-700/50">
                 {demoState === 'typing_in_input' && selectedTool ? (
-                  <span className="text-white text-sm">
+                  <span className="text-gray-900 dark:text-white text-sm">
                     {inputText}
                     <motion.span
                       className="inline-block w-0.5 h-4 bg-emerald-400 ml-0.5 align-middle rounded-full"
@@ -722,7 +722,7 @@ function UnifiedChatPanel() {
                 className={`p-3 rounded-xl transition-all ${
                   demoState === 'typing_in_input' && inputText.length > 0
                     ? 'bg-gradient-to-r from-emerald-500 to-cyan-500 text-white shadow-lg'
-                    : 'bg-gray-800 text-gray-500 border border-gray-700/50'
+                    : 'bg-gray-100 dark:bg-gray-800 text-gray-500 border border-gray-200 dark:border-gray-700/50'
                 }`}
                 animate={demoState === 'typing_in_input' && inputText.length > 0 ? { scale: [1, 1.05, 1] } : {}}
               >
@@ -739,7 +739,7 @@ function UnifiedChatPanel() {
               >
                 <button
                   onClick={resetToSelection}
-                  className="flex items-center space-x-2 text-sm text-gray-400 hover:text-white transition-colors px-4 py-2 rounded-xl hover:bg-gray-800/50"
+                  className="flex items-center space-x-2 text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-white transition-colors px-4 py-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800/50"
                 >
                   <RotateCcw className="w-4 h-4" />
                   <span>Try Another Tool</span>
@@ -758,7 +758,7 @@ function UnifiedChatPanel() {
             className={`flex items-center space-x-2 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
               selectedTool?.id === tool.id
                 ? `bg-gradient-to-r ${tool.color} text-white shadow-lg`
-                : 'bg-gray-800/60 text-gray-400 border border-gray-700/50'
+                : 'bg-gray-100 dark:bg-gray-800/60 text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700/50'
             }`}
           >
             <tool.icon className="w-3.5 h-3.5" />
@@ -773,7 +773,7 @@ function UnifiedChatPanel() {
         animate={{ opacity: 1 }}
         className="flex justify-center mt-4"
       >
-        <div className="flex items-center space-x-2 text-xs text-gray-500 bg-gray-800/50 px-3 py-1.5 rounded-full">
+        <div className="flex items-center space-x-2 text-xs text-gray-500 bg-gray-100 dark:bg-gray-800/50 px-3 py-1.5 rounded-full border border-gray-200 dark:border-transparent">
           <motion.div
             className="w-2 h-2 bg-emerald-400 rounded-full"
             animate={{ opacity: [0.5, 1, 0.5] }}
@@ -919,7 +919,7 @@ function HeroDemoVideo() {
         <div className="absolute -inset-3 bg-gradient-to-r from-emerald-500/30 via-cyan-500/25 to-blue-500/30 rounded-2xl blur-2xl" />
 
         {/* Screen */}
-        <div className="relative bg-[#0a0a0f] border border-gray-700/50 rounded-2xl overflow-hidden shadow-2xl">
+        <div className="relative bg-white dark:bg-[#0a0a0f] border border-gray-200 dark:border-gray-700/50 rounded-2xl overflow-hidden shadow-2xl">
           {/* Chat Area */}
           <div
             ref={chatRef}
@@ -949,7 +949,7 @@ function HeroDemoVideo() {
                       animate={{ opacity: [0.3, 1, 0.3] }}
                       transition={{ duration: 1, repeat: Infinity }}
                     />
-                    <span className="text-gray-400 text-sm">Connecting to PostgreSQL...</span>
+                    <span className="text-gray-600 dark:text-gray-400 text-sm">Connecting to PostgreSQL...</span>
                   </div>
                 </div>
               </motion.div>
@@ -965,12 +965,12 @@ function HeroDemoVideo() {
                 <div className="w-9 h-9 rounded-full bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center flex-shrink-0 shadow-lg shadow-emerald-500/20">
                   <Bot className="w-4 h-4 text-white" />
                 </div>
-                <div className="bg-gray-800/70 rounded-2xl rounded-bl-md px-4 py-3 max-w-[85%]">
+                <div className="bg-gray-100 dark:bg-gray-800/70 rounded-2xl rounded-bl-md px-4 py-3 max-w-[85%]">
                   <div className="flex items-center space-x-2 mb-1">
-                    <span className="w-2 h-2 bg-emerald-400 rounded-full" />
-                    <span className="text-xs text-emerald-400 font-medium">Connected to PostgreSQL</span>
+                    <span className="w-2 h-2 bg-emerald-500 dark:bg-emerald-400 rounded-full" />
+                    <span className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">Connected to PostgreSQL</span>
                   </div>
-                  <p className="text-sm text-gray-300">
+                  <p className="text-sm text-gray-700 dark:text-gray-300">
                     Database ready! Ask me anything about your inventory.
                   </p>
                 </div>
@@ -992,9 +992,9 @@ function HeroDemoVideo() {
                 )}
                 <div className={msg.type === 'user'
                   ? 'max-w-[85%] bg-blue-600 text-white rounded-2xl rounded-br-md px-4 py-3 text-sm shadow-lg shadow-blue-600/20'
-                  : 'max-w-[85%] bg-gray-800/70 rounded-2xl rounded-bl-md px-4 py-3'
+                  : 'max-w-[85%] bg-gray-100 dark:bg-gray-800/70 rounded-2xl rounded-bl-md px-4 py-3'
                 }>
-                  <p className={`text-sm whitespace-pre-wrap leading-relaxed ${msg.type === 'bot' ? 'text-gray-100' : ''}`}>
+                  <p className={`text-sm whitespace-pre-wrap leading-relaxed ${msg.type === 'bot' ? 'text-gray-700 dark:text-gray-100' : ''}`}>
                     {msg.text}
                   </p>
                 </div>
@@ -1012,13 +1012,13 @@ function HeroDemoVideo() {
                 <div className="w-9 h-9 rounded-full bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center flex-shrink-0 shadow-lg shadow-emerald-500/20">
                   <Bot className="w-4 h-4 text-white" />
                 </div>
-                <div className="bg-gray-800/70 rounded-2xl rounded-bl-md px-4 py-3">
+                <div className="bg-gray-100 dark:bg-gray-800/70 rounded-2xl rounded-bl-md px-4 py-3">
                   <div className="flex items-center space-x-2">
                     <div className="flex space-x-1">
                       {[0, 1, 2].map(i => (
                         <motion.span
                           key={i}
-                          className="w-2 h-2 bg-emerald-400 rounded-full"
+                          className="w-2 h-2 bg-emerald-500 dark:bg-emerald-400 rounded-full"
                           animate={{
                             scale: [1, 1.3, 1],
                             opacity: [0.5, 1, 0.5]
@@ -1031,7 +1031,7 @@ function HeroDemoVideo() {
                         />
                       ))}
                     </div>
-                    <span className="text-xs text-gray-400">{currentQuery.steps[currentStep]}</span>
+                    <span className="text-xs text-gray-600 dark:text-gray-400">{currentQuery.steps[currentStep]}</span>
                   </div>
                 </div>
               </motion.div>
@@ -1047,11 +1047,11 @@ function HeroDemoVideo() {
                 <div className="w-9 h-9 rounded-full bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center flex-shrink-0 shadow-lg shadow-emerald-500/20">
                   <Bot className="w-4 h-4 text-white" />
                 </div>
-                <div className="max-w-[85%] bg-gray-800/70 rounded-2xl rounded-bl-md px-4 py-3">
-                  <div className="text-sm text-gray-100 whitespace-pre-wrap leading-relaxed">
+                <div className="max-w-[85%] bg-gray-100 dark:bg-gray-800/70 rounded-2xl rounded-bl-md px-4 py-3">
+                  <div className="text-sm text-gray-700 dark:text-gray-100 whitespace-pre-wrap leading-relaxed">
                     {streamedResponse}
                     <motion.span
-                      className="inline-block w-0.5 h-4 bg-emerald-400 ml-0.5 align-middle rounded-full"
+                      className="inline-block w-0.5 h-4 bg-emerald-500 dark:bg-emerald-400 ml-0.5 align-middle rounded-full"
                       animate={{ opacity: [1, 0, 1] }}
                       transition={{ duration: 0.8, repeat: Infinity }}
                     />
@@ -1062,14 +1062,14 @@ function HeroDemoVideo() {
           </div>
 
           {/* Input Area - Shows typing animation */}
-          <div className="border-t border-gray-800/50 p-3 sm:p-4 bg-gray-900/60">
+          <div className="border-t border-gray-200 dark:border-gray-800/50 p-3 sm:p-4 bg-gray-50 dark:bg-gray-900/60">
             <div className="flex items-center space-x-3">
-              <div className="flex-1 bg-gray-800/90 rounded-xl px-4 py-3 min-h-[44px] flex items-center">
+              <div className="flex-1 bg-gray-100 dark:bg-gray-800/90 rounded-xl px-4 py-3 min-h-[44px] flex items-center">
                 {phase === 'typing' && inputText ? (
-                  <span className="text-white text-sm">
+                  <span className="text-gray-900 dark:text-white text-sm">
                     {inputText}
                     <motion.span
-                      className="inline-block w-0.5 h-4 bg-emerald-400 ml-0.5 align-middle rounded-full"
+                      className="inline-block w-0.5 h-4 bg-emerald-500 dark:bg-emerald-400 ml-0.5 align-middle rounded-full"
                       animate={{ opacity: [1, 0, 1] }}
                       transition={{ duration: 0.5, repeat: Infinity }}
                     />
@@ -1082,7 +1082,7 @@ function HeroDemoVideo() {
                 className={`p-3 rounded-xl transition-all ${
                   phase === 'typing' && inputText.length > 0
                     ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30'
-                    : 'bg-gray-800 text-gray-500'
+                    : 'bg-gray-200 dark:bg-gray-800 text-gray-500'
                 }`}
                 animate={phase === 'typing' && inputText.length > 0 ? { scale: [1, 1.05, 1] } : {}}
                 transition={{ duration: 0.3 }}
@@ -1127,7 +1127,7 @@ function StatCounter({ value, label, suffix = '' }: { value: number; label: stri
       <div className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent">
         {count}{suffix}
       </div>
-      <div className="text-gray-400 mt-2">{label}</div>
+      <div className="text-gray-600 dark:text-gray-400 mt-2">{label}</div>
     </div>
   );
 }
@@ -1147,7 +1147,7 @@ export default function Home() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gray-950 flex items-center justify-center">
+      <div className="min-h-screen bg-white dark:bg-gray-950 flex items-center justify-center">
         <motion.div
           className="w-12 h-12 border-4 border-emerald-500 border-t-transparent rounded-full"
           animate={{ rotate: 360 }}
@@ -1482,8 +1482,8 @@ export default function Home() {
                     transition={{ delay: i * 0.1 }}
                     className="flex items-center space-x-3"
                   >
-                    <CheckCircle className="w-5 h-5 text-emerald-400 flex-shrink-0" />
-                    <span className="text-gray-300">{item}</span>
+                    <CheckCircle className="w-5 h-5 text-emerald-500 dark:text-emerald-400 flex-shrink-0" />
+                    <span className="text-gray-700 dark:text-gray-300">{item}</span>
                   </motion.li>
                 ))}
               </ul>
@@ -1507,14 +1507,14 @@ export default function Home() {
               className="relative"
             >
               <div className="absolute -inset-4 bg-gradient-to-r from-emerald-500/20 to-cyan-500/20 rounded-3xl blur-2xl" />
-              <div className="relative bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden">
+              <div className="relative bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl overflow-hidden">
                 {/* Calendar Header */}
-                <div className="bg-gray-800/50 px-6 py-4 border-b border-gray-700 flex items-center justify-between">
+                <div className="bg-gray-50 dark:bg-gray-800/50 px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
                   <div className="flex items-center space-x-3">
-                    <Calendar className="w-5 h-5 text-emerald-400" />
+                    <Calendar className="w-5 h-5 text-emerald-500 dark:text-emerald-400" />
                     <span className="font-medium">Schedule Task</span>
                   </div>
-                  <span className="text-sm text-gray-400">January 2026</span>
+                  <span className="text-sm text-gray-600 dark:text-gray-400">January 2026</span>
                 </div>
 
                 {/* Mock Calendar Grid - January 2026 starts on Thursday (offset 4) */}
@@ -1534,10 +1534,10 @@ export default function Home() {
                         <motion.div
                           key={i}
                           className={`text-center py-2 rounded-lg text-sm ${
-                            !isValid ? 'text-gray-700' :
+                            !isValid ? 'text-gray-300 dark:text-gray-700' :
                             isSelected ? 'bg-emerald-500 text-white font-medium' :
-                            hasTask ? 'bg-emerald-500/20 text-emerald-400' :
-                            'text-gray-400 hover:bg-gray-800'
+                            hasTask ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400' :
+                            'text-gray-700 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
                           } ${isValid ? 'cursor-pointer' : ''}`}
                           whileHover={isValid && !isSelected ? { scale: 1.1 } : {}}
                         >
@@ -1548,156 +1548,24 @@ export default function Home() {
                   </div>
 
                   {/* Time Selection */}
-                  <div className="border-t border-gray-800 pt-4 mt-4">
+                  <div className="border-t border-gray-200 dark:border-gray-800 pt-4 mt-4">
                     <div className="flex items-center justify-between mb-4">
-                      <span className="text-sm text-gray-400">Selected: Jan 15, 2026</span>
-                      <div className="flex items-center space-x-2 bg-gray-800 rounded-lg px-3 py-1.5">
-                        <Clock className="w-4 h-4 text-emerald-400" />
+                      <span className="text-sm text-gray-600 dark:text-gray-400">Selected: Jan 15, 2026</span>
+                      <div className="flex items-center space-x-2 bg-gray-100 dark:bg-gray-800 rounded-lg px-3 py-1.5">
+                        <Clock className="w-4 h-4 text-emerald-500 dark:text-emerald-400" />
                         <span className="text-sm">09:00 AM</span>
                       </div>
                     </div>
 
                     {/* Task Preview */}
-                    <div className="bg-gray-800/50 rounded-xl p-4 border border-gray-700">
+                    <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
                       <div className="flex items-start space-x-3">
                         <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center flex-shrink-0">
                           <Mail className="w-4 h-4 text-white" />
                         </div>
                         <div>
-                          <p className="text-sm font-medium text-white">Weekly Sales Report</p>
-                          <p className="text-xs text-gray-400 mt-1">Repeats every Monday at 9:00 AM</p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </motion.div>
-          </div>
-        </div>
-      </section>
-
-      {/* Schedule Your Tasks Section */}
-      <section id="schedule" className="py-20">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid lg:grid-cols-2 gap-12 items-center">
-            {/* Left: Content */}
-            <motion.div
-              initial={{ opacity: 0, x: -30 }}
-              whileInView={{ opacity: 1, x: 0 }}
-              viewport={{ once: true }}
-            >
-              <div className="inline-flex items-center space-x-2 bg-emerald-500/10 border border-emerald-500/20 rounded-full px-4 py-1.5 mb-6">
-                <Timer className="w-4 h-4 text-emerald-400" />
-                <span className="text-emerald-400 text-sm font-medium">New Feature</span>
-              </div>
-              <h2 className="text-3xl sm:text-4xl font-bold mb-4">
-                Schedule Your <span className="text-emerald-400">Tasks</span>
-              </h2>
-              <p className="text-gray-600 dark:text-gray-400 mb-8 leading-relaxed">
-                Set up automated workflows that run on your schedule. Whether it&apos;s daily inventory reports,
-                weekly sales summaries, or monthly analytics - let the AI handle it while you focus on growing
-                your business.
-              </p>
-              <ul className="space-y-4 mb-8">
-                {[
-                  "Schedule queries for any date and time",
-                  "Set up recurring tasks (daily, weekly, monthly)",
-                  "Receive results via email or in-app notifications",
-                  "Combine multiple tools in scheduled workflows"
-                ].map((item, i) => (
-                  <motion.li
-                    key={i}
-                    initial={{ opacity: 0, x: -20 }}
-                    whileInView={{ opacity: 1, x: 0 }}
-                    viewport={{ once: true }}
-                    transition={{ delay: i * 0.1 }}
-                    className="flex items-center space-x-3"
-                  >
-                    <CheckCircle className="w-5 h-5 text-emerald-400 flex-shrink-0" />
-                    <span className="text-gray-300">{item}</span>
-                  </motion.li>
-                ))}
-              </ul>
-              <Link href={ROUTES.SIGNUP}>
-                <motion.button
-                  className="flex items-center space-x-2 bg-gradient-to-r from-emerald-500 to-cyan-500 text-white px-6 py-3 rounded-xl font-semibold hover:opacity-90 transition-opacity"
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                >
-                  <Calendar className="w-5 h-5" />
-                  <span>Start Scheduling</span>
-                </motion.button>
-              </Link>
-            </motion.div>
-
-            {/* Right: Calendar UI Preview */}
-            <motion.div
-              initial={{ opacity: 0, x: 30 }}
-              whileInView={{ opacity: 1, x: 0 }}
-              viewport={{ once: true }}
-              className="relative"
-            >
-              <div className="absolute -inset-4 bg-gradient-to-r from-emerald-500/20 to-cyan-500/20 rounded-3xl blur-2xl" />
-              <div className="relative bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden">
-                {/* Calendar Header */}
-                <div className="bg-gray-800/50 px-6 py-4 border-b border-gray-700 flex items-center justify-between">
-                  <div className="flex items-center space-x-3">
-                    <Calendar className="w-5 h-5 text-emerald-400" />
-                    <span className="font-medium">Schedule Task</span>
-                  </div>
-                  <span className="text-sm text-gray-400">January 2025</span>
-                </div>
-
-                {/* Mock Calendar Grid */}
-                <div className="p-6">
-                  <div className="grid grid-cols-7 gap-2 mb-4">
-                    {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, i) => (
-                      <div key={i} className="text-center text-xs text-gray-500 font-medium py-2">
-                        {day}
-                      </div>
-                    ))}
-                    {Array.from({ length: 35 }, (_, i) => {
-                      const day = i - 2; // Start offset
-                      const isValid = day >= 1 && day <= 31;
-                      const isSelected = day === 15;
-                      const hasTask = [8, 15, 22, 29].includes(day);
-                      return (
-                        <motion.div
-                          key={i}
-                          className={`text-center py-2 rounded-lg text-sm ${
-                            !isValid ? 'text-gray-700' :
-                            isSelected ? 'bg-emerald-500 text-white font-medium' :
-                            hasTask ? 'bg-emerald-500/20 text-emerald-400' :
-                            'text-gray-400 hover:bg-gray-800'
-                          } ${isValid ? 'cursor-pointer' : ''}`}
-                          whileHover={isValid && !isSelected ? { scale: 1.1 } : {}}
-                        >
-                          {isValid ? day : ''}
-                        </motion.div>
-                      );
-                    })}
-                  </div>
-
-                  {/* Time Selection */}
-                  <div className="border-t border-gray-800 pt-4 mt-4">
-                    <div className="flex items-center justify-between mb-4">
-                      <span className="text-sm text-gray-400">Selected: Jan 15, 2025</span>
-                      <div className="flex items-center space-x-2 bg-gray-800 rounded-lg px-3 py-1.5">
-                        <Clock className="w-4 h-4 text-emerald-400" />
-                        <span className="text-sm">09:00 AM</span>
-                      </div>
-                    </div>
-
-                    {/* Task Preview */}
-                    <div className="bg-gray-800/50 rounded-xl p-4 border border-gray-700">
-                      <div className="flex items-start space-x-3">
-                        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center flex-shrink-0">
-                          <Mail className="w-4 h-4 text-white" />
-                        </div>
-                        <div>
-                          <p className="text-sm font-medium text-white">Weekly Sales Report</p>
-                          <p className="text-xs text-gray-400 mt-1">Repeats every Monday at 9:00 AM</p>
+                          <p className="text-sm font-medium">Weekly Sales Report</p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Repeats every Monday at 9:00 AM</p>
                         </div>
                       </div>
                     </div>
@@ -1710,7 +1578,7 @@ export default function Home() {
       </section>
 
       {/* How It Works Section */}
-      <section className="py-20 bg-gray-900/30">
+      <section className="py-20 bg-gray-50 dark:bg-gray-900/30">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <motion.div
             initial={{ opacity: 0, y: 30 }}
@@ -1739,13 +1607,13 @@ export default function Home() {
                 className="relative text-center"
               >
                 <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-emerald-500/20 to-cyan-500/20 border border-emerald-500/30 flex items-center justify-center">
-                  <item.icon className="w-7 h-7 text-emerald-400" />
+                  <item.icon className="w-7 h-7 text-emerald-500 dark:text-emerald-400" />
                 </div>
                 <div className="text-5xl font-bold text-emerald-500/20 mb-2">{item.step}</div>
                 <h3 className="text-lg font-semibold mb-2">{item.title}</h3>
-                <p className="text-gray-400 text-sm">{item.desc}</p>
+                <p className="text-gray-600 dark:text-gray-400 text-sm">{item.desc}</p>
                 {i < 3 && (
-                  <ChevronRight className="hidden md:block absolute top-10 -right-3 w-6 h-6 text-gray-700" />
+                  <ChevronRight className="hidden md:block absolute top-10 -right-3 w-6 h-6 text-gray-300 dark:text-gray-700" />
                 )}
               </motion.div>
             ))}
