@@ -7,7 +7,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, useInView, AnimatePresence } from 'framer-motion';
 import { ROUTES, APP_METADATA } from '@/lib/constants';
@@ -15,7 +15,7 @@ import { useAuth } from '@/lib/auth-context';
 import {
   Mail, Cloud, FileText, BarChart3, Phone, Sparkles,
   Send, Bot, User, ArrowRight, Play, ChevronRight,
-  Database, Zap, Shield, Clock
+  Database, Zap, Shield, Clock, X, MessageSquare
 } from 'lucide-react';
 
 // Tool Demo Data
@@ -107,37 +107,116 @@ function TypeWriter({ text, speed = 30, onComplete }: { text: string; speed?: nu
   return <span>{displayText}</span>;
 }
 
-// Tool Demo Card Component
-function ToolDemoCard({ tool, index }: { tool: typeof toolDemos[0]; index: number }) {
-  const [isPlaying, setIsPlaying] = useState(false);
+// Tool Demo Card Component - ChatKit-like inline demo (no popup)
+function ToolDemoCard({
+  tool,
+  index,
+}: {
+  tool: typeof toolDemos[0];
+  index: number;
+}) {
+  // Demo states: idle -> typing_in_input -> sent -> thinking -> streaming -> complete
+  const [demoState, setDemoState] = useState<'idle' | 'typing_in_input' | 'sent' | 'thinking' | 'streaming' | 'complete'>('idle');
+  const [inputText, setInputText] = useState(''); // Text in input box
+  const [streamedResponse, setStreamedResponse] = useState('');
   const [currentStep, setCurrentStep] = useState(0);
-  const [showResponse, setShowResponse] = useState(false);
   const ref = useRef(null);
+  const chatRef = useRef<HTMLDivElement>(null);
   const isInView = useInView(ref, { once: true, margin: "-100px" });
 
+  const query = tool.demo.query;
+  const response = tool.demo.response;
+  const steps = tool.demo.steps;
+
+  // Auto-scroll chat area
+  useEffect(() => {
+    if (chatRef.current) {
+      chatRef.current.scrollTop = chatRef.current.scrollHeight;
+    }
+  }, [inputText, streamedResponse, demoState]);
+
+  // Start demo
   const startDemo = () => {
-    setIsPlaying(true);
+    setDemoState('typing_in_input');
+    setInputText('');
+    setStreamedResponse('');
     setCurrentStep(0);
-    setShowResponse(false);
-
-    // Animate through steps
-    tool.demo.steps.forEach((_, i) => {
-      setTimeout(() => {
-        setCurrentStep(i + 1);
-        if (i === tool.demo.steps.length - 1) {
-          setTimeout(() => setShowResponse(true), 500);
-        }
-      }, (i + 1) * 800);
-    });
   };
 
+  // Reset demo
   const resetDemo = () => {
-    setIsPlaying(false);
+    setDemoState('idle');
+    setInputText('');
+    setStreamedResponse('');
     setCurrentStep(0);
-    setShowResponse(false);
   };
+
+  // Phase 1: Typing in input box
+  useEffect(() => {
+    if (demoState !== 'typing_in_input') return;
+
+    let i = 0;
+    const interval = setInterval(() => {
+      if (i < query.length) {
+        setInputText(query.slice(0, i + 1));
+        i++;
+      } else {
+        clearInterval(interval);
+        // Wait then "send" the message
+        setTimeout(() => {
+          setDemoState('sent');
+          // After message appears in chat, start thinking
+          setTimeout(() => {
+            setDemoState('thinking');
+          }, 300);
+        }, 500);
+      }
+    }, 25);
+
+    return () => clearInterval(interval);
+  }, [demoState, query]);
+
+  // Phase 2: Thinking/processing steps
+  useEffect(() => {
+    if (demoState !== 'thinking') return;
+
+    let stepIdx = 0;
+    setCurrentStep(0);
+
+    const stepInterval = setInterval(() => {
+      stepIdx++;
+      if (stepIdx < steps.length) {
+        setCurrentStep(stepIdx);
+      } else {
+        clearInterval(stepInterval);
+        // Start streaming after all thinking steps
+        setTimeout(() => setDemoState('streaming'), 400);
+      }
+    }, 700);
+
+    return () => clearInterval(stepInterval);
+  }, [demoState, steps.length]);
+
+  // Phase 3: Streaming response
+  useEffect(() => {
+    if (demoState !== 'streaming') return;
+
+    let i = 0;
+    const interval = setInterval(() => {
+      if (i < response.length) {
+        setStreamedResponse(response.slice(0, i + 1));
+        i++;
+      } else {
+        clearInterval(interval);
+        setDemoState('complete');
+      }
+    }, 10);
+
+    return () => clearInterval(interval);
+  }, [demoState, response]);
 
   const Icon = tool.icon;
+  const showMessageInChat = demoState === 'sent' || demoState === 'thinking' || demoState === 'streaming' || demoState === 'complete';
 
   return (
     <motion.div
@@ -150,95 +229,490 @@ function ToolDemoCard({ tool, index }: { tool: typeof toolDemos[0]; index: numbe
       {/* Glow Effect */}
       <div className={`absolute -inset-1 ${tool.bgGlow} rounded-2xl blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500`} />
 
-      <div className="relative bg-gray-900/80 backdrop-blur-sm border border-gray-800 rounded-2xl p-6 hover:border-gray-700 transition-all duration-300">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-4">
+      <div className="relative bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden hover:border-gray-700 transition-all duration-300">
+        {/* ChatKit-style Header */}
+        <div className="bg-gray-900 border-b border-gray-800 px-4 py-3 flex items-center justify-between">
           <div className="flex items-center space-x-3">
-            <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${tool.color} flex items-center justify-center`}>
-              <Icon className="w-6 h-6 text-white" />
+            <div className={`w-9 h-9 rounded-lg bg-gradient-to-br ${tool.color} flex items-center justify-center`}>
+              <Icon className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h3 className="text-lg font-semibold text-white">{tool.name}</h3>
-              <p className="text-sm text-gray-400">{tool.description}</p>
+              <h3 className="text-sm font-semibold text-white">{tool.name}</h3>
+              <p className="text-xs text-gray-500">{tool.description.slice(0, 40)}...</p>
             </div>
+          </div>
+          <div className="flex items-center space-x-1">
+            <span className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse" />
+            <span className="text-xs text-emerald-400">Online</span>
           </div>
         </div>
 
-        {/* Demo Area */}
-        <div className="bg-gray-950/50 rounded-xl p-4 min-h-[300px]">
-          {/* User Query */}
-          <div className="flex items-start space-x-3 mb-4">
-            <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center flex-shrink-0">
-              <User className="w-4 h-4 text-white" />
-            </div>
-            <div className="bg-blue-600/20 rounded-lg rounded-tl-none p-3 flex-1">
-              <p className="text-sm text-gray-200">{tool.demo.query}</p>
-            </div>
-          </div>
-
-          {/* Processing Steps */}
-          {isPlaying && !showResponse && (
-            <div className="flex items-center space-x-3 mb-4 ml-11">
-              <div className="flex space-x-1">
-                {[0, 1, 2].map(i => (
-                  <motion.div
-                    key={i}
-                    className="w-2 h-2 bg-emerald-500 rounded-full"
-                    animate={{ scale: [1, 1.5, 1] }}
-                    transition={{ duration: 0.6, repeat: Infinity, delay: i * 0.2 }}
-                  />
-                ))}
+        {/* ChatKit-style Chat Area */}
+        <div
+          ref={chatRef}
+          className="h-[280px] overflow-y-auto p-4 space-y-3 bg-[#0a0a0f]"
+          style={{
+            backgroundImage: 'radial-gradient(circle at 50% 0%, rgba(16, 185, 129, 0.03) 0%, transparent 50%)'
+          }}
+        >
+          {/* Initial state - show prompt */}
+          {demoState === 'idle' && (
+            <div className="h-full flex flex-col items-center justify-center text-center px-4">
+              <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${tool.color} flex items-center justify-center mb-3`}>
+                <Icon className="w-6 h-6 text-white" />
               </div>
-              <span className="text-sm text-emerald-400">
-                {tool.demo.steps[currentStep - 1] || tool.demo.steps[0]}
-              </span>
+              <h4 className="text-white font-medium mb-1 text-sm">Try {tool.name}</h4>
+              <p className="text-gray-500 text-xs mb-4 max-w-[220px]">
+                See how this integration works
+              </p>
+              <motion.button
+                onClick={startDemo}
+                className={`flex items-center space-x-2 px-4 py-2 bg-gradient-to-r ${tool.color} text-white rounded-lg font-medium text-sm shadow-lg`}
+                whileHover={{ scale: 1.03 }}
+                whileTap={{ scale: 0.97 }}
+              >
+                <Play className="w-3.5 h-3.5" />
+                <span>Watch Demo</span>
+              </motion.button>
             </div>
           )}
 
-          {/* AI Response */}
-          <AnimatePresence>
-            {showResponse && (
+          {/* User Message - shown after sent */}
+          {showMessageInChat && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="flex justify-end"
+            >
+              <div className="max-w-[85%]">
+                <div className="bg-blue-600 text-white rounded-2xl rounded-br-sm px-3.5 py-2 text-sm">
+                  {query}
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          {/* Thinking/Processing indicator with steps */}
+          {demoState === 'thinking' && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="flex items-start space-x-2"
+            >
+              <div className="w-7 h-7 rounded-full bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center flex-shrink-0">
+                <Bot className="w-3.5 h-3.5 text-white" />
+              </div>
+              <div className="bg-gray-800/80 rounded-2xl rounded-bl-sm px-3.5 py-2.5">
+                <div className="flex items-center space-x-2">
+                  {/* Animated dots */}
+                  <div className="flex space-x-0.5">
+                    {[0, 1, 2].map(i => (
+                      <motion.span
+                        key={i}
+                        className="w-1.5 h-1.5 bg-emerald-400 rounded-full"
+                        animate={{
+                          scale: [1, 1.3, 1],
+                          opacity: [0.5, 1, 0.5]
+                        }}
+                        transition={{
+                          duration: 0.6,
+                          repeat: Infinity,
+                          delay: i * 0.15
+                        }}
+                      />
+                    ))}
+                  </div>
+                  <span className="text-xs text-gray-400">{steps[currentStep]}</span>
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          {/* AI Response - streaming */}
+          {(demoState === 'streaming' || demoState === 'complete') && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="flex items-start space-x-2"
+            >
+              <div className="w-7 h-7 rounded-full bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center flex-shrink-0">
+                <Bot className="w-3.5 h-3.5 text-white" />
+              </div>
+              <div className="max-w-[85%] bg-gray-800/80 rounded-2xl rounded-bl-sm px-3.5 py-2.5">
+                <div className="text-sm text-gray-100 whitespace-pre-wrap leading-relaxed">
+                  {streamedResponse}
+                  {demoState === 'streaming' && (
+                    <motion.span
+                      className="inline-block w-0.5 h-4 bg-emerald-400 ml-0.5 align-middle rounded-full"
+                      animate={{ opacity: [1, 0, 1] }}
+                      transition={{ duration: 0.8, repeat: Infinity }}
+                    />
+                  )}
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </div>
+
+        {/* ChatKit-style Input Area */}
+        <div className="border-t border-gray-800 p-3 bg-gray-900">
+          <div className="flex items-center space-x-2">
+            <div className="flex-1 bg-gray-800 rounded-xl px-3.5 py-2.5 min-h-[40px] flex items-center">
+              {demoState === 'typing_in_input' ? (
+                <span className="text-white text-sm">
+                  {inputText}
+                  <motion.span
+                    className="inline-block w-0.5 h-4 bg-white ml-0.5 align-middle rounded-full"
+                    animate={{ opacity: [1, 0, 1] }}
+                    transition={{ duration: 0.5, repeat: Infinity }}
+                  />
+                </span>
+              ) : demoState === 'idle' ? (
+                <span className="text-gray-500 text-sm">Message AI Agent...</span>
+              ) : (
+                <span className="text-gray-500 text-sm">Message AI Agent...</span>
+              )}
+            </div>
+            <motion.button
+              className={`p-2.5 rounded-xl transition-all ${
+                demoState === 'typing_in_input' && inputText.length > 0
+                  ? 'bg-emerald-500 text-white'
+                  : 'bg-gray-800 text-gray-500'
+              }`}
+              animate={demoState === 'typing_in_input' && inputText.length > 0 ? { scale: [1, 1.05, 1] } : {}}
+              transition={{ duration: 0.3 }}
+            >
+              <Send className="w-4 h-4" />
+            </motion.button>
+          </div>
+
+          {/* Replay button */}
+          {demoState === 'complete' && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="flex justify-center mt-2"
+            >
+              <button
+                onClick={resetDemo}
+                className="text-xs text-emerald-400 hover:text-emerald-300 transition-colors flex items-center space-x-1"
+              >
+                <span>↻</span>
+                <span>Replay Demo</span>
+              </button>
+            </motion.div>
+          )}
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+// Hero Demo Video Component - Auto-play simulated chat screen with DB connection + multiple queries
+function HeroDemoVideo() {
+  const [phase, setPhase] = useState<'connecting' | 'connected' | 'typing' | 'sent' | 'thinking' | 'streaming' | 'complete' | 'pause'>('connecting');
+  const [inputText, setInputText] = useState('');
+  const [streamedResponse, setStreamedResponse] = useState('');
+  const [queryIndex, setQueryIndex] = useState(0);
+  const [messages, setMessages] = useState<{type: 'user' | 'bot', text: string}[]>([]);
+  const [currentStep, setCurrentStep] = useState(0);
+  const chatRef = useRef<HTMLDivElement>(null);
+  const queryIndexRef = useRef(queryIndex);
+
+  // Keep ref in sync
+  useEffect(() => {
+    queryIndexRef.current = queryIndex;
+  }, [queryIndex]);
+
+  // 2 demo queries
+  const demoQueries = [
+    {
+      query: "Show me products with low stock",
+      response: "Found 3 products with low stock:\n\n📦 Wireless Mouse - 2 units\n📦 USB-C Hub - 4 units\n📦 Keyboard - 1 unit\n\n⚠️ Reorder recommended!",
+      steps: ['Querying inventory...', 'Analyzing stock...', 'Done!']
+    },
+    {
+      query: "What were today's total sales?",
+      response: "Today's Sales Summary:\n\n💰 Total Revenue: $2,847.50\n📊 Orders: 23 completed\n🏆 Top Seller: iPhone Case (12 sold)\n\n📈 +18% vs yesterday!",
+      steps: ['Fetching transactions...', 'Calculating totals...', 'Done!']
+    }
+  ];
+
+  // Auto-scroll
+  useEffect(() => {
+    if (chatRef.current) {
+      chatRef.current.scrollTop = chatRef.current.scrollHeight;
+    }
+  }, [inputText, streamedResponse, phase, messages]);
+
+  // Single useEffect to manage all phase transitions
+  useEffect(() => {
+    let timeout: NodeJS.Timeout;
+    let interval: NodeJS.Timeout;
+
+    const currentIdx = queryIndexRef.current;
+    const query = demoQueries[currentIdx];
+
+    if (phase === 'connecting') {
+      timeout = setTimeout(() => setPhase('connected'), 2000);
+    }
+    else if (phase === 'connected') {
+      timeout = setTimeout(() => setPhase('typing'), 1500);
+    }
+    else if (phase === 'typing') {
+      let i = 0;
+      interval = setInterval(() => {
+        if (i < query.query.length) {
+          setInputText(query.query.slice(0, i + 1));
+          i++;
+        } else {
+          clearInterval(interval);
+          timeout = setTimeout(() => setPhase('sent'), 400);
+        }
+      }, 35);
+    }
+    else if (phase === 'sent') {
+      setMessages(prev => [...prev, { type: 'user', text: query.query }]);
+      setInputText('');
+      timeout = setTimeout(() => setPhase('thinking'), 300);
+    }
+    else if (phase === 'thinking') {
+      let stepIdx = 0;
+      setCurrentStep(0);
+      interval = setInterval(() => {
+        stepIdx++;
+        if (stepIdx < query.steps.length) {
+          setCurrentStep(stepIdx);
+        } else {
+          clearInterval(interval);
+          timeout = setTimeout(() => setPhase('streaming'), 400);
+        }
+      }, 500);
+    }
+    else if (phase === 'streaming') {
+      let i = 0;
+      interval = setInterval(() => {
+        if (i < query.response.length) {
+          setStreamedResponse(query.response.slice(0, i + 1));
+          i++;
+        } else {
+          clearInterval(interval);
+          setMessages(prev => [...prev, { type: 'bot', text: query.response }]);
+          setStreamedResponse('');
+          setPhase('complete');
+        }
+      }, 12);
+    }
+    else if (phase === 'complete') {
+      timeout = setTimeout(() => setPhase('pause'), 2000);
+    }
+    else if (phase === 'pause') {
+      timeout = setTimeout(() => {
+        const nextIndex = (currentIdx + 1) % demoQueries.length;
+        if (nextIndex === 0) {
+          setMessages([]);
+        }
+        setQueryIndex(nextIndex);
+        setCurrentStep(0);
+        setPhase('typing');
+      }, 800);
+    }
+
+    return () => {
+      if (timeout) clearTimeout(timeout);
+      if (interval) clearInterval(interval);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, queryIndex]);
+
+  const currentQuery = demoQueries[queryIndex];
+  const isTypingOrLater = phase === 'typing' || phase === 'sent' || phase === 'thinking' || phase === 'streaming' || phase === 'complete' || phase === 'pause';
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.6, delay: 0.2 }}
+      className="max-w-4xl mx-auto"
+    >
+      {/* Large screen container - no header/footer */}
+      <div className="relative">
+        {/* Glow effect */}
+        <div className="absolute -inset-3 bg-gradient-to-r from-emerald-500/30 via-cyan-500/25 to-blue-500/30 rounded-2xl blur-2xl" />
+
+        {/* Screen */}
+        <div className="relative bg-[#0a0a0f] border border-gray-700/50 rounded-2xl overflow-hidden shadow-2xl">
+          {/* Chat Area */}
+          <div
+            ref={chatRef}
+            className="h-[400px] sm:h-[450px] lg:h-[480px] overflow-y-auto p-5 sm:p-8 space-y-4"
+            style={{
+              backgroundImage: 'radial-gradient(circle at 50% 0%, rgba(16, 185, 129, 0.05) 0%, transparent 50%)'
+            }}
+          >
+            {/* Database Connection Status */}
+            {phase === 'connecting' && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="flex items-center justify-center h-full"
+              >
+                <div className="text-center">
+                  <motion.div
+                    className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-emerald-500/20 to-cyan-500/20 border border-emerald-500/30 flex items-center justify-center"
+                    animate={{ scale: [1, 1.05, 1] }}
+                    transition={{ duration: 1.5, repeat: Infinity }}
+                  >
+                    <Database className="w-8 h-8 text-emerald-400" />
+                  </motion.div>
+                  <div className="flex items-center justify-center space-x-2">
+                    <motion.div
+                      className="w-2 h-2 bg-emerald-400 rounded-full"
+                      animate={{ opacity: [0.3, 1, 0.3] }}
+                      transition={{ duration: 1, repeat: Infinity }}
+                    />
+                    <span className="text-gray-400 text-sm">Connecting to PostgreSQL...</span>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+
+            {/* Connected Message */}
+            {(phase === 'connected' || isTypingOrLater) && (
               <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 className="flex items-start space-x-3"
               >
-                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center flex-shrink-0">
+                <div className="w-9 h-9 rounded-full bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center flex-shrink-0 shadow-lg shadow-emerald-500/20">
                   <Bot className="w-4 h-4 text-white" />
                 </div>
-                <div className="bg-gray-800/50 rounded-lg rounded-tl-none p-3 flex-1">
-                  <pre className="text-sm text-gray-200 whitespace-pre-wrap font-sans">
-                    {tool.demo.response}
-                  </pre>
+                <div className="bg-gray-800/70 rounded-2xl rounded-bl-md px-4 py-3 max-w-[85%]">
+                  <div className="flex items-center space-x-2 mb-1">
+                    <span className="w-2 h-2 bg-emerald-400 rounded-full" />
+                    <span className="text-xs text-emerald-400 font-medium">Connected to PostgreSQL</span>
+                  </div>
+                  <p className="text-sm text-gray-300">
+                    Database ready! Ask me anything about your inventory.
+                  </p>
                 </div>
               </motion.div>
             )}
-          </AnimatePresence>
 
-          {/* Play Button */}
-          {!isPlaying && (
-            <motion.button
-              onClick={startDemo}
-              className="absolute bottom-6 right-6 flex items-center space-x-2 px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-lg font-medium hover:opacity-90 transition-opacity"
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-            >
-              <Play className="w-4 h-4" />
-              <span>Watch Demo</span>
-            </motion.button>
-          )}
+            {/* Previous Messages */}
+            {messages.map((msg, idx) => (
+              <motion.div
+                key={idx}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className={msg.type === 'user' ? 'flex justify-end' : 'flex items-start space-x-3'}
+              >
+                {msg.type === 'bot' && (
+                  <div className="w-9 h-9 rounded-full bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center flex-shrink-0 shadow-lg shadow-emerald-500/20">
+                    <Bot className="w-4 h-4 text-white" />
+                  </div>
+                )}
+                <div className={msg.type === 'user'
+                  ? 'max-w-[85%] bg-blue-600 text-white rounded-2xl rounded-br-md px-4 py-3 text-sm shadow-lg shadow-blue-600/20'
+                  : 'max-w-[85%] bg-gray-800/70 rounded-2xl rounded-bl-md px-4 py-3'
+                }>
+                  <p className={`text-sm whitespace-pre-wrap leading-relaxed ${msg.type === 'bot' ? 'text-gray-100' : ''}`}>
+                    {msg.text}
+                  </p>
+                </div>
+              </motion.div>
+            ))}
 
-          {/* Reset Button */}
-          {showResponse && (
-            <motion.button
-              onClick={resetDemo}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="absolute bottom-6 right-6 text-sm text-gray-400 hover:text-white transition-colors"
-            >
-              Replay Demo
-            </motion.button>
-          )}
+
+            {/* Thinking indicator */}
+            {phase === 'thinking' && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="flex items-start space-x-3"
+              >
+                <div className="w-9 h-9 rounded-full bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center flex-shrink-0 shadow-lg shadow-emerald-500/20">
+                  <Bot className="w-4 h-4 text-white" />
+                </div>
+                <div className="bg-gray-800/70 rounded-2xl rounded-bl-md px-4 py-3">
+                  <div className="flex items-center space-x-2">
+                    <div className="flex space-x-1">
+                      {[0, 1, 2].map(i => (
+                        <motion.span
+                          key={i}
+                          className="w-2 h-2 bg-emerald-400 rounded-full"
+                          animate={{
+                            scale: [1, 1.3, 1],
+                            opacity: [0.5, 1, 0.5]
+                          }}
+                          transition={{
+                            duration: 0.6,
+                            repeat: Infinity,
+                            delay: i * 0.15
+                          }}
+                        />
+                      ))}
+                    </div>
+                    <span className="text-xs text-gray-400">{currentQuery.steps[currentStep]}</span>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+
+            {/* Streaming AI Response */}
+            {phase === 'streaming' && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="flex items-start space-x-3"
+              >
+                <div className="w-9 h-9 rounded-full bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center flex-shrink-0 shadow-lg shadow-emerald-500/20">
+                  <Bot className="w-4 h-4 text-white" />
+                </div>
+                <div className="max-w-[85%] bg-gray-800/70 rounded-2xl rounded-bl-md px-4 py-3">
+                  <div className="text-sm text-gray-100 whitespace-pre-wrap leading-relaxed">
+                    {streamedResponse}
+                    <motion.span
+                      className="inline-block w-0.5 h-4 bg-emerald-400 ml-0.5 align-middle rounded-full"
+                      animate={{ opacity: [1, 0, 1] }}
+                      transition={{ duration: 0.8, repeat: Infinity }}
+                    />
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </div>
+
+          {/* Input Area - Shows typing animation */}
+          <div className="border-t border-gray-800/50 p-3 sm:p-4 bg-gray-900/60">
+            <div className="flex items-center space-x-3">
+              <div className="flex-1 bg-gray-800/90 rounded-xl px-4 py-3 min-h-[44px] flex items-center">
+                {phase === 'typing' && inputText ? (
+                  <span className="text-white text-sm">
+                    {inputText}
+                    <motion.span
+                      className="inline-block w-0.5 h-4 bg-emerald-400 ml-0.5 align-middle rounded-full"
+                      animate={{ opacity: [1, 0, 1] }}
+                      transition={{ duration: 0.5, repeat: Infinity }}
+                    />
+                  </span>
+                ) : (
+                  <span className="text-gray-500 text-sm">Ask about your inventory...</span>
+                )}
+              </div>
+              <motion.div
+                className={`p-3 rounded-xl transition-all ${
+                  phase === 'typing' && inputText.length > 0
+                    ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30'
+                    : 'bg-gray-800 text-gray-500'
+                }`}
+                animate={phase === 'typing' && inputText.length > 0 ? { scale: [1, 1.05, 1] } : {}}
+                transition={{ duration: 0.3 }}
+              >
+                <Send className="w-4 h-4" />
+              </motion.div>
+            </div>
+          </div>
         </div>
       </div>
     </motion.div>
@@ -341,128 +815,27 @@ export default function Home() {
       </header>
 
       {/* Hero Section */}
-      <section ref={heroRef} className="relative pt-32 pb-20 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-7xl mx-auto text-center">
+      <section ref={heroRef} className="relative pt-32 sm:pt-36 pb-12 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-5xl mx-auto text-center">
           <motion.div
-            initial={{ opacity: 0, y: 30 }}
-            animate={isHeroInView ? { opacity: 1, y: 0 } : {}}
-            transition={{ duration: 0.8 }}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6 }}
           >
-            {/* Badge */}
-            <motion.div
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: 0.2 }}
-              className="inline-flex items-center space-x-2 bg-emerald-500/10 border border-emerald-500/20 rounded-full px-4 py-2 mb-8"
-            >
-              <Sparkles className="w-4 h-4 text-emerald-400" />
-              <span className="text-sm text-emerald-400">AI-Powered Automation</span>
-            </motion.div>
-
-            {/* Main Heading */}
-            <h1 className="text-4xl sm:text-5xl lg:text-7xl font-bold mb-6 leading-tight">
-              Your AI Agent That
-              <br />
-              <span className="bg-gradient-to-r from-emerald-400 via-cyan-400 to-blue-400 bg-clip-text text-transparent">
-                Connects Everything
+            {/* Compact, Emotional Tagline */}
+            <h1 className="text-xl sm:text-2xl lg:text-3xl font-medium mb-2 text-gray-200">
+              Your Database.{' '}
+              <span className="bg-gradient-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent font-semibold">
+                Now Intelligent.
               </span>
             </h1>
 
-            <p className="text-lg sm:text-xl text-gray-400 max-w-3xl mx-auto mb-10">
-              One intelligent agent that integrates with Gmail, Google Drive, Notion, Analytics,
-              and more. Ask in natural language, get things done automatically.
+            <p className="text-sm text-gray-500 mb-8">
+              Connect PostgreSQL. Ask in plain English. Get instant answers.
             </p>
 
-            {/* CTA Buttons */}
-            <div className="flex flex-col sm:flex-row justify-center gap-4 mb-16">
-              <Link href={ROUTES.SIGNUP}>
-                <motion.button
-                  className="flex items-center justify-center space-x-2 bg-gradient-to-r from-emerald-500 to-cyan-500 text-white px-8 py-4 rounded-xl font-semibold text-lg hover:opacity-90 transition-opacity"
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                >
-                  <span>Start Free</span>
-                  <ArrowRight className="w-5 h-5" />
-                </motion.button>
-              </Link>
-              <Link href="#tools">
-                <motion.button
-                  className="flex items-center justify-center space-x-2 border border-gray-700 text-white px-8 py-4 rounded-xl font-semibold text-lg hover:bg-gray-800/50 transition-colors"
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                >
-                  <Play className="w-5 h-5" />
-                  <span>See It In Action</span>
-                </motion.button>
-              </Link>
-            </div>
-
-            {/* Hero Visual - Chat Interface Preview */}
-            <motion.div
-              initial={{ opacity: 0, y: 50 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.4, duration: 0.8 }}
-              className="relative max-w-4xl mx-auto"
-            >
-              <div className="absolute -inset-4 bg-gradient-to-r from-emerald-500/20 via-cyan-500/20 to-blue-500/20 rounded-3xl blur-2xl" />
-              <div className="relative bg-gray-900/90 backdrop-blur-sm border border-gray-800 rounded-2xl p-6 shadow-2xl">
-                {/* Chat Header */}
-                <div className="flex items-center space-x-3 mb-6 pb-4 border-b border-gray-800">
-                  <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-cyan-500 rounded-full flex items-center justify-center">
-                    <Bot className="w-5 h-5 text-white" />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold">StoreLite AI Agent</h3>
-                    <p className="text-sm text-emerald-400">Online • Ready to help</p>
-                  </div>
-                </div>
-
-                {/* Chat Messages */}
-                <div className="space-y-4">
-                  <div className="flex items-start space-x-3">
-                    <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center flex-shrink-0">
-                      <User className="w-4 h-4 text-white" />
-                    </div>
-                    <div className="bg-blue-600/20 rounded-lg rounded-tl-none p-3">
-                      <p className="text-sm">Send yesterday&apos;s sales report to the team via email and update Notion</p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-start space-x-3">
-                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center flex-shrink-0">
-                      <Bot className="w-4 h-4 text-white" />
-                    </div>
-                    <div className="bg-gray-800/50 rounded-lg rounded-tl-none p-3 flex-1">
-                      <p className="text-sm text-gray-200">
-                        Done! I&apos;ve completed both tasks:
-                      </p>
-                      <div className="mt-3 space-y-2">
-                        <div className="flex items-center space-x-2 text-sm">
-                          <Mail className="w-4 h-4 text-red-400" />
-                          <span className="text-gray-300">Email sent to 5 team members</span>
-                          <span className="text-emerald-400">✓</span>
-                        </div>
-                        <div className="flex items-center space-x-2 text-sm">
-                          <FileText className="w-4 h-4 text-gray-400" />
-                          <span className="text-gray-300">Notion &quot;Daily Reports&quot; updated</span>
-                          <span className="text-emerald-400">✓</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Input Area */}
-                <div className="mt-6 flex items-center space-x-3">
-                  <div className="flex-1 bg-gray-800/50 rounded-lg px-4 py-3 text-gray-400 text-sm">
-                    Ask me anything...
-                  </div>
-                  <button className="w-10 h-10 bg-gradient-to-r from-emerald-500 to-cyan-500 rounded-lg flex items-center justify-center">
-                    <Send className="w-5 h-5 text-white" />
-                  </button>
-                </div>
-              </div>
-            </motion.div>
+            {/* Hero Demo Video - Large, auto-play simulated screen */}
+            <HeroDemoVideo />
           </motion.div>
         </div>
       </section>
@@ -633,6 +1006,7 @@ export default function Home() {
           </div>
         </div>
       </footer>
+
     </div>
   );
 }
