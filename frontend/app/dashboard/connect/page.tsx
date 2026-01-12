@@ -324,54 +324,56 @@ export default function DashboardConnectPage() {
 
       {/* Header */}
       <header className="bg-white dark:bg-gray-800 shadow-sm dark:shadow-gray-900/50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
-          <div className="flex items-center space-x-6">
-            <Link href={ROUTES.DASHBOARD} className="flex items-center space-x-3">
-              <div className="w-10 h-10 bg-blue-600 dark:bg-blue-500 rounded-lg flex items-center justify-center">
-                <span className="text-white text-xl font-bold">S</span>
-              </div>
-              <span className="text-xl font-bold text-gray-900 dark:text-white">{APP_METADATA.NAME}</span>
-            </Link>
-            <nav className="hidden md:flex space-x-4">
-              <Link href={ROUTES.DB_CONNECT} className="text-blue-600 dark:text-blue-400 font-medium">Connection</Link>
-              <Link href={ROUTES.ANALYTICS} className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white">Analytics</Link>
-            </nav>
-          </div>
-          <div className="flex items-center space-x-4">
-            <span className="px-2 py-1 bg-blue-100 dark:bg-blue-900/50 text-blue-800 dark:text-blue-300 text-xs rounded-full">Your Database</span>
-            <span className="text-gray-600 dark:text-gray-300 text-sm">{user?.email}</span>
-            <ThemeToggle />
-            <button onClick={logout} className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-sm">Logout</button>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 sm:py-4">
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 sm:gap-0">
+            <div className="flex items-center justify-between sm:justify-start space-x-4 sm:space-x-6">
+              <Link href={ROUTES.DASHBOARD} className="flex items-center space-x-2 sm:space-x-3">
+                <div className="w-8 h-8 sm:w-10 sm:h-10 bg-blue-600 dark:bg-blue-500 rounded-lg flex items-center justify-center">
+                  <span className="text-white text-lg sm:text-xl font-bold">S</span>
+                </div>
+                <span className="text-lg sm:text-xl font-bold text-gray-900 dark:text-white">{APP_METADATA.NAME}</span>
+              </Link>
+              <nav className="hidden md:flex space-x-4">
+                <Link href={ROUTES.DB_CONNECT} className="text-blue-600 dark:text-blue-400 font-medium">Connection</Link>
+                <Link href={ROUTES.ANALYTICS} className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white">Analytics</Link>
+              </nav>
+            </div>
+            <div className="flex items-center justify-between sm:justify-end space-x-3 sm:space-x-4">
+              <span className="px-2 py-1 bg-blue-100 dark:bg-blue-900/50 text-blue-800 dark:text-blue-300 text-xs rounded-full">Your Database</span>
+              <span className="text-gray-600 dark:text-gray-300 text-xs sm:text-sm truncate max-w-[100px] sm:max-w-none">{user?.email}</span>
+              <ThemeToggle />
+              <button onClick={logout} className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-xs sm:text-sm">Logout</button>
+            </div>
           </div>
         </div>
       </header>
 
       {/* Main Content */}
-      <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="mb-6">
-          <h1 className="text-3xl font-bold mb-2 text-gray-900 dark:text-white">Your PostgreSQL Database</h1>
-          <p className="text-gray-600 dark:text-gray-400">Manage your database connection via MCP protocol.</p>
+      <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8">
+        <div className="mb-4 sm:mb-6">
+          <h1 className="text-xl sm:text-3xl font-bold mb-1 sm:mb-2 text-gray-900 dark:text-white">Your PostgreSQL Database</h1>
+          <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400">Manage your database connection via MCP protocol.</p>
         </div>
 
         {/* Step indicator */}
-        <div className="flex items-center mb-8">
+        <div className="flex items-center mb-6 sm:mb-8">
           <div className={`flex items-center ${step === 'connect' ? 'text-blue-600 dark:text-blue-400' : 'text-green-600 dark:text-green-400'}`}>
-            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${step === 'connect' ? 'bg-blue-100 dark:bg-blue-900/50' : 'bg-green-100 dark:bg-green-900/50'}`}>
+            <div className={`w-6 h-6 sm:w-8 sm:h-8 text-xs sm:text-sm rounded-full flex items-center justify-center ${step === 'connect' ? 'bg-blue-100 dark:bg-blue-900/50' : 'bg-green-100 dark:bg-green-900/50'}`}>
               {step === 'connect' ? '1' : '✓'}
             </div>
-            <span className="ml-2 font-medium">Connect</span>
+            <span className="ml-1 sm:ml-2 text-xs sm:text-base font-medium">Connect</span>
           </div>
-          <div className={`flex-1 h-1 mx-4 ${step !== 'connect' ? 'bg-green-400 dark:bg-green-600' : 'bg-gray-200 dark:bg-gray-700'}`} />
+          <div className={`flex-1 h-0.5 sm:h-1 mx-2 sm:mx-4 ${step !== 'connect' ? 'bg-green-400 dark:bg-green-600' : 'bg-gray-200 dark:bg-gray-700'}`} />
           <div className={`flex items-center ${step === 'setup' ? 'text-blue-600 dark:text-blue-400' : step === 'chat' ? 'text-green-600 dark:text-green-400' : 'text-gray-400 dark:text-gray-500'}`}>
-            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${step === 'setup' ? 'bg-blue-100 dark:bg-blue-900/50' : step === 'chat' ? 'bg-green-100 dark:bg-green-900/50' : 'bg-gray-100 dark:bg-gray-700'}`}>
+            <div className={`w-6 h-6 sm:w-8 sm:h-8 text-xs sm:text-sm rounded-full flex items-center justify-center ${step === 'setup' ? 'bg-blue-100 dark:bg-blue-900/50' : step === 'chat' ? 'bg-green-100 dark:bg-green-900/50' : 'bg-gray-100 dark:bg-gray-700'}`}>
               {step === 'chat' ? '✓' : '2'}
             </div>
-            <span className="ml-2 font-medium">Setup</span>
+            <span className="ml-1 sm:ml-2 text-xs sm:text-base font-medium">Setup</span>
           </div>
-          <div className={`flex-1 h-1 mx-4 ${step === 'chat' ? 'bg-green-400 dark:bg-green-600' : 'bg-gray-200 dark:bg-gray-700'}`} />
+          <div className={`flex-1 h-0.5 sm:h-1 mx-2 sm:mx-4 ${step === 'chat' ? 'bg-green-400 dark:bg-green-600' : 'bg-gray-200 dark:bg-gray-700'}`} />
           <div className={`flex items-center ${step === 'chat' ? 'text-blue-600 dark:text-blue-400' : 'text-gray-400 dark:text-gray-500'}`}>
-            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${step === 'chat' ? 'bg-blue-100 dark:bg-blue-900/50' : 'bg-gray-100 dark:bg-gray-700'}`}>3</div>
-            <span className="ml-2 font-medium">Manage</span>
+            <div className={`w-6 h-6 sm:w-8 sm:h-8 text-xs sm:text-sm rounded-full flex items-center justify-center ${step === 'chat' ? 'bg-blue-100 dark:bg-blue-900/50' : 'bg-gray-100 dark:bg-gray-700'}`}>3</div>
+            <span className="ml-1 sm:ml-2 text-xs sm:text-base font-medium">Manage</span>
           </div>
         </div>
 
@@ -412,8 +414,8 @@ export default function DashboardConnectPage() {
               </div>
             )}
 
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md dark:shadow-gray-900/50 p-6">
-              <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Connect to Your Database</h2>
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md dark:shadow-gray-900/50 p-4 sm:p-6">
+              <h2 className="text-lg sm:text-xl font-semibold mb-3 sm:mb-4 text-gray-900 dark:text-white">Connect to Your Database</h2>
 
               {/* Show stored database option OR input field based on state */}
               {databaseUri && !useDifferentDb ? (
@@ -478,7 +480,7 @@ export default function DashboardConnectPage() {
                       value={newDatabaseUri}
                       onChange={(e) => setNewDatabaseUri(e.target.value)}
                       placeholder="postgresql://user:password@host:port/database"
-                      className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-mono text-sm placeholder-gray-400 dark:placeholder-gray-500"
+                      className="w-full px-3 sm:px-4 py-2 sm:py-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-mono text-xs sm:text-sm placeholder-gray-400 dark:placeholder-gray-500"
                     />
                     <p className="text-gray-500 dark:text-gray-400 text-xs mt-1">
                       Your URI will be saved for future connections.
@@ -548,22 +550,24 @@ export default function DashboardConnectPage() {
         {/* Step 3: Chat */}
         {step === 'chat' && (
           <div className="space-y-4">
-            <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-6 py-4 rounded-lg shadow-lg flex justify-between items-center">
-              <div>
-                <h2 className="text-xl font-semibold">Your Database Agent</h2>
-                <p className="text-blue-100 text-sm">Session: {sessionId} | Connected via MCP</p>
-              </div>
-              <div className="flex gap-2">
-                <Link href={ROUTES.ANALYTICS} className="bg-white text-blue-600 px-4 py-2 rounded-md hover:bg-gray-100 transition-colors font-medium">
-                  AI Analytics
-                </Link>
-                <button onClick={disconnect} className="bg-red-500 hover:bg-red-600 px-5 py-2.5 rounded-md transition-colors font-medium">
-                  Disconnect
-                </button>
+            <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-4 sm:px-6 py-3 sm:py-4 rounded-lg shadow-lg">
+              <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
+                <div>
+                  <h2 className="text-lg sm:text-xl font-semibold">Your Database Agent</h2>
+                  <p className="text-blue-100 text-xs sm:text-sm truncate max-w-[200px] sm:max-w-none">Session: {sessionId}</p>
+                </div>
+                <div className="flex gap-2">
+                  <Link href={ROUTES.ANALYTICS} className="bg-white text-blue-600 px-3 sm:px-4 py-1.5 sm:py-2 rounded-md hover:bg-gray-100 transition-colors font-medium text-sm">
+                    AI Analytics
+                  </Link>
+                  <button onClick={disconnect} className="bg-red-500 hover:bg-red-600 px-3 sm:px-5 py-1.5 sm:py-2.5 rounded-md transition-colors font-medium text-sm">
+                    Disconnect
+                  </button>
+                </div>
               </div>
             </div>
 
-            <div className="bg-white rounded-lg shadow-md overflow-hidden" style={{ height: '500px' }}>
+            <div className="bg-white rounded-lg shadow-md overflow-hidden h-[400px] sm:h-[500px]">
               {isChatkitLoaded ? (
                 <openai-chatkit
                   ref={chatkitRef as any}
