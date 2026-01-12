@@ -92,13 +92,9 @@ export default function SchemaAgentPage() {
   const [systemTools, setSystemTools] = useState<SystemTool[]>([]);
   const [connectors, setConnectors] = useState<Connector[]>([]);
   const [toolsLoaded, setToolsLoaded] = useState(false);
-  const [showAllTools, setShowAllTools] = useState(false);
 
   // File Search Modal state
   const [showFileSearchModal, setShowFileSearchModal] = useState(false);
-
-  // Maximum tools to show initially (before "See more")
-  const MAX_VISIBLE_TOOLS = 6;
 
   // Load system tools and MCP connectors
   const loadTools = useCallback(async () => {
@@ -139,25 +135,21 @@ export default function SchemaAgentPage() {
         shortLabel: tool.name,
         icon: systemIconToChatKit[tool.icon] || 'sparkle',
         placeholderOverride: `What would you like to do with ${tool.name}?`,
-        // Keep selected tool active across multiple messages until the user deselects it.
-        // This uses ChatKit's built-in persistence (no custom UI/state).
         persistent: true,
       });
     });
 
-    // Add MCP connectors (only connector name, not individual tools)
-    // Agent will automatically select appropriate tool based on user query
+    // Add MCP connectors
     connectors.forEach((connector) => {
       const toolCount = connector.discovered_tools?.length || 0;
       tools.push({
         id: `mcp:${connector.id}:${connector.server_url}:${connector.name}`,
         label: `Use ${connector.name}`,
         shortLabel: connector.name,
-        icon: 'cube', // MCP connectors use cube icon
+        icon: 'cube',
         placeholderOverride: toolCount > 0
           ? `Ask anything - ${toolCount} tools available from ${connector.name}`
           : `What would you like to do with ${connector.name}?`,
-        // Keep selected connector active across multiple messages until the user deselects it.
         persistent: true,
       });
     });
@@ -165,31 +157,11 @@ export default function SchemaAgentPage() {
     return tools;
   }, [systemTools, connectors]);
 
-  // Build ChatKit tools with pagination (max 6 initially, then "See more")
+  // Build ChatKit tools - pass all tools and let ChatKit handle the UI
+  // ChatKit natively handles tool overflow with a scrollable menu
   const buildChatKitTools = useCallback((): ChatKitToolOption[] => {
-    const allTools = buildAllTools();
-
-    // If showing all tools or total <= MAX_VISIBLE_TOOLS, return all
-    if (showAllTools || allTools.length <= MAX_VISIBLE_TOOLS) {
-      return allTools;
-    }
-
-    // Otherwise, show first (MAX_VISIBLE_TOOLS - 1) tools + "See more" option
-    const visibleTools = allTools.slice(0, MAX_VISIBLE_TOOLS - 1);
-    const remainingCount = allTools.length - (MAX_VISIBLE_TOOLS - 1);
-
-    // Add "See more" option
-    visibleTools.push({
-      id: '__see_more__',
-      label: `See ${remainingCount} more tools...`,
-      shortLabel: `+${remainingCount} more`,
-      icon: 'plus' as ChatKitIcon,
-      placeholderOverride: 'Click to see all available tools',
-      persistent: false,
-    });
-
-    return visibleTools;
-  }, [buildAllTools, showAllTools, MAX_VISIBLE_TOOLS]);
+    return buildAllTools();
+  }, [buildAllTools]);
 
   // Load tools on mount
   useEffect(() => {
@@ -453,13 +425,6 @@ export default function SchemaAgentPage() {
           if (name === 'tool_selected' || name === 'composer.tool.selected' || name === 'tool.selected') {
             const toolId = data?.toolId || data?.tool || data?.id || null;
             if (toolId) {
-              // Handle "See more" special tool
-              if (toolId === '__see_more__') {
-                console.log('[Tool] See more clicked - expanding tools');
-                setShowAllTools(true);
-                configuredRef.current = false; // Force reconfigure
-                return;
-              }
               // Handle File Search - open modal instead of just selecting tool
               if (toolId === 'file_search') {
                 console.log('[Tool] File Search selected - opening modal');
@@ -492,13 +457,6 @@ export default function SchemaAgentPage() {
           if (name?.includes('tool') || name?.includes('composer')) {
             if (data?.id || data?.toolId) {
               const toolId = data.id || data.toolId;
-              // Handle "See more" special tool
-              if (toolId === '__see_more__') {
-                console.log('[Tool] See more clicked - expanding tools');
-                setShowAllTools(true);
-                configuredRef.current = false; // Force reconfigure
-                return;
-              }
               // Handle File Search - open modal
               if (toolId === 'file_search') {
                 console.log('[Tool] File Search selected - opening modal');
@@ -539,13 +497,6 @@ export default function SchemaAgentPage() {
           console.log('[ChatKit] Composer tool event:', e.detail);
           if (e.detail?.id) {
             const toolId = e.detail.id;
-            // Handle "See more" special tool
-            if (toolId === '__see_more__') {
-              console.log('[Tool] See more clicked - expanding tools');
-              setShowAllTools(true);
-              configuredRef.current = false; // Force reconfigure
-              return;
-            }
             // Handle File Search - open modal
             if (toolId === 'file_search') {
               console.log('[Tool] File Search selected from composer - opening modal');
@@ -582,7 +533,7 @@ export default function SchemaAgentPage() {
 
     // Initialize with delay for element to be ready
     setTimeout(initChatKit, 300);
-  }, [isLoaded, toolsLoaded, buildChatKitTools, showAllTools, threadIdFromUrl, resolvedTheme]);
+  }, [isLoaded, toolsLoaded, buildChatKitTools, threadIdFromUrl, resolvedTheme]);
 
   // Check if ChatKit is already registered (from cache or previous page)
   useEffect(() => {
