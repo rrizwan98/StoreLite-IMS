@@ -17,12 +17,14 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Script from 'next/script';
+import { useTheme } from 'next-themes';
 import { ROUTES, API_BASE_URL } from '@/lib/constants';
 import { useAuth } from '@/lib/auth-context';
 import { getAccessToken } from '@/lib/auth-api';
 import { getAllTools, SystemTool } from '@/lib/tools-api';
 import { getConnectors, Connector } from '@/lib/connectors-api';
 import { FileSearchModal } from '@/components/file-search';
+import { ThemeToggle } from '@/components/theme-toggle';
 // File upload is now handled by ChatKit's native attachments feature
 // The backend /api/files/chatkit-upload endpoint handles file uploads
 
@@ -74,6 +76,7 @@ export default function SchemaAgentPage() {
   const { user, connectionStatus, isLoading, isAuthenticated } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { resolvedTheme } = useTheme();
 
   // Get thread_id from URL query params (for scheduled task results)
   const threadIdFromUrl = searchParams.get('thread');
@@ -83,6 +86,7 @@ export default function SchemaAgentPage() {
   const chatkitRef = useRef<HTMLElement | null>(null);
   const configuredRef = useRef(false);
   const checkIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const lastThemeRef = useRef<string | undefined>(undefined);
 
   // Tools state
   const [systemTools, setSystemTools] = useState<SystemTool[]>([]);
@@ -211,8 +215,12 @@ export default function SchemaAgentPage() {
   }, [connectionStatus, isLoading, router]);
 
   // Configure ChatKit when loaded and tools are ready
+  // Re-configure when theme changes
   useEffect(() => {
-    if (!isLoaded || !toolsLoaded || configuredRef.current) return;
+    if (!isLoaded || !toolsLoaded) return;
+
+    // Check if theme actually changed
+    if (configuredRef.current && lastThemeRef.current === resolvedTheme) return;
 
     const initChatKit = () => {
       const chatkit = chatkitRef.current as any;
@@ -227,8 +235,9 @@ export default function SchemaAgentPage() {
         return;
       }
 
-      console.log('[SchemaAgent] Configuring ChatKit with dynamic tools');
+      console.log('[SchemaAgent] Configuring ChatKit with dynamic tools, theme:', resolvedTheme);
       configuredRef.current = true;
+      lastThemeRef.current = resolvedTheme;
 
       const token = getAccessToken();
       const apiUrl = `${API_BASE_URL}/schema-agent/chatkit`;
@@ -342,8 +351,10 @@ export default function SchemaAgentPage() {
               }
             },
           },
-          // Theme (ColorScheme or ThemeOption)
-          theme: 'light',
+          // Theme (ColorScheme or ThemeOption) - using OpenAI ChatKit's native theming
+          theme: {
+            colorScheme: resolvedTheme === 'dark' ? 'dark' : 'light',
+          },
           // History configuration - enables the history sidebar
           // Threads are stored in PostgreSQL via backend ChatKit store
           history: {
@@ -571,7 +582,7 @@ export default function SchemaAgentPage() {
 
     // Initialize with delay for element to be ready
     setTimeout(initChatKit, 300);
-  }, [isLoaded, toolsLoaded, buildChatKitTools, showAllTools, threadIdFromUrl]);
+  }, [isLoaded, toolsLoaded, buildChatKitTools, showAllTools, threadIdFromUrl, resolvedTheme]);
 
   // Check if ChatKit is already registered (from cache or previous page)
   useEffect(() => {
@@ -627,8 +638,8 @@ export default function SchemaAgentPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600"></div>
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600 dark:border-emerald-400"></div>
       </div>
     );
   }
@@ -638,7 +649,7 @@ export default function SchemaAgentPage() {
   }
 
   return (
-    <div className="h-screen flex flex-col bg-gray-50">
+    <div className="h-screen flex flex-col bg-gray-50 dark:bg-gray-900">
       {/* Load ChatKit from OpenAI CDN */}
       <Script
         src="https://cdn.platform.openai.com/deployments/chatkit/chatkit.js"
@@ -651,44 +662,45 @@ export default function SchemaAgentPage() {
       />
 
       {/* Header */}
-      <header className="bg-white shadow-sm flex-shrink-0 z-10">
+      <header className="bg-white dark:bg-gray-800 shadow-sm dark:shadow-gray-900/50 flex-shrink-0 z-10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 sm:py-4">
           <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 sm:gap-0">
             <div className="flex items-center space-x-2 sm:space-x-3">
               <Link href={ROUTES.DASHBOARD} className="flex items-center space-x-2 sm:space-x-3">
-                <div className="w-8 h-8 sm:w-10 sm:h-10 bg-emerald-600 rounded-lg flex items-center justify-center">
+                <div className="w-8 h-8 sm:w-10 sm:h-10 bg-emerald-600 dark:bg-emerald-500 rounded-lg flex items-center justify-center">
                   <span className="text-white text-lg sm:text-xl">🧠</span>
                 </div>
-                <span className="text-lg sm:text-xl font-bold text-gray-900">AI Agent</span>
+                <span className="text-lg sm:text-xl font-bold text-gray-900 dark:text-white">AI Agent</span>
               </Link>
-              <span className="hidden md:inline text-gray-400">|</span>
-              <span className="hidden md:inline text-gray-600 text-sm">Query your database with natural language</span>
+              <span className="hidden md:inline text-gray-400 dark:text-gray-500">|</span>
+              <span className="hidden md:inline text-gray-600 dark:text-gray-400 text-sm">Query your database with natural language</span>
             </div>
             <div className="flex items-center space-x-2 sm:space-x-4 text-xs sm:text-sm">
               {connectionStatus?.tables_count !== undefined && (
-                <span className="text-gray-500 bg-gray-100 px-2 sm:px-3 py-1 rounded-full">
+                <span className="text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 px-2 sm:px-3 py-1 rounded-full">
                   {connectionStatus.tables_count} tables
                 </span>
               )}
               {/* Tools indicator */}
               {toolsLoaded && (systemTools.length > 0 || connectors.length > 0) && (
-                <span className="text-emerald-600 bg-emerald-50 px-2 sm:px-3 py-1 rounded-full flex items-center">
+                <span className="text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 px-2 sm:px-3 py-1 rounded-full flex items-center">
                   <span className="mr-1">🔧</span>
                   {systemTools.length + connectors.length}
                 </span>
               )}
               <Link
                 href={ROUTES.SCHEMA_CONNECT}
-                className="hidden sm:inline text-gray-600 hover:text-gray-900"
+                className="hidden sm:inline text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white"
               >
                 Schema
               </Link>
               <Link
                 href={ROUTES.DASHBOARD}
-                className="text-gray-600 hover:text-gray-900 font-medium"
+                className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white font-medium"
               >
                 Dashboard
               </Link>
+              <ThemeToggle />
             </div>
           </div>
         </div>
@@ -696,12 +708,12 @@ export default function SchemaAgentPage() {
 
       {/* Error Banner */}
       {error && (
-        <div className="bg-red-50 border-b border-red-200 px-4 py-3">
+        <div className="bg-red-50 dark:bg-red-900/30 border-b border-red-200 dark:border-red-800 px-4 py-3">
           <div className="max-w-7xl mx-auto flex justify-between items-center">
-            <span className="text-red-700 text-sm">{error}</span>
+            <span className="text-red-700 dark:text-red-400 text-sm">{error}</span>
             <button
               onClick={() => setError('')}
-              className="text-red-500 hover:text-red-700"
+              className="text-red-500 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
             >
               ✕
             </button>
@@ -712,10 +724,10 @@ export default function SchemaAgentPage() {
       {/* ChatKit Container */}
       <div className="flex-grow overflow-hidden relative">
         {!isLoaded && (
-          <div className="absolute inset-0 flex items-center justify-center bg-gray-50">
+          <div className="absolute inset-0 flex items-center justify-center bg-gray-50 dark:bg-gray-900">
             <div className="text-center">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600 mx-auto mb-4"></div>
-              <p className="text-gray-600">Loading chat interface...</p>
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600 dark:border-emerald-400 mx-auto mb-4"></div>
+              <p className="text-gray-600 dark:text-gray-400">Loading chat interface...</p>
             </div>
           </div>
         )}
@@ -733,8 +745,8 @@ export default function SchemaAgentPage() {
       </div>
 
       {/* Footer info */}
-      <div className="bg-white border-t border-gray-200 px-4 py-1.5 sm:py-2 flex-shrink-0">
-        <div className="max-w-7xl mx-auto text-center text-[10px] sm:text-xs text-gray-500">
+      <div className="bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 px-4 py-1.5 sm:py-2 flex-shrink-0">
+        <div className="max-w-7xl mx-auto text-center text-[10px] sm:text-xs text-gray-500 dark:text-gray-400">
           Read-only mode - Only SELECT queries are executed
         </div>
       </div>
