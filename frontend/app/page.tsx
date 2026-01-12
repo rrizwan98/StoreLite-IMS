@@ -17,7 +17,7 @@ import {
   Send, Bot, User, ArrowRight, Play, ChevronRight,
   Database, Zap, Shield, Clock, X, MessageSquare,
   Calendar, Wrench, CheckCircle, Users, Globe, Lock,
-  MessageCircle, Cpu, Timer, Copy, Check, RotateCcw,
+MessageCircle, Cpu, Timer, Copy, Check, RotateCcw,
   Plus, ChevronDown
 } from 'lucide-react';
 import { DemoMarkdown } from '@/components/landing/DemoMarkdown';
@@ -1549,6 +1549,138 @@ export default function Home() {
                   <div className="border-t border-gray-800 pt-4 mt-4">
                     <div className="flex items-center justify-between mb-4">
                       <span className="text-sm text-gray-400">Selected: Jan 15, 2026</span>
+                      <div className="flex items-center space-x-2 bg-gray-800 rounded-lg px-3 py-1.5">
+                        <Clock className="w-4 h-4 text-emerald-400" />
+                        <span className="text-sm">09:00 AM</span>
+                      </div>
+                    </div>
+
+                    {/* Task Preview */}
+                    <div className="bg-gray-800/50 rounded-xl p-4 border border-gray-700">
+                      <div className="flex items-start space-x-3">
+                        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center flex-shrink-0">
+                          <Mail className="w-4 h-4 text-white" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-white">Weekly Sales Report</p>
+                          <p className="text-xs text-gray-400 mt-1">Repeats every Monday at 9:00 AM</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        </div>
+      </section>
+
+      {/* Schedule Your Tasks Section */}
+      <section id="schedule" className="py-20">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="grid lg:grid-cols-2 gap-12 items-center">
+            {/* Left: Content */}
+            <motion.div
+              initial={{ opacity: 0, x: -30 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true }}
+            >
+              <div className="inline-flex items-center space-x-2 bg-emerald-500/10 border border-emerald-500/20 rounded-full px-4 py-1.5 mb-6">
+                <Timer className="w-4 h-4 text-emerald-400" />
+                <span className="text-emerald-400 text-sm font-medium">New Feature</span>
+              </div>
+              <h2 className="text-3xl sm:text-4xl font-bold mb-4">
+                Schedule Your <span className="text-emerald-400">Tasks</span>
+              </h2>
+              <p className="text-gray-400 mb-8 leading-relaxed">
+                Set up automated workflows that run on your schedule. Whether it&apos;s daily inventory reports,
+                weekly sales summaries, or monthly analytics - let the AI handle it while you focus on growing
+                your business.
+              </p>
+              <ul className="space-y-4 mb-8">
+                {[
+                  "Schedule queries for any date and time",
+                  "Set up recurring tasks (daily, weekly, monthly)",
+                  "Receive results via email or in-app notifications",
+                  "Combine multiple tools in scheduled workflows"
+                ].map((item, i) => (
+                  <motion.li
+                    key={i}
+                    initial={{ opacity: 0, x: -20 }}
+                    whileInView={{ opacity: 1, x: 0 }}
+                    viewport={{ once: true }}
+                    transition={{ delay: i * 0.1 }}
+                    className="flex items-center space-x-3"
+                  >
+                    <CheckCircle className="w-5 h-5 text-emerald-400 flex-shrink-0" />
+                    <span className="text-gray-300">{item}</span>
+                  </motion.li>
+                ))}
+              </ul>
+              <Link href={ROUTES.SIGNUP}>
+                <motion.button
+                  className="flex items-center space-x-2 bg-gradient-to-r from-emerald-500 to-cyan-500 text-white px-6 py-3 rounded-xl font-semibold hover:opacity-90 transition-opacity"
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                >
+                  <Calendar className="w-5 h-5" />
+                  <span>Start Scheduling</span>
+                </motion.button>
+              </Link>
+            </motion.div>
+
+            {/* Right: Calendar UI Preview */}
+            <motion.div
+              initial={{ opacity: 0, x: 30 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true }}
+              className="relative"
+            >
+              <div className="absolute -inset-4 bg-gradient-to-r from-emerald-500/20 to-cyan-500/20 rounded-3xl blur-2xl" />
+              <div className="relative bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden">
+                {/* Calendar Header */}
+                <div className="bg-gray-800/50 px-6 py-4 border-b border-gray-700 flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    <Calendar className="w-5 h-5 text-emerald-400" />
+                    <span className="font-medium">Schedule Task</span>
+                  </div>
+                  <span className="text-sm text-gray-400">January 2025</span>
+                </div>
+
+                {/* Mock Calendar Grid */}
+                <div className="p-6">
+                  <div className="grid grid-cols-7 gap-2 mb-4">
+                    {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, i) => (
+                      <div key={i} className="text-center text-xs text-gray-500 font-medium py-2">
+                        {day}
+                      </div>
+                    ))}
+                    {Array.from({ length: 35 }, (_, i) => {
+                      const day = i - 2; // Start offset
+                      const isValid = day >= 1 && day <= 31;
+                      const isSelected = day === 15;
+                      const hasTask = [8, 15, 22, 29].includes(day);
+                      return (
+                        <motion.div
+                          key={i}
+                          className={`text-center py-2 rounded-lg text-sm ${
+                            !isValid ? 'text-gray-700' :
+                            isSelected ? 'bg-emerald-500 text-white font-medium' :
+                            hasTask ? 'bg-emerald-500/20 text-emerald-400' :
+                            'text-gray-400 hover:bg-gray-800'
+                          } ${isValid ? 'cursor-pointer' : ''}`}
+                          whileHover={isValid && !isSelected ? { scale: 1.1 } : {}}
+                        >
+                          {isValid ? day : ''}
+                        </motion.div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Time Selection */}
+                  <div className="border-t border-gray-800 pt-4 mt-4">
+                    <div className="flex items-center justify-between mb-4">
+                      <span className="text-sm text-gray-400">Selected: Jan 15, 2025</span>
                       <div className="flex items-center space-x-2 bg-gray-800 rounded-lg px-3 py-1.5">
                         <Clock className="w-4 h-4 text-emerald-400" />
                         <span className="text-sm">09:00 AM</span>
