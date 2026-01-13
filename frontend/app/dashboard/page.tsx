@@ -651,6 +651,19 @@ export default function DashboardPage() {
                   </p>
                 </div>
               </Link>
+
+              <Link href={connectionStatus.schema_status === 'ready' ? ROUTES.DEVELOPER_TOOLS : ROUTES.SCHEMA_CONNECT}>
+                <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md dark:shadow-gray-900/50 p-6 hover:shadow-lg dark:hover:shadow-gray-900/70 transition-shadow cursor-pointer border-2 border-orange-200 dark:border-orange-800">
+                  <div className="text-4xl mb-4">🛠️</div>
+                  <h2 className="text-xl font-semibold mb-2 text-gray-900 dark:text-white">Developer Tools</h2>
+                  <p className="text-gray-600 dark:text-gray-400">
+                    Publish agents, get API keys, embed code.
+                  </p>
+                  {connectionStatus.schema_status !== 'ready' && (
+                    <span className="text-xs text-yellow-600 dark:text-yellow-400 mt-2 block">Discover schema first</span>
+                  )}
+                </div>
+              </Link>
             </div>
 
             {/* Connect Tools Section */}
