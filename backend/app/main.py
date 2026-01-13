@@ -192,7 +192,7 @@ async def root():
 
 # ============ Include Routers ============
 
-from app.routers import inventory, billing, agent, chatkit_server, analytics, db_connect, inventory_agent, auth, schema_agent, gmail, tools, connectors, oauth_connectors, notion_mcp_oauth, gdrive_oauth, gmail_oauth, retellai_mcp, files, user_settings, gemini_file_search, scheduler
+from app.routers import inventory, billing, agent, chatkit_server, analytics, db_connect, inventory_agent, auth, schema_agent, gmail, tools, connectors, oauth_connectors, notion_mcp_oauth, gdrive_oauth, gmail_oauth, retellai_mcp, files, user_settings, gemini_file_search, scheduler, developer_portal, public_agent
 
 # Authentication router (must be first for auth to work)
 app.include_router(auth.router)
@@ -240,6 +240,10 @@ app.include_router(gemini_file_search.router)
 
 # Task Scheduler (Feature 014 - Scheduled task automation)
 app.include_router(scheduler.router)
+
+# Developer Portal & Public Agent API (Phase 14 - Developer Tools)
+app.include_router(developer_portal.router)
+app.include_router(public_agent.router)
 
 logger.info("FastAPI application initialized")
 

@@ -10,6 +10,10 @@ from sqlalchemy.dialects.postgresql import JSONB
 import enum
 from app.database import Base, PortableJSON
 
+# Import models from models package (for auto table creation)
+# These are kept in separate files for better organization
+from app.models.published_agent import PublishedAgentConfig, PublishedAgentUsage
+
 
 # ============================================================================
 # Enums

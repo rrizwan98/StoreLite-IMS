@@ -77,6 +77,7 @@ export const ROUTES = {
   SCHEMA_CONNECT: '/dashboard/schema-connect',
   SCHEMA_AGENT: '/dashboard/schema-agent',
   SCHEDULER: '/dashboard/scheduler',
+  DEVELOPER_TOOLS: '/dashboard/developer-tools',
   // Legacy routes (kept for backwards compatibility)
   LEGACY_ADMIN: '/admin',
   LEGACY_POS: '/pos',
