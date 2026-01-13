@@ -8,6 +8,7 @@ This router allows organizations to:
 - Create/manage published agents with API keys
 - Configure table access, rate limits, and domain restrictions
 - View usage statistics and embed code
+- Generate embeddable code snippets for external integration
 
 Base path: /api/developer
 """
