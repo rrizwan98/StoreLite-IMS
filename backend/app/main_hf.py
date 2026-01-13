@@ -212,4 +212,9 @@ app.include_router(user_settings.router)
 from app.routers import scheduler
 app.include_router(scheduler.router)
 
+# Developer Portal & Public Agent API (Phase 14 - Developer Tools)
+from app.routers import developer_portal, public_agent
+app.include_router(developer_portal.router)
+app.include_router(public_agent.router)
+
 logger.info("Schema Agent API initialized - Ready for queries!")
