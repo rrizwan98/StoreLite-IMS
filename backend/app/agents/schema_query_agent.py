@@ -1032,6 +1032,10 @@ class SchemaQueryAgent:
         self._connector_tool_names: List[str] = []
         self._is_initialized = False
 
+        # Custom system prompt (optional - for published agents)
+        # If set, this will be used instead of generate_schema_agent_prompt()
+        self._custom_system_prompt: Optional[str] = None
+
         # Initialize session manager if user_id is provided
         if user_id:
             self._session_manager = AgentSessionManager(user_id)
@@ -1261,7 +1265,12 @@ class SchemaQueryAgent:
                 logger.info(f"[Schema Agent] Stdio MCP ready with tools: {tool_names}")
 
             # Generate system prompt with schema context
-            system_prompt = generate_schema_agent_prompt(self.schema_metadata)
+            # Use custom prompt if set (for published agents), otherwise use default
+            if self._custom_system_prompt:
+                system_prompt = self._custom_system_prompt
+                logger.info(f"[Schema Agent] Using custom system prompt (published agent mode)")
+            else:
+                system_prompt = generate_schema_agent_prompt(self.schema_metadata)
 
             # Add connector tools info to system prompt if available
             if self.connector_tools and self._connector_tool_names:
@@ -1651,7 +1660,12 @@ IMPORTANT CONNECTOR TOOL RULES:
                 logger.info(f"[Schema Agent] Stdio MCP ready with tools: {tool_names}")
 
             # Generate system prompt
-            system_prompt = generate_schema_agent_prompt(self.schema_metadata)
+            # Use custom prompt if set (for published agents), otherwise use default
+            if self._custom_system_prompt:
+                system_prompt = self._custom_system_prompt
+                logger.info(f"[Schema Agent Stream] Using custom system prompt (published agent mode)")
+            else:
+                system_prompt = generate_schema_agent_prompt(self.schema_metadata)
 
             # Add connector tools info
             if self.connector_tools and self._connector_tool_names:

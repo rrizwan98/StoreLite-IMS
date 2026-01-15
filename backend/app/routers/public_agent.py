@@ -37,9 +37,9 @@ from app.services.api_key_service import validate_api_key
 from app.services.schema_filter_service import filter_schema_for_published_agent
 from app.services.published_agent_rate_limiter import check_and_record_rate_limit
 from app.services.domain_validator import validate_origin
-from app.services.published_agent_service import PublishedAgentService
+from app.services.published_agent_service import PublishedAgentService, generate_published_agent_prompt
 from app.services.sql_table_validator import get_table_access_summary
-from app.agents.schema_query_agent import create_schema_query_agent, SchemaQueryAgent
+from app.agents.schema_query_agent import SchemaQueryAgent
 
 logger = logging.getLogger(__name__)
 
@@ -69,20 +69,16 @@ async def _get_or_create_agent(
         thread_id: Thread ID for conversation
 
     Returns:
-        SchemaQueryAgent instance with filtered schema
+        SchemaQueryAgent instance with filtered schema and specialized prompt
 
     IMPORTANT:
         - Caching is DISABLED for published agents to ensure table restrictions work
         - Each request creates a fresh agent with properly filtered schema
-        - This is necessary because the agent prompt contains the schema
+        - Uses specialized prompt that hides database details from users
+        - Agent acts as organization representative, not a database assistant
     """
     # NOTE: Cache disabled for security - each request gets fresh agent
     # This ensures table filtering is always applied correctly
-    # cache_key = config.id
-    # if cache_key in _published_agent_cache:
-    #     cached_agent = _published_agent_cache[cache_key]
-    #     logger.debug(f"[Public API] Using cached agent for {cache_key[:8]}...")
-    #     return cached_agent
 
     # Filter schema based on allowed tables and access mode
     filtered_schema = filter_schema_for_published_agent(
@@ -101,22 +97,37 @@ async def _get_or_create_agent(
     # Determine read_only based on access_mode
     read_only = config.access_mode == "read_only"
 
-    # Create new agent with filtered schema
-    agent = await create_schema_query_agent(
+    # Generate specialized prompt for published agents
+    # This prompt ensures the agent:
+    # 1. Never mentions table names or database structure
+    # 2. Acts as an employee of the organization
+    # 3. Adapts to any industry dynamically
+    system_prompt = generate_published_agent_prompt(
+        schema_metadata=filtered_schema,
+        agent_name=config.name,
+        custom_instructions=config.custom_instructions,
+    )
+
+    # Create agent with specialized prompt
+    agent = SchemaQueryAgent(
         database_uri=user_connection.database_uri,
         schema_metadata=filtered_schema,
-        auto_initialize=True,
         read_only=read_only,
         user_id=config.user_id,
         thread_id=thread_id,
     )
 
-    # NOTE: Caching disabled for security reasons
-    # _published_agent_cache[cache_key] = agent
+    # Override the system prompt with our specialized one
+    agent._custom_system_prompt = system_prompt
+
+    # Initialize the agent
+    result = await agent.initialize()
+    if not result.get("success"):
+        raise RuntimeError(f"Failed to initialize agent: {result.get('error')}")
 
     logger.info(
-        f"[Public API] Created fresh agent for {config.id[:8]}... "
-        f"(tables={len(config.allowed_tables)}, mode={config.access_mode})"
+        f"[Public API] Created published agent for {config.id[:8]}... "
+        f"(name='{config.name}', tables={len(config.allowed_tables)}, mode={config.access_mode})"
     )
 
     return agent
