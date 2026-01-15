@@ -9,7 +9,8 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
-import { Settings, Check, Mail, BarChart3, Download, Server, ChevronRight, AlertTriangle, Loader2 } from 'lucide-react';
+import { Settings, Check, Mail, BarChart3, Download, Server, ChevronRight, AlertTriangle, Loader2, HelpCircle } from 'lucide-react';
+import Tooltip from '@/components/ui/Tooltip';
 import { getAllTools, SystemTool } from '@/lib/tools-api';
 import { getConnectors, Connector, checkConnectorHealth, HealthCheckResult } from '@/lib/connectors-api';
 
@@ -91,7 +92,21 @@ export default function ConnectToolsSection({ className = '' }: ConnectToolsSect
     <div className={`bg-white dark:bg-gray-800 rounded-xl shadow-md dark:shadow-gray-900/50 p-6 ${className}`}>
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h2 className="text-xl font-bold text-gray-900 dark:text-white">Connected Tools</h2>
+          <div className="flex items-center space-x-2">
+            <h2 className="text-xl font-bold text-gray-900 dark:text-white">Connected Tools</h2>
+            <Tooltip
+              content="Tools extend your AI Agent's capabilities. Connect Gmail to search emails, Google Drive to access files, or add custom MCP servers for specialized functionality."
+              position="right"
+            >
+              <button
+                type="button"
+                className="p-0.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                aria-label="Learn more about connected tools"
+              >
+                <HelpCircle className="h-4 w-4" />
+              </button>
+            </Tooltip>
+          </div>
           <p className="text-sm text-gray-600 dark:text-gray-400">
             {totalConnected > 0
               ? `${totalConnected} tool${totalConnected !== 1 ? 's' : ''} connected to AI Agent`
@@ -100,7 +115,7 @@ export default function ConnectToolsSection({ className = '' }: ConnectToolsSect
         </div>
         <Link
           href="/dashboard/settings"
-          className="flex items-center px-4 py-2 text-sm font-medium text-white bg-emerald-600 dark:bg-emerald-500 rounded-lg hover:bg-emerald-700 dark:hover:bg-emerald-600 transition-colors"
+          className="flex items-center px-4 py-2 text-sm font-medium text-white bg-emerald-600 dark:bg-emerald-500 rounded-lg hover:bg-emerald-700 dark:hover:bg-emerald-600 transition-colors click-feedback"
         >
           <Settings className="w-4 h-4 mr-2" />
           Manage All Tools
@@ -135,10 +150,11 @@ export default function ConnectToolsSection({ className = '' }: ConnectToolsSect
             <div>
               <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase mb-2">System Tools</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {connectedSystemTools.map((tool) => (
+                {connectedSystemTools.map((tool, index) => (
                   <div
                     key={tool.id}
-                    className="flex items-center p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-100 dark:border-gray-600"
+                    className="flex items-center p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-100 dark:border-gray-600 animate-fade-in-up opacity-0"
+                    style={{ animationDelay: `${index * 50}ms`, animationFillMode: 'forwards' }}
                   >
                     <div className="w-10 h-10 rounded-lg bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 flex items-center justify-center mr-3">
                       {iconMap[tool.icon] || <Mail className="h-5 w-5" />}
@@ -161,7 +177,7 @@ export default function ConnectToolsSection({ className = '' }: ConnectToolsSect
             <div>
               <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase mb-2">MCP Connectors</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {connectors.map((connector) => {
+                {connectors.map((connector, index) => {
                   const healthStatus = healthStatuses[connector.id];
                   const isCheckingHealth = healthCheckLoading[connector.id];
                   const isHealthy = healthStatus?.is_healthy ?? true;
@@ -169,17 +185,18 @@ export default function ConnectToolsSection({ className = '' }: ConnectToolsSect
                   return (
                     <div
                       key={connector.id}
-                      className={`flex items-center p-3 rounded-lg border ${
+                      className={`flex items-center p-3 rounded-lg border animate-fade-in-up opacity-0 ${
                         isHealthy
                           ? 'bg-gray-50 dark:bg-gray-700/50 border-gray-100 dark:border-gray-600'
                           : 'bg-red-50 dark:bg-red-900/30 border-red-200 dark:border-red-800'
                       }`}
+                      style={{ animationDelay: `${(connectedSystemTools.length + index) * 50}ms`, animationFillMode: 'forwards' }}
                     >
                       <div className={`w-10 h-10 rounded-lg flex items-center justify-center mr-3 ${
                         isHealthy
                           ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400'
                           : 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400'
-                      }`}>
+                      } ${isCheckingHealth ? 'animate-pulse-subtle' : ''}`}>
                         <Server className="h-5 w-5" />
                       </div>
                       <div className="flex-1 min-w-0">
