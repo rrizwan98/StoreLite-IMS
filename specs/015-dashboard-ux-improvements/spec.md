@@ -3,7 +3,7 @@
 **Feature ID**: 015-dashboard-ux-improvements
 **Feature Branch**: `feat/dashboard-ux-improvements`
 **Created**: 2025-01-16
-**Version**: v1.4
+**Version**: v1.5
 **Status**: In Progress
 **Type**: UI/UX Enhancement (No Backend Changes)
 
@@ -16,6 +16,7 @@
 | v1.2 | 2025-01-16 | Added Phase 6: Recent Activity Panel using existing API data (no backend changes) |
 | v1.3 | 2025-01-16 | Added Phase 7: Interactive Onboarding Tour (custom build, no external libraries) |
 | v1.4 | 2025-01-16 | Added Phase 8: Customizable Dashboard Widgets (show/hide, reorder, persist to localStorage) |
+| v1.5 | 2025-01-16 | Added Phase 9: Tour UX Improvements (multi-step coach marks, scroll lock, auto-completion triggers, revisitable tips) |
 
 ## Executive Summary
 
@@ -304,6 +305,47 @@ As a power user, I want to customize my dashboard by showing/hiding widgets and 
 
 ---
 
+### User Story 15 - User: Enhanced Tour UX (Priority: P1 - Phase 9) [v1.5]
+
+As a new user, I want an improved onboarding tour experience with scroll lock, auto-completion triggers, and revisitable tips so that I can learn features more effectively without confusion.
+
+**Why this priority**: P1 - User feedback highlighted specific tour UX issues: overlay scroll confusion, no auto-progress on actions, and missing persistent help.
+
+**Independent Test**: Can be tested by starting the tour, attempting to scroll, performing actions to trigger auto-completion, and verifying info icons appear after tour completion.
+
+**Improvements to Existing Tour:**
+
+1. **Scroll Lock During Overlay**
+   - When tour overlay is active, page scroll should be disabled
+   - Only highlighted element should be visible in viewport
+   - Prevents confusing behavior where overlay moves with scroll
+
+2. **Multi-step Coach Marks with Auto-Trigger**
+   - Tour becomes contextual: after completing action, next step auto-triggers
+   - Example: User clicks "Open Chat" → tour auto-advances to "Ask your first question" step
+   - Example: User creates first scheduled task → tour auto-advances to next step
+
+3. **Automated Completion Triggers**
+   - When user opens chat and sends first query → checklist "Ask your first AI question" auto-marks as complete
+   - When user creates first scheduled task → checklist "Create scheduled task" auto-marks as complete
+   - Progress bar updates in real-time with visual checkmark animation
+
+4. **Revisitable Info Tips**
+   - After tour completion, each feature card shows a small info (ℹ️) icon
+   - Hovering/clicking info icon shows quick feature summary tooltip
+   - Tips are always accessible, not just during tour
+
+**Acceptance Scenarios**:
+
+1. **Given** the tour is active, **When** I try to scroll the page, **Then** scroll is disabled and overlay stays fixed
+2. **Given** I'm on "AI Agent" tour step and click "Open Chat", **When** chat opens, **Then** tour auto-advances to "Ask your first question" step
+3. **Given** I'm on tour step 2, **When** I click Next/Previous buttons, **Then** smooth transition occurs with proper arrow indicators
+4. **Given** I send my first AI query during tour, **When** query is sent, **Then** checklist progress bar animates and shows checkmark
+5. **Given** tour is completed, **When** I view any feature card, **Then** I see a small info icon for quick feature summary
+6. **Given** I hover over the info icon on AI Agent card, **When** hovering, **Then** tooltip shows "Ask natural language questions about your data"
+
+---
+
 ## Requirements
 
 ### Functional Requirements
@@ -468,6 +510,44 @@ As a power user, I want to customize my dashboard by showing/hiding widgets and 
 ##### Default Configuration
 - **FR-096**: Default order: Checklist, KPI Stats, Recent Activity, Feature Cards, Connected Tools
 - **FR-097**: Default visibility: All widgets visible
+
+#### P1 Phase 9 - Enhanced Tour UX (v1.5)
+
+##### Scroll Lock During Tour
+- **FR-098**: When tour overlay is active, body scroll MUST be disabled (`overflow: hidden`)
+- **FR-099**: Tour MUST scroll target element into view before highlighting
+- **FR-100**: When tour ends or is skipped, scroll MUST be re-enabled
+
+##### Multi-step Coach Marks with Auto-Trigger
+- **FR-101**: Tour steps MUST support optional action triggers that auto-advance to next step
+- **FR-102**: Clicking "Open Chat" button during AI Agent step MUST auto-advance tour
+- **FR-103**: Creating first scheduled task MUST auto-advance tour to completion celebration
+- **FR-104**: Auto-triggered steps MUST show a brief transition animation (not instant jump)
+
+##### Next/Previous Navigation Enhancement
+- **FR-105**: Previous button MUST be visible on all steps except first (already implemented)
+- **FR-106**: Navigation buttons MUST have clear visual arrow indicators
+- **FR-107**: Close (×) icon MUST only trigger skip confirmation, not direct close
+- **FR-108**: "Continue" action MUST be visually distinct from close/skip
+
+##### Automated Completion Triggers
+- **FR-109**: Checklist MUST listen for custom events to update completion status in real-time
+- **FR-110**: When `ims_first_ai_query` localStorage is set, checklist progress MUST animate update
+- **FR-111**: When `ims_first_task_created` localStorage is set, checklist progress MUST animate update
+- **FR-112**: Progress bar MUST show smooth animation when items complete (not instant jump)
+
+##### Revisitable Info Tips
+- **FR-113**: Feature cards MUST display info (ℹ️) icon after tour completion
+- **FR-114**: Info icon MUST show tooltip with quick feature summary on hover
+- **FR-115**: Info icons MUST be visible regardless of tour completion state (always accessible)
+- **FR-116**: Info tooltips MUST be positioned to avoid viewport edges
+
+##### Info Tip Content
+- **FR-117**: AI Agent info tip: "Ask natural language questions about your data"
+- **FR-118**: Scheduler info tip: "Automate recurring queries on a schedule"
+- **FR-119**: Connection info tip: "View your database schema and tables"
+- **FR-120**: Developer Tools info tip: "Publish and manage custom AI agents"
+- **FR-121**: Connected Tools info tip: "Extend AI capabilities with external integrations"
 
 ### Non-Functional Requirements
 

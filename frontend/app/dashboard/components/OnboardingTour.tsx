@@ -5,6 +5,11 @@
  * NO external libraries - uses existing Tailwind/CSS animations.
  *
  * v1.3: Phase 7 - Interactive Onboarding Tour
+ * v1.5: Phase 9 - Tour UX Improvements
+ *   - Scroll lock during overlay
+ *   - Auto-scroll to target element
+ *   - Multi-step coach marks with auto-trigger on action
+ *   - Event-based tour advancement
  */
 
 'use client';
@@ -29,6 +34,10 @@ interface TourStep {
   title: string;
   description: string;
   position: 'top' | 'bottom' | 'left' | 'right';
+  /** Optional action element selector - clicking this auto-advances tour */
+  actionTrigger?: string;
+  /** Optional event name that triggers auto-advance */
+  triggerEvent?: string;
 }
 
 // Tour steps configuration
@@ -38,6 +47,8 @@ const TOUR_STEPS: TourStep[] = [
     title: 'AI Agent',
     description: 'Start here! Ask questions about your data in natural language. The AI understands your database schema.',
     position: 'right',
+    // When user clicks "Open Chat" button, auto-advance tour
+    actionTrigger: '[data-tour="ai-agent-card"] a, [data-tour="ai-agent-card"] button',
   },
   {
     target: '[data-tour="kpi-stats"]',
@@ -56,6 +67,8 @@ const TOUR_STEPS: TourStep[] = [
     title: 'Scheduler',
     description: 'Automate recurring queries on a schedule. Perfect for daily reports or automated monitoring.',
     position: 'left',
+    // When user clicks scheduler action, auto-advance tour
+    actionTrigger: '[data-tour="scheduler-card"] a, [data-tour="scheduler-card"] button',
   },
   {
     target: '[data-tour="help-button"]',
@@ -102,6 +115,68 @@ export default function OnboardingTour({ onComplete, onSkip, forceStart = false 
     }
   }, [forceStart]);
 
+  // v1.5: Smart scroll - scroll target element into view with space for tooltip
+  useEffect(() => {
+    if (!isActive) return;
+
+    const step = TOUR_STEPS[currentStep];
+    const element = document.querySelector(step.target) as HTMLElement;
+
+    if (element) {
+      // Get element's absolute position on page
+      const rect = element.getBoundingClientRect();
+      const viewportHeight = window.innerHeight;
+      const tooltipHeight = 220; // Approximate tooltip height including footer
+      const padding = 40;
+
+      // Calculate element's absolute position (not relative to viewport)
+      const elementAbsoluteTop = rect.top + window.scrollY;
+
+      let targetScrollY = window.scrollY;
+
+      // Calculate scroll position to ensure both element AND tooltip are visible
+      switch (step.position) {
+        case 'top':
+          // Tooltip appears above element - need element lower in viewport
+          // Scroll so element is in lower half with space above for tooltip
+          targetScrollY = elementAbsoluteTop - tooltipHeight - padding - 80;
+          break;
+        case 'bottom':
+          // Tooltip appears below element - need element higher in viewport
+          // Scroll so element is near top with space below for tooltip
+          targetScrollY = elementAbsoluteTop - padding - 60;
+          break;
+        case 'left':
+        case 'right':
+          // Tooltip appears to side - center element vertically
+          // Account for tooltip height when centering
+          targetScrollY = elementAbsoluteTop - (viewportHeight / 2) + (rect.height / 2);
+          break;
+      }
+
+      // Ensure we don't scroll past document boundaries
+      targetScrollY = Math.max(0, targetScrollY);
+      const maxScroll = document.documentElement.scrollHeight - viewportHeight;
+      targetScrollY = Math.min(targetScrollY, maxScroll);
+
+      // Smooth scroll to calculated position
+      window.scrollTo({
+        top: targetScrollY,
+        behavior: 'smooth',
+      });
+
+      // Update target rect after scroll animation completes
+      const scrollTimeout = setTimeout(() => {
+        // Get fresh rect after scroll
+        const freshRect = element.getBoundingClientRect();
+        setTargetRect(freshRect);
+      }, 500);
+
+      return () => clearTimeout(scrollTimeout);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isActive, currentStep]);
+
   // Update target rect when step changes
   const updateTargetRect = useCallback(() => {
     if (!isActive) return;
@@ -116,17 +191,31 @@ export default function OnboardingTour({ onComplete, onSkip, forceStart = false 
   }, [isActive, currentStep]);
 
   useEffect(() => {
+    if (!isActive) return;
+
+    // Initial update
     updateTargetRect();
 
-    // Update on scroll/resize
-    window.addEventListener('scroll', updateTargetRect);
-    window.addEventListener('resize', updateTargetRect);
+    // Update on scroll/resize with throttle for performance
+    let ticking = false;
+    const handleUpdate = () => {
+      if (!ticking) {
+        window.requestAnimationFrame(() => {
+          updateTargetRect();
+          ticking = false;
+        });
+        ticking = true;
+      }
+    };
+
+    window.addEventListener('scroll', handleUpdate, { passive: true });
+    window.addEventListener('resize', handleUpdate, { passive: true });
 
     return () => {
-      window.removeEventListener('scroll', updateTargetRect);
-      window.removeEventListener('resize', updateTargetRect);
+      window.removeEventListener('scroll', handleUpdate);
+      window.removeEventListener('resize', handleUpdate);
     };
-  }, [updateTargetRect]);
+  }, [updateTargetRect, isActive]);
 
   // Handle keyboard navigation
   useEffect(() => {
@@ -144,6 +233,37 @@ export default function OnboardingTour({ onComplete, onSkip, forceStart = false 
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [isActive, currentStep]);
+
+  // v1.5: Action trigger listeners for auto-advance
+  useEffect(() => {
+    if (!isActive) return;
+
+    const step = TOUR_STEPS[currentStep];
+    if (!step.actionTrigger) return;
+
+    const elements = document.querySelectorAll(step.actionTrigger);
+
+    const handleActionClick = () => {
+      // Auto-advance to next step after brief delay for visual feedback
+      setTimeout(() => {
+        if (currentStep < TOUR_STEPS.length - 1) {
+          setCurrentStep((prev) => prev + 1);
+        } else {
+          handleComplete();
+        }
+      }, 300);
+    };
+
+    elements.forEach((el) => {
+      el.addEventListener('click', handleActionClick);
+    });
+
+    return () => {
+      elements.forEach((el) => {
+        el.removeEventListener('click', handleActionClick);
+      });
+    };
   }, [isActive, currentStep]);
 
   const handleNext = () => {
