@@ -3,7 +3,7 @@
 **Feature ID**: 015-dashboard-ux-improvements
 **Feature Branch**: `feat/dashboard-ux-improvements`
 **Created**: 2025-01-16
-**Version**: v1.5
+**Version**: v1.6
 **Status**: In Progress
 **Type**: UI/UX Enhancement (No Backend Changes)
 
@@ -17,6 +17,7 @@
 | v1.3 | 2025-01-16 | Added Phase 7: Interactive Onboarding Tour (custom build, no external libraries) |
 | v1.4 | 2025-01-16 | Added Phase 8: Customizable Dashboard Widgets (show/hide, reorder, persist to localStorage) |
 | v1.5 | 2025-01-16 | Added Phase 9: Tour UX Improvements (multi-step coach marks, scroll lock, auto-completion triggers, revisitable tips) |
+| v1.6 | 2025-01-16 | Added Phase 9.1: Responsive Tour Cards + Centered Finish Screen |
 
 ## Executive Summary
 
@@ -346,6 +347,44 @@ As a new user, I want an improved onboarding tour experience with scroll lock, a
 
 ---
 
+### User Story 16 - User: Responsive Tour Cards (Priority: P1 - Phase 9.1) [v1.6]
+
+As a user on mobile or tablet, I want the tour cards to be responsive and readable so that I can complete the onboarding tour on any device.
+
+**Why this priority**: P1 - Mobile-first design is essential. Users accessing dashboard on smaller screens need properly sized tour cards.
+
+**Independent Test**: Can be tested by resizing browser or using mobile emulation and verifying tour cards adapt properly.
+
+**Improvements:**
+
+1. **Responsive Tooltip Width**
+   - Very small screens (<400px): 280px max width
+   - Mobile (<640px): 300px max width
+   - Desktop: 320px fixed width
+
+2. **Responsive Typography & Spacing**
+   - Smaller text and padding on mobile (text-xs/sm, px-3/py-3)
+   - Larger text and padding on desktop (text-sm/base, px-5/py-4)
+
+3. **Mobile-Optimized Positioning**
+   - Left/right positioned tooltips switch to bottom on mobile
+   - Prevents tooltips from overflowing viewport
+
+4. **Centered Finish Card**
+   - When tour completes, show a celebration card centered on screen
+   - Gradient header with success icon and message
+   - Quick tips section with keyboard shortcut hint
+   - Responsive sizing for mobile/desktop
+
+**Acceptance Scenarios**:
+
+1. **Given** I'm on a mobile device (<640px), **When** viewing a tour step, **Then** the tooltip is responsive and fits the screen
+2. **Given** a step has left/right positioning, **When** on mobile, **Then** the tooltip appears below the target instead
+3. **Given** I complete the tour, **When** the finish card appears, **Then** it's centered on screen with celebration UI
+4. **Given** I click "Start Exploring" on finish card, **When** clicked, **Then** the tour closes and is marked complete
+
+---
+
 ## Requirements
 
 ### Functional Requirements
@@ -548,6 +587,24 @@ As a new user, I want an improved onboarding tour experience with scroll lock, a
 - **FR-119**: Connection info tip: "View your database schema and tables"
 - **FR-120**: Developer Tools info tip: "Publish and manage custom AI agents"
 - **FR-121**: Connected Tools info tip: "Extend AI capabilities with external integrations"
+
+#### P1 Phase 9.1 - Responsive Tour Cards (v1.6)
+
+##### Responsive Tooltip Sizing
+- **FR-122**: Tooltip width MUST be responsive: 280px (<400px), 300px (<640px), 320px (desktop)
+- **FR-123**: Tooltip padding MUST be responsive: px-3/py-3 (mobile), px-5/py-4 (desktop)
+- **FR-124**: Tooltip text MUST be responsive: text-xs/sm (mobile), text-sm/base (desktop)
+
+##### Mobile-Optimized Positioning
+- **FR-125**: Left/right positioned tooltips MUST switch to bottom positioning on mobile
+- **FR-126**: Tooltip MUST stay within viewport boundaries on all screen sizes
+
+##### Centered Finish Card
+- **FR-127**: When tour completes, a centered finish card MUST appear instead of immediately closing
+- **FR-128**: Finish card MUST include gradient header with success icon
+- **FR-129**: Finish card MUST include quick tips section
+- **FR-130**: Finish card MUST have "Start Exploring" button to dismiss
+- **FR-131**: Finish card MUST be responsive (max-w-xs on mobile, max-w-sm on desktop)
 
 ### Non-Functional Requirements
 
