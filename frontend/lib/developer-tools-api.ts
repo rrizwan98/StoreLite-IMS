@@ -365,3 +365,130 @@ export function formatNumber(num: number): string {
 export function truncateApiKey(prefix: string): string {
   return prefix.length > 15 ? prefix.substring(0, 15) + '...' : prefix;
 }
+
+/**
+ * Format response time to human-readable format
+ */
+export function formatResponseTime(ms: number): {
+  display: string;
+  shortDisplay: string;
+  status: 'fast' | 'normal' | 'slow';
+  color: string;
+} {
+  let display: string;
+  let shortDisplay: string;
+  let status: 'fast' | 'normal' | 'slow';
+  let color: string;
+
+  if (ms < 1000) {
+    display = `${ms.toFixed(0)}ms`;
+    shortDisplay = `${ms.toFixed(0)}ms`;
+    status = 'fast';
+    color = '#10B981'; // Green
+  } else if (ms < 5000) {
+    display = `${(ms / 1000).toFixed(1)}s`;
+    shortDisplay = `${(ms / 1000).toFixed(1)}s`;
+    status = 'fast';
+    color = '#10B981'; // Green
+  } else if (ms < 30000) {
+    display = `${(ms / 1000).toFixed(1)}s`;
+    shortDisplay = `${(ms / 1000).toFixed(0)}s`;
+    status = 'normal';
+    color = '#F59E0B'; // Amber
+  } else if (ms < 60000) {
+    display = `${(ms / 1000).toFixed(0)}s`;
+    shortDisplay = `${(ms / 1000).toFixed(0)}s`;
+    status = 'slow';
+    color = '#EF4444'; // Red
+  } else {
+    const minutes = Math.floor(ms / 60000);
+    const seconds = Math.round((ms % 60000) / 1000);
+    display = seconds > 0 ? `${minutes}m ${seconds}s` : `${minutes}m`;
+    shortDisplay = `${minutes}m+`;
+    status = 'slow';
+    color = '#EF4444'; // Red
+  }
+
+  return { display, shortDisplay, status, color };
+}
+
+/**
+ * Get performance status color based on success rate
+ */
+export function getSuccessRateStatus(rate: number): {
+  status: 'excellent' | 'good' | 'warning' | 'critical';
+  color: string;
+  bgColor: string;
+  label: string;
+} {
+  if (rate >= 95) {
+    return {
+      status: 'excellent',
+      color: '#10B981',
+      bgColor: 'bg-green-100 dark:bg-green-900/30',
+      label: 'Excellent',
+    };
+  } else if (rate >= 80) {
+    return {
+      status: 'good',
+      color: '#3B82F6',
+      bgColor: 'bg-blue-100 dark:bg-blue-900/30',
+      label: 'Good',
+    };
+  } else if (rate >= 50) {
+    return {
+      status: 'warning',
+      color: '#F59E0B',
+      bgColor: 'bg-amber-100 dark:bg-amber-900/30',
+      label: 'Needs Attention',
+    };
+  } else {
+    return {
+      status: 'critical',
+      color: '#EF4444',
+      bgColor: 'bg-red-100 dark:bg-red-900/30',
+      label: 'Critical',
+    };
+  }
+}
+
+/**
+ * Calculate trend percentage between two values
+ */
+export function calculateTrend(current: number, previous: number): {
+  percentage: number;
+  direction: 'up' | 'down' | 'neutral';
+  display: string;
+  color: string;
+  isPositive: boolean;
+} {
+  if (previous === 0) {
+    if (current === 0) {
+      return {
+        percentage: 0,
+        direction: 'neutral',
+        display: '0%',
+        color: '#6B7280',
+        isPositive: true,
+      };
+    }
+    return {
+      percentage: 100,
+      direction: 'up',
+      display: '+100%',
+      color: '#10B981',
+      isPositive: true,
+    };
+  }
+
+  const percentage = ((current - previous) / previous) * 100;
+  const direction = percentage > 0 ? 'up' : percentage < 0 ? 'down' : 'neutral';
+
+  return {
+    percentage: Math.abs(percentage),
+    direction,
+    display: `${percentage >= 0 ? '+' : ''}${percentage.toFixed(0)}%`,
+    color: percentage >= 0 ? '#10B981' : '#EF4444',
+    isPositive: percentage >= 0,
+  };
+}
