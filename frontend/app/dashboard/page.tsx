@@ -706,7 +706,14 @@ export default function DashboardPage() {
                           </span>
                         )}
                         <div className="text-4xl mb-4">🧠</div>
-                        <h2 className="text-xl font-semibold mb-2 text-gray-900 dark:text-white">AI Agent</h2>
+                        <div className="flex items-center justify-between mb-2">
+                          <h2 className="text-xl font-semibold text-gray-900 dark:text-white">AI Agent</h2>
+                          {/* v1.5: Revisitable info tip */}
+                          <InfoTooltip
+                            content="Ask natural language questions about your data. The AI understands your database schema and can generate SQL queries."
+                            position="left"
+                          />
+                        </div>
                         <p className="text-gray-600 dark:text-gray-400 text-sm mb-4">
                           Ask questions about your data in natural language.
                         </p>
@@ -732,7 +739,14 @@ export default function DashboardPage() {
                         }`}
                       >
                         <div className="text-4xl mb-4">⏰</div>
-                        <h2 className="text-xl font-semibold mb-2 text-gray-900 dark:text-white">Scheduler</h2>
+                        <div className="flex items-center justify-between mb-2">
+                          <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Scheduler</h2>
+                          {/* v1.5: Revisitable info tip */}
+                          <InfoTooltip
+                            content="Automate recurring queries on a schedule. Perfect for daily reports, weekly summaries, or automated monitoring."
+                            position="left"
+                          />
+                        </div>
                         <p className="text-gray-600 dark:text-gray-400 text-sm mb-4">
                           Schedule automated tasks to run at specific times.
                         </p>
@@ -755,7 +769,14 @@ export default function DashboardPage() {
                         isNewUser ? 'opacity-75 hover:opacity-100' : ''
                       }`}>
                         <div className="text-4xl mb-4">🔌</div>
-                        <h2 className="text-xl font-semibold mb-2 text-gray-900 dark:text-white">Connection</h2>
+                        <div className="flex items-center justify-between mb-2">
+                          <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Connection</h2>
+                          {/* v1.5: Revisitable info tip */}
+                          <InfoTooltip
+                            content="View your database schema and discovered tables. Refresh metadata or manage your database connection settings."
+                            position="left"
+                          />
+                        </div>
                         <p className="text-gray-600 dark:text-gray-400 text-sm mb-4">
                           View schema, refresh metadata, or upgrade mode.
                         </p>
@@ -771,7 +792,14 @@ export default function DashboardPage() {
                         isNewUser ? 'opacity-75 hover:opacity-100' : ''
                       }`}>
                         <div className="text-4xl mb-4">🛠️</div>
-                        <h2 className="text-xl font-semibold mb-2 text-gray-900 dark:text-white">Developer Tools</h2>
+                        <div className="flex items-center justify-between mb-2">
+                          <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Developer Tools</h2>
+                          {/* v1.5: Revisitable info tip */}
+                          <InfoTooltip
+                            content="Publish and manage custom AI agents. Get API keys and embed code to integrate AI capabilities into your applications."
+                            position="left"
+                          />
+                        </div>
                         <p className="text-gray-600 dark:text-gray-400 text-sm mb-4">
                           Publish agents, get API keys, embed code.
                         </p>

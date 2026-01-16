@@ -8,6 +8,11 @@
  * v1.1 Updates:
  * - Added inline action buttons per step
  * - Auto-collapse when all steps completed
+ *
+ * v1.5 Updates:
+ * - Real-time progress updates via custom events
+ * - Animated progress bar transitions
+ * - Visual checkmark animation on completion
  */
 
 'use client';
@@ -130,6 +135,31 @@ export default function OnboardingChecklist({
     if (allComplete && !dismissed) {
       setIsAutoCollapsed(true);
     }
+  }, [connectionStatus, connectorsCount]);
+
+  // v1.5: Listen for real-time completion events
+  useEffect(() => {
+    const handleChecklistUpdate = () => {
+      // Re-fetch checklist items to reflect new completion states
+      const updatedItems = getChecklistItems(connectionStatus, connectorsCount);
+      setItems(updatedItems);
+
+      // Check for auto-collapse
+      const allComplete = updatedItems.every(item => item.isComplete);
+      const dismissed = localStorage.getItem(STORAGE_KEYS.CHECKLIST_DISMISSED) === 'true';
+      if (allComplete && !dismissed) {
+        setIsAutoCollapsed(true);
+      }
+    };
+
+    // Listen for custom events that indicate checklist progress
+    window.addEventListener('checklist-item-complete', handleChecklistUpdate);
+    window.addEventListener('storage', handleChecklistUpdate);
+
+    return () => {
+      window.removeEventListener('checklist-item-complete', handleChecklistUpdate);
+      window.removeEventListener('storage', handleChecklistUpdate);
+    };
   }, [connectionStatus, connectorsCount]);
 
   // Handle dismiss
@@ -352,6 +382,10 @@ export default function OnboardingChecklist({
 export function markFirstAIQueryComplete() {
   if (typeof window !== 'undefined') {
     localStorage.setItem(STORAGE_KEYS.FIRST_AI_QUERY, 'true');
+    // v1.5: Dispatch custom event for real-time checklist update
+    window.dispatchEvent(new CustomEvent('checklist-item-complete', {
+      detail: { item: 'first_query' }
+    }));
   }
 }
 
@@ -359,5 +393,9 @@ export function markFirstAIQueryComplete() {
 export function markFirstTaskCreated() {
   if (typeof window !== 'undefined') {
     localStorage.setItem(STORAGE_KEYS.FIRST_TASK_CREATED, 'true');
+    // v1.5: Dispatch custom event for real-time checklist update
+    window.dispatchEvent(new CustomEvent('checklist-item-complete', {
+      detail: { item: 'first_task' }
+    }));
   }
 }
