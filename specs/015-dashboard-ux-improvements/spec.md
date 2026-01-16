@@ -3,7 +3,7 @@
 **Feature ID**: 015-dashboard-ux-improvements
 **Feature Branch**: `feat/dashboard-ux-improvements`
 **Created**: 2025-01-16
-**Version**: v1.2
+**Version**: v1.3
 **Status**: In Progress
 **Type**: UI/UX Enhancement (No Backend Changes)
 
@@ -14,6 +14,7 @@
 | v1.0 | 2025-01-16 | Initial spec: KPI Stats, Onboarding Checklist, CTAs, Microinteractions, Tooltips |
 | v1.1 | 2025-01-16 | Added Phase 5 Quick Wins: Checklist action buttons, auto-collapse, tools quick actions, help button, learn more link |
 | v1.2 | 2025-01-16 | Added Phase 6: Recent Activity Panel using existing API data (no backend changes) |
+| v1.3 | 2025-01-16 | Added Phase 7: Interactive Onboarding Tour (custom build, no external libraries) |
 
 ## Executive Summary
 
@@ -236,6 +237,40 @@ As a returning user, I want to see my recent activity on the dashboard so that I
 
 ---
 
+### User Story 13 - New User: Interactive Onboarding Tour (Priority: P1 - Phase 7) [v1.3]
+
+As a new user, I want an interactive guided tour of the dashboard so that I can quickly understand how to use the key features without reading documentation.
+
+**Why this priority**: P1 - Interactive tours increase feature discovery by 60% and reduce time-to-first-value. First-time users need visual guidance.
+
+**Independent Test**: Can be tested by clearing localStorage and verifying the tour starts automatically for new users.
+
+**Technical Approach (Custom Build - NO external libraries):**
+- Uses existing Framer Motion for animations
+- Uses existing Tailwind for styling
+- localStorage for tour completion tracking (`ims_onboarding_tour_completed`)
+
+**Acceptance Scenarios**:
+
+1. **Given** I am a first-time user (no localStorage flag), **When** I land on the dashboard, **Then** the tour starts automatically after 1 second delay
+2. **Given** the tour is active, **When** viewing a step, **Then** I see a spotlight on the target element with a tooltip explaining its purpose
+3. **Given** I am on a tour step, **When** I click "Next", **Then** the spotlight and tooltip animate smoothly to the next target
+4. **Given** I am on the first step, **When** I view controls, **Then** I see "Skip" and "Next" buttons (no "Back" on first step)
+5. **Given** I am on any step after first, **When** I view controls, **Then** I see "Back", "Skip", and "Next" buttons
+6. **Given** I am on the last step, **When** I click "Finish", **Then** the tour completes, localStorage is set, and a celebration animation plays
+7. **Given** I click "Skip" at any point, **When** prompted, **Then** I can choose to skip or continue (prevent accidental skip)
+8. **Given** I have completed the tour, **When** I return to dashboard, **Then** the tour does not start again
+9. **Given** I want to replay the tour, **When** I click "Replay Tour" in help menu, **Then** the tour starts from the beginning
+
+**Tour Steps**:
+1. **AI Agent Card** - "Start here! Ask questions about your data in natural language."
+2. **KPI Stats Row** - "Quick overview of your connected tables and tools."
+3. **Connected Tools** - "Extend AI capabilities by connecting Gmail, Slack, and more."
+4. **Scheduler Card** - "Automate recurring queries on a schedule."
+5. **Help Button** - "Need help? Find documentation and shortcuts here."
+
+---
+
 ## Requirements
 
 ### Functional Requirements
@@ -336,6 +371,42 @@ As a returning user, I want to see my recent activity on the dashboard so that I
 - **FR-057**: Task activities derived from `getScheduledTasks()` API response
 - **FR-058**: Connector activities derived from `getConnectors()` API response
 - **FR-059**: NO new backend API endpoints required
+
+#### P1 Phase 7 - Interactive Onboarding Tour (v1.3)
+
+##### Tour Initialization
+- **FR-060**: Tour MUST start automatically for first-time users (no `ims_onboarding_tour_completed` in localStorage)
+- **FR-061**: Tour MUST have a 1-second delay before starting (allow page to settle)
+- **FR-062**: Tour MUST NOT start if user has completed or skipped it before
+
+##### Tour Display
+- **FR-063**: Tour MUST display a spotlight overlay highlighting the target element
+- **FR-064**: Tour MUST display a tooltip with title, description, and navigation controls
+- **FR-065**: Spotlight MUST dim the rest of the page (semi-transparent overlay)
+- **FR-066**: Tooltip MUST be positioned automatically (avoid viewport edges)
+
+##### Tour Navigation
+- **FR-067**: Tour MUST show "Next" button on all steps except last
+- **FR-068**: Tour MUST show "Back" button on all steps except first
+- **FR-069**: Tour MUST show "Skip" button on all steps
+- **FR-070**: Tour MUST show "Finish" button on last step
+- **FR-071**: Progress indicator MUST show current step (e.g., "2 of 5")
+
+##### Tour Completion
+- **FR-072**: Completing tour MUST set `ims_onboarding_tour_completed` in localStorage
+- **FR-073**: Skipping tour MUST set `ims_onboarding_tour_skipped` in localStorage
+- **FR-074**: Skip action MUST show confirmation (prevent accidental skip)
+
+##### Tour Replay
+- **FR-075**: Help menu MUST include "Replay Tour" option
+- **FR-076**: Clicking "Replay Tour" MUST clear tour flags and restart tour
+
+##### Tour Steps (5 total)
+- **FR-077**: Step 1: AI Agent Card - Primary feature introduction
+- **FR-078**: Step 2: KPI Stats Row - Dashboard metrics overview
+- **FR-079**: Step 3: Connected Tools - Integration capabilities
+- **FR-080**: Step 4: Scheduler Card - Automation features
+- **FR-081**: Step 5: Help Button - Support resources
 
 ### Non-Functional Requirements
 

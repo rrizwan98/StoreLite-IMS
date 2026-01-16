@@ -1,7 +1,7 @@
 # Requirements Checklist: Dashboard UX Improvements
 
 **Feature ID**: 015-dashboard-ux-improvements
-**Version**: v1.2
+**Version**: v1.3
 **Last Updated**: 2025-01-16
 
 ---
@@ -198,6 +198,62 @@
 
 ---
 
+## P1 Phase 7 - Interactive Onboarding Tour (v1.3)
+
+### Tour Initialization
+
+| ID | Requirement | Status | Notes |
+|----|-------------|--------|-------|
+| FR-060 | Tour starts automatically for first-time users | [x] Done | Task 7.1 |
+| FR-061 | Tour has 1-second delay before starting | [x] Done | Task 7.1 |
+| FR-062 | Tour does not start if completed/skipped before | [x] Done | Task 7.1 |
+
+### Tour Display
+
+| ID | Requirement | Status | Notes |
+|----|-------------|--------|-------|
+| FR-063 | Spotlight overlay highlights target element | [x] Done | Task 7.1 |
+| FR-064 | Tooltip shows title, description, navigation | [x] Done | Task 7.1 |
+| FR-065 | Spotlight dims rest of page | [x] Done | Task 7.1 |
+| FR-066 | Tooltip positioned automatically | [x] Done | Task 7.1 |
+
+### Tour Navigation
+
+| ID | Requirement | Status | Notes |
+|----|-------------|--------|-------|
+| FR-067 | "Next" button on all steps except last | [x] Done | Task 7.1 |
+| FR-068 | "Back" button on all steps except first | [x] Done | Task 7.1 |
+| FR-069 | "Skip" button on all steps | [x] Done | Task 7.1 |
+| FR-070 | "Finish" button on last step | [x] Done | Task 7.1 |
+| FR-071 | Progress indicator shows current step | [x] Done | Task 7.1 |
+
+### Tour Completion
+
+| ID | Requirement | Status | Notes |
+|----|-------------|--------|-------|
+| FR-072 | Completion sets localStorage flag | [x] Done | Task 7.1 |
+| FR-073 | Skip sets localStorage flag | [x] Done | Task 7.1 |
+| FR-074 | Skip shows confirmation dialog | [x] Done | Task 7.1 |
+
+### Tour Replay
+
+| ID | Requirement | Status | Notes |
+|----|-------------|--------|-------|
+| FR-075 | Help menu includes "Replay Tour" | [x] Done | Task 7.2 |
+| FR-076 | "Replay Tour" clears flags and restarts | [x] Done | Task 7.2 |
+
+### Tour Steps
+
+| ID | Requirement | Status | Notes |
+|----|-------------|--------|-------|
+| FR-077 | Step 1: AI Agent Card | [x] Done | Task 7.2 |
+| FR-078 | Step 2: KPI Stats Row | [x] Done | Task 7.2 |
+| FR-079 | Step 3: Connected Tools | [x] Done | Task 7.2 |
+| FR-080 | Step 4: Scheduler Card | [x] Done | Task 7.2 |
+| FR-081 | Step 5: Help Button | [x] Done | Task 7.2 |
+
+---
+
 ### v1.2 Requirements (Completed)
 
 | Category | Total | Completed | Percentage |
@@ -210,6 +266,20 @@
 
 ---
 
+### v1.3 Requirements (Completed)
+
+| Category | Total | Completed | Percentage |
+|----------|-------|-----------|------------|
+| Tour Initialization | 3 | 3 | 100% |
+| Tour Display | 4 | 4 | 100% |
+| Tour Navigation | 5 | 5 | 100% |
+| Tour Completion | 3 | 3 | 100% |
+| Tour Replay | 2 | 2 | 100% |
+| Tour Steps | 5 | 5 | 100% |
+| **v1.3 Total** | **22** | **22** | **100%** |
+
+---
+
 ### Overall
 
 | Version | Total | Completed | Percentage |
@@ -217,4 +287,5 @@
 | v1.0 | 34 | 34 | 100% |
 | v1.1 | 17 | 17 | 100% |
 | v1.2 | 13 | 12 | 92% |
-| **Grand Total** | **64** | **63** | **98%** |
+| v1.3 | 22 | 22 | 100% |
+| **Grand Total** | **86** | **85** | **99%** |

@@ -5,12 +5,14 @@
  * that provides quick access to help resources.
  *
  * v1.1: New component for quick help access
+ * v1.3: Added Replay Tour option
  */
 
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { HelpCircle, ExternalLink, Mail, Keyboard, X } from 'lucide-react';
+import { HelpCircle, ExternalLink, Mail, Keyboard, X, Play } from 'lucide-react';
+import { restartOnboardingTour } from './OnboardingTour';
 
 interface HelpMenuItem {
   id: string;
@@ -48,7 +50,23 @@ export default function FloatingHelpButton() {
     return () => document.removeEventListener('keydown', handleEscape);
   }, []);
 
+  // Handle replay tour
+  const handleReplayTour = () => {
+    restartOnboardingTour();
+    setIsOpen(false);
+    // Small delay to allow menu to close, then force page reload to restart tour
+    setTimeout(() => {
+      window.location.reload();
+    }, 100);
+  };
+
   const menuItems: HelpMenuItem[] = [
+    {
+      id: 'tour',
+      label: 'Replay Tour',
+      icon: <Play className="h-4 w-4" />,
+      onClick: handleReplayTour,
+    },
     {
       id: 'docs',
       label: 'Documentation',

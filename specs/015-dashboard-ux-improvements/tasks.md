@@ -1,7 +1,7 @@
 # Tasks: Dashboard UX Improvements
 
 **Feature ID**: 015-dashboard-ux-improvements
-**Version**: v1.2
+**Version**: v1.3
 **Created**: 2025-01-16
 **Updated**: 2025-01-16
 **Branch**: `feat/dashboard-ux-improvements`
@@ -13,6 +13,7 @@
 | v1.0 | 2025-01-16 | Initial 12 tasks for Phases 1-4 |
 | v1.1 | 2025-01-16 | Added Phase 5: Quick Wins (5 new tasks) |
 | v1.2 | 2025-01-16 | Added Phase 6: Recent Activity Panel (2 new tasks) |
+| v1.3 | 2025-01-16 | Added Phase 7: Interactive Onboarding Tour (2 new tasks) |
 
 ---
 
@@ -640,15 +641,17 @@ export default function FloatingHelpButton() {
 | 5 | 5.3 Tools Quick Actions | P1 | Low | ✅ Done | None |
 | 5 | 5.4 Read-Only Learn More | P1 | Low | ✅ Done | None |
 | 5 | 5.5 Floating Help Button | P1 | Medium | ✅ Done | None |
-| **6** | **6.1 Recent Activity Panel** | **P1** | **Medium** | ⏳ Pending | None |
-| **6** | **6.2 Integrate Activity Panel** | **P1** | **Low** | ⏳ Pending | 6.1 |
+| 6 | 6.1 Recent Activity Panel | P1 | Medium | ✅ Done | None |
+| 6 | 6.2 Integrate Activity Panel | P1 | Low | ✅ Done | 6.1 |
+| 7 | 7.1 Onboarding Tour Component | P1 | Medium | ✅ Done | None |
+| 7 | 7.2 Integrate Tour + Replay | P1 | Low | ✅ Done | 7.1 |
 
 ---
 
-## Phase 6: Recent Activity Panel (v1.2 Addition)
+## Phase 6: Recent Activity Panel (v1.2 Addition - COMPLETED)
 
 ### Task 6.1: Create RecentActivityPanel Component
-**Priority**: P1 | **Effort**: Medium | **Status**: [ ] Pending
+**Priority**: P1 | **Effort**: Medium | **Status**: [x] Done
 
 **Description**: Create a component that displays recent user activities aggregated from existing API data.
 
@@ -695,7 +698,7 @@ const activities: Activity[] = [
 ---
 
 ### Task 6.2: Integrate RecentActivityPanel into Dashboard
-**Priority**: P1 | **Effort**: Low | **Status**: [ ] Pending
+**Priority**: P1 | **Effort**: Low | **Status**: [x] Done
 
 **Description**: Add RecentActivityPanel to the dashboard page below KPI stats.
 
@@ -716,6 +719,106 @@ const activities: Activity[] = [
   connectors={connectors}
   className="mt-6"
 />
+```
+
+---
+
+## Phase 7: Interactive Onboarding Tour (v1.3 Addition)
+
+### Task 7.1: Create OnboardingTour Component
+**Priority**: P1 | **Effort**: Medium | **Status**: [x] Done
+
+**Description**: Create a custom onboarding tour component with spotlight and tooltip functionality.
+
+**Files**:
+- CREATE: `frontend/app/dashboard/components/OnboardingTour.tsx`
+
+**Acceptance Criteria**:
+- [ ] Tour starts automatically for new users (after 1s delay)
+- [ ] Spotlight overlay highlights target element
+- [ ] Tooltip shows title, description, step progress
+- [ ] Navigation: Back, Next, Skip, Finish buttons
+- [ ] Skip shows confirmation dialog
+- [ ] Completion sets localStorage flag
+- [ ] Smooth animations between steps
+- [ ] Dark mode support
+- [ ] Keyboard accessible (Escape to close)
+
+**Tour Steps Configuration**:
+```typescript
+const TOUR_STEPS = [
+  {
+    target: '[data-tour="ai-agent-card"]',
+    title: 'AI Agent',
+    description: 'Start here! Ask questions about your data in natural language.',
+    position: 'right',
+  },
+  {
+    target: '[data-tour="kpi-stats"]',
+    title: 'Quick Stats',
+    description: 'See an overview of your connected tables and tools.',
+    position: 'bottom',
+  },
+  {
+    target: '[data-tour="connected-tools"]',
+    title: 'Connected Tools',
+    description: 'Extend AI capabilities by connecting Gmail, Slack, and more.',
+    position: 'top',
+  },
+  {
+    target: '[data-tour="scheduler-card"]',
+    title: 'Scheduler',
+    description: 'Automate recurring queries on a schedule.',
+    position: 'left',
+  },
+  {
+    target: '[data-tour="help-button"]',
+    title: 'Need Help?',
+    description: 'Find documentation, support, and keyboard shortcuts here.',
+    position: 'top',
+  },
+];
+```
+
+**localStorage Keys**:
+- `ims_onboarding_tour_completed`: 'true' | null
+- `ims_onboarding_tour_skipped`: 'true' | null
+
+---
+
+### Task 7.2: Integrate Tour and Add Replay Option
+**Priority**: P1 | **Effort**: Low | **Status**: [x] Done
+
+**Description**: Add tour component to dashboard and replay option in help menu.
+
+**Files**:
+- MODIFY: `frontend/app/dashboard/page.tsx` (add data-tour attributes, import tour)
+- MODIFY: `frontend/app/dashboard/components/FloatingHelpButton.tsx` (add replay option)
+
+**Acceptance Criteria**:
+- [ ] data-tour attributes added to target elements
+- [ ] Tour component rendered in dashboard
+- [ ] Help menu shows "Replay Tour" option
+- [ ] Clicking "Replay Tour" clears flags and starts tour
+- [ ] Tour only shows for schema_query_only users
+
+**Integration Points**:
+```tsx
+// In dashboard page.tsx - add data-tour attributes
+<div data-tour="ai-agent-card" className="...">
+<div data-tour="kpi-stats" className="...">
+<div data-tour="connected-tools" className="...">
+<div data-tour="scheduler-card" className="...">
+<div data-tour="help-button" className="...">
+
+// Import and render tour
+<OnboardingTour onComplete={() => setTourCompleted(true)} />
+
+// In FloatingHelpButton.tsx - add replay option
+<button onClick={handleReplayTour}>
+  <Play className="h-4 w-4 mr-2" />
+  Replay Tour
+</button>
 ```
 
 ---
@@ -746,9 +849,14 @@ Phase 5 (v1.1 - Quick Wins - COMPLETED ✅)
 └── Task 5.5: Floating Help Button ✅
     │
     ▼
-Phase 6 (v1.2 - Recent Activity - PENDING)
-├── Task 6.1: Recent Activity Panel ⏳
-└── Task 6.2: Integrate Activity Panel ⏳
+Phase 6 (v1.2 - Recent Activity - COMPLETED ✅)
+├── Task 6.1: Recent Activity Panel ✅
+└── Task 6.2: Integrate Activity Panel ✅
+    │
+    ▼
+Phase 7 (v1.3 - Onboarding Tour - COMPLETED ✅)
+├── Task 7.1: Onboarding Tour Component ✅
+└── Task 7.2: Integrate Tour + Replay ✅
     │
     ▼
 Build Verification & PR Update
