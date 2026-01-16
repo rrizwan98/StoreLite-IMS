@@ -3,9 +3,16 @@
 **Feature ID**: 015-dashboard-ux-improvements
 **Feature Branch**: `feat/dashboard-ux-improvements`
 **Created**: 2025-01-16
-**Version**: v1.0
-**Status**: Draft
+**Version**: v1.1
+**Status**: In Progress
 **Type**: UI/UX Enhancement (No Backend Changes)
+
+## Change History
+
+| Version | Date | Changes |
+|---------|------|---------|
+| v1.0 | 2025-01-16 | Initial spec: KPI Stats, Onboarding Checklist, CTAs, Microinteractions, Tooltips |
+| v1.1 | 2025-01-16 | Added Phase 5 Quick Wins: Checklist action buttons, auto-collapse, tools quick actions, help button, learn more link |
 
 ## Executive Summary
 
@@ -123,6 +130,87 @@ As a user, I want contextual help tooltips so that I can understand features wit
 
 ---
 
+### User Story 7 - User: Checklist Action Buttons (Priority: P1 - Quick Win) [v1.1]
+
+As a user viewing the onboarding checklist, I want inline action buttons on each step so that I can directly take action without guessing where to click.
+
+**Why this priority**: P1 - Research showed 9.2/10 rating improvement when adding direct action buttons. Reduces friction significantly.
+
+**Independent Test**: Can be tested by viewing the checklist and verifying each item has a contextual action button.
+
+**Acceptance Scenarios**:
+
+1. **Given** I see "Connect your database" step, **When** I look at the item, **Then** I see a "View Schema" button on the right
+2. **Given** I see "Ask your first AI question" step, **When** I look at the item, **Then** I see an "Open Chat" button
+3. **Given** I see "Connect a tool" step, **When** I look at the item, **Then** I see a "Connect Tools" button
+4. **Given** I see "Create a scheduled task" step, **When** I look at the item, **Then** I see a "Create Task" button
+5. **Given** I click any action button, **When** I click, **Then** I am navigated to the corresponding page
+
+---
+
+### User Story 8 - User: Auto-collapse Completed Checklist (Priority: P1 - Quick Win) [v1.1]
+
+As a returning user who has completed all onboarding steps, I want the checklist to automatically collapse so that I don't see clutter from completed items.
+
+**Why this priority**: P1 - Research showed 9.0/10 rating. Reduces visual noise for power users.
+
+**Independent Test**: Can be tested by completing all 4 steps and verifying the checklist auto-collapses.
+
+**Acceptance Scenarios**:
+
+1. **Given** I have completed all 4 checklist items, **When** I land on the dashboard, **Then** the checklist is collapsed to a minimal "All set! ✓" state
+2. **Given** the checklist is auto-collapsed, **When** I want to see my progress, **Then** I can expand it by clicking
+3. **Given** I previously dismissed the checklist, **When** I complete all items later, **Then** the auto-collapse respects the dismissed state
+
+---
+
+### User Story 9 - User: Tools Quick Actions (Priority: P1 - Quick Win) [v1.1]
+
+As a user viewing my connected tools, I want quick action buttons (Reconnect/Disconnect) inline so that I can manage tools without navigating away.
+
+**Why this priority**: P1 - Research showed 9.3/10 rating. Users frequently need to reconnect unhealthy connectors.
+
+**Independent Test**: Can be tested by viewing a disconnected tool and clicking the Reconnect button.
+
+**Acceptance Scenarios**:
+
+1. **Given** a tool shows as "Disconnected" (health check failed), **When** I view the tool card, **Then** I see a "Reconnect" button
+2. **Given** I click "Reconnect" on a disconnected tool, **When** I click, **Then** I am navigated to Settings page with that tool highlighted
+3. **Given** a tool is healthy, **When** I hover over the tool card, **Then** I see a subtle "..." menu or settings icon for management
+
+---
+
+### User Story 10 - User: Read-Only Learn More Link (Priority: P1 - Quick Win) [v1.1]
+
+As a user seeing the Read-Only banner, I want a "Learn more" link so that I can understand what read-only mode means in detail.
+
+**Why this priority**: P1 - Research showed 9.1/10 rating. New users often don't understand the security implications.
+
+**Independent Test**: Can be tested by clicking the Learn More link and verifying it opens documentation.
+
+**Acceptance Scenarios**:
+
+1. **Given** the Read-Only banner is displayed, **When** I look at the banner, **Then** I see a "Learn more" link next to the text
+2. **Given** I click "Learn more", **When** I click, **Then** documentation about read-only mode opens (either in-app or external docs)
+
+---
+
+### User Story 11 - User: Floating Help Button (Priority: P1 - Quick Win) [v1.1]
+
+As a user anywhere on the dashboard, I want a floating help button so that I can access help resources quickly.
+
+**Why this priority**: P1 - Research showed 9.0/10 rating. Users need persistent access to help.
+
+**Independent Test**: Can be tested by verifying the help button appears on dashboard and clicking it.
+
+**Acceptance Scenarios**:
+
+1. **Given** I am on the dashboard page, **When** I look at the bottom-right corner, **Then** I see a floating help button (? icon)
+2. **Given** I click the help button, **When** I click, **Then** a dropdown shows options: "Documentation", "Contact Support", "Keyboard Shortcuts"
+3. **Given** the help button is visible, **When** I scroll the page, **Then** the button remains fixed in position
+
+---
+
 ## Requirements
 
 ### Functional Requirements
@@ -171,6 +259,35 @@ As a user, I want contextual help tooltips so that I can understand features wit
 - **FR-027**: Tool connection status MUST have tooltip explaining current state
 - **FR-028**: Read-Only banner MUST have tooltip explaining security implications
 - **FR-029**: Connected Tools section header MAY have tooltip explaining purpose
+
+#### P1 Quick Wins - v1.1 Additions
+
+##### Checklist Action Buttons
+- **FR-030**: Each checklist item MUST have an inline action button on the right side
+- **FR-031**: "Connect your database" step MUST show "View Schema" button
+- **FR-032**: "Ask your first AI question" step MUST show "Open Chat" button
+- **FR-033**: "Connect a tool" step MUST show "Connect Tools" button
+- **FR-034**: "Create a scheduled task" step MUST show "Create Task" button
+- **FR-035**: Clicking action buttons MUST navigate to the corresponding feature page
+
+##### Auto-collapse Checklist
+- **FR-036**: Checklist MUST auto-collapse when all 4 steps are completed
+- **FR-037**: Collapsed state MUST show "All set! ✓" with expand option
+- **FR-038**: Auto-collapse MUST respect previously dismissed state
+
+##### Tools Quick Actions
+- **FR-039**: Disconnected tools MUST show a "Reconnect" button inline
+- **FR-040**: Clicking "Reconnect" MUST navigate to Settings page with tool query param
+- **FR-041**: Healthy tools MAY show a subtle settings icon on hover
+
+##### Read-Only Learn More
+- **FR-042**: Read-Only banner MUST include a "Learn more" link
+- **FR-043**: "Learn more" link SHOULD open help documentation (external or modal)
+
+##### Floating Help Button
+- **FR-044**: Dashboard MUST display a floating help button (fixed position, bottom-right)
+- **FR-045**: Help button MUST show dropdown with: "Documentation", "Contact Support", "Keyboard Shortcuts"
+- **FR-046**: Help button MUST remain visible during scroll
 
 ### Non-Functional Requirements
 

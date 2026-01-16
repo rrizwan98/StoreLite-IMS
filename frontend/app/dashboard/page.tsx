@@ -19,6 +19,7 @@ import { getAccessToken } from '@/lib/auth-api';
 import ConnectToolsSection from './components/ConnectToolsSection';
 import KPIStatsRow from './components/KPIStatsRow';
 import OnboardingChecklist from './components/OnboardingChecklist';
+import FloatingHelpButton from './components/FloatingHelpButton';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { InfoTooltip } from '@/components/ui/Tooltip';
 import { getConnectors } from '@/lib/connectors-api';
@@ -740,7 +741,7 @@ export default function DashboardPage() {
             {/* Connect Tools Section */}
             <ConnectToolsSection className="mt-8" />
 
-            {/* Read-Only Notice with Tooltip */}
+            {/* Read-Only Notice with Tooltip and Learn More link (v1.1) */}
             <div className="mt-8 bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-800 rounded-lg p-4">
               <div className="flex items-start space-x-3">
                 <span className="text-emerald-600 dark:text-emerald-400 text-xl">🛡️</span>
@@ -754,6 +755,14 @@ export default function DashboardPage() {
                   </div>
                   <p className="text-sm text-emerald-700 dark:text-emerald-400">
                     Your data is safe. This connection only allows SELECT queries - no modifications to your database.
+                    <a
+                      href="https://www.postgresql.org/docs/current/sql-grant.html"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="ml-2 underline hover:text-emerald-600 dark:hover:text-emerald-300 transition-colors"
+                    >
+                      Learn more
+                    </a>
                   </p>
                 </div>
               </div>
@@ -901,6 +910,9 @@ export default function DashboardPage() {
           `}</style>
         </>
       )}
+
+      {/* v1.1: Floating Help Button */}
+      {isSchemaQueryOnly && <FloatingHelpButton />}
     </div>
   );
 }

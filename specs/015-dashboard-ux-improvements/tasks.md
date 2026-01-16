@@ -1,9 +1,17 @@
 # Tasks: Dashboard UX Improvements
 
 **Feature ID**: 015-dashboard-ux-improvements
-**Version**: v1.0
+**Version**: v1.1
 **Created**: 2025-01-16
+**Updated**: 2025-01-16
 **Branch**: `feat/dashboard-ux-improvements`
+
+## Change History
+
+| Version | Date | Changes |
+|---------|------|---------|
+| v1.0 | 2025-01-16 | Initial 12 tasks for Phases 1-4 |
+| v1.1 | 2025-01-16 | Added Phase 5: Quick Wins (5 new tasks) |
 
 ---
 
@@ -365,74 +373,325 @@ npm install --save-dev @axe-core/react
 ---
 
 ### Task 4.3: Build Verification & PR
-**Priority**: P1 | **Effort**: Low | **Status**: [ ] Pending
+**Priority**: P1 | **Effort**: Low | **Status**: [x] Completed (v1.0)
 
 **Description**: Verify build passes and create PR.
 
 **Acceptance Criteria**:
-- [ ] `npm run build` passes with no errors
-- [ ] No TypeScript errors
-- [ ] No ESLint errors
-- [ ] All changes committed
-- [ ] Pushed to `feat/dashboard-ux-improvements` branch
-- [ ] PR created with link to spec
+- [x] `npm run build` passes with no errors
+- [x] No TypeScript errors
+- [x] No ESLint errors
+- [x] All changes committed
+- [x] Pushed to `feat/dashboard-ux-improvements` branch
+- [x] PR created with link to spec
+
+---
+
+## Phase 5: Quick Wins (v1.1 Addition)
+
+### Task 5.1: Add Checklist Inline Action Buttons
+**Priority**: P1 | **Effort**: Low | **Status**: [ ] Pending
+
+**Description**: Add contextual action buttons to each checklist item (e.g., "Open Chat", "Connect Tools").
+
+**Files**:
+- MODIFY: `frontend/app/dashboard/components/OnboardingChecklist.tsx`
+
+**Acceptance Criteria**:
+- [ ] Each checklist step has an action button on the right side
+- [ ] "Connect your database" → "View Schema" button
+- [ ] "Ask your first AI question" → "Open Chat" button
+- [ ] "Connect a tool" → "Connect Tools" button
+- [ ] "Create a scheduled task" → "Create Task" button
+- [ ] Buttons navigate to corresponding pages on click
+- [ ] Buttons styled consistently (outline style, small size)
+- [ ] Dark mode support
+
+**Implementation Notes**:
+```tsx
+// Add to each step in the checklist
+<div className="flex items-center justify-between">
+  <div className="flex items-center space-x-3">
+    {/* Existing checkbox and label */}
+  </div>
+  <button
+    onClick={() => router.push(step.route)}
+    className="text-xs px-3 py-1 rounded border border-emerald-300
+               text-emerald-600 hover:bg-emerald-50 dark:border-emerald-700
+               dark:text-emerald-400 dark:hover:bg-emerald-900/30 transition-colors"
+  >
+    {step.actionLabel}
+  </button>
+</div>
+```
+
+---
+
+### Task 5.2: Implement Auto-collapse for Completed Checklist
+**Priority**: P1 | **Effort**: Low | **Status**: [ ] Pending
+
+**Description**: Auto-collapse the checklist to minimal state when all 4 steps are completed.
+
+**Files**:
+- MODIFY: `frontend/app/dashboard/components/OnboardingChecklist.tsx`
+
+**Acceptance Criteria**:
+- [ ] Checklist auto-collapses when `completedCount === 4`
+- [ ] Collapsed state shows: "All set! ✓ You've completed setup"
+- [ ] Expand button available to show full checklist
+- [ ] Auto-collapse respects user's previous dismiss preference
+- [ ] Smooth collapse/expand animation
+
+**Implementation Notes**:
+```tsx
+const allCompleted = completedCount === 4;
+const [isExpanded, setIsExpanded] = useState(!allCompleted);
+
+// Show minimal view when all done
+if (allCompleted && !isExpanded) {
+  return (
+    <div className="bg-emerald-50 dark:bg-emerald-900/30 rounded-xl p-4 flex items-center justify-between">
+      <div className="flex items-center space-x-2">
+        <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+        <span className="font-medium text-emerald-700 dark:text-emerald-300">All set!</span>
+        <span className="text-sm text-emerald-600 dark:text-emerald-400">You've completed setup</span>
+      </div>
+      <button onClick={() => setIsExpanded(true)} className="text-sm text-emerald-600">
+        Show details
+      </button>
+    </div>
+  );
+}
+```
+
+---
+
+### Task 5.3: Add Tools Quick Actions (Reconnect Button)
+**Priority**: P1 | **Effort**: Low | **Status**: [ ] Pending
+
+**Description**: Add "Reconnect" button to disconnected tools in ConnectToolsSection.
+
+**Files**:
+- MODIFY: `frontend/app/dashboard/components/ConnectToolsSection.tsx`
+
+**Acceptance Criteria**:
+- [ ] Disconnected tools (health check failed) show "Reconnect" button
+- [ ] "Reconnect" navigates to `/dashboard/settings?connector={id}`
+- [ ] Healthy tools show subtle settings icon on hover
+- [ ] Button styled to match error state (red/orange theme)
+- [ ] Dark mode support
+
+**Implementation Notes**:
+```tsx
+// For disconnected connector
+{!isHealthy && (
+  <Link
+    href={`/dashboard/settings?connector=${connector.id}`}
+    className="text-xs px-2 py-1 rounded bg-red-100 text-red-600
+               hover:bg-red-200 dark:bg-red-900/30 dark:text-red-400
+               dark:hover:bg-red-900/50 transition-colors"
+  >
+    Reconnect
+  </Link>
+)}
+```
+
+---
+
+### Task 5.4: Add "Learn More" Link to Read-Only Banner
+**Priority**: P1 | **Effort**: Low | **Status**: [ ] Pending
+
+**Description**: Add a "Learn more" link to the Read-Only security banner.
+
+**Files**:
+- MODIFY: `frontend/app/dashboard/page.tsx`
+
+**Acceptance Criteria**:
+- [ ] Read-Only banner includes "Learn more" link after the text
+- [ ] Link opens documentation about read-only mode (external link or modal)
+- [ ] Link styled as subtle underlined text
+- [ ] Opens in new tab if external
+- [ ] Dark mode support
+
+**Implementation Notes**:
+```tsx
+// In the Read-Only banner section
+<p className="text-sm text-blue-800 dark:text-blue-300">
+  <ShieldCheck className="inline h-4 w-4 mr-1" />
+  Read-only connection - Your data is safe
+  <a
+    href="https://docs.example.com/read-only-mode"
+    target="_blank"
+    rel="noopener noreferrer"
+    className="ml-2 underline hover:text-blue-600 dark:hover:text-blue-200"
+  >
+    Learn more
+  </a>
+</p>
+```
+
+---
+
+### Task 5.5: Create Floating Help Button Component
+**Priority**: P1 | **Effort**: Medium | **Status**: [ ] Pending
+
+**Description**: Add a floating help button (FAB) with dropdown menu in bottom-right corner.
+
+**Files**:
+- CREATE: `frontend/app/dashboard/components/FloatingHelpButton.tsx`
+- MODIFY: `frontend/app/dashboard/page.tsx` (import and add component)
+
+**Acceptance Criteria**:
+- [ ] Floating button fixed at bottom-right (z-50)
+- [ ] Button shows "?" icon
+- [ ] Click opens dropdown with 3 options:
+  - "Documentation" → external docs link
+  - "Contact Support" → support email or form
+  - "Keyboard Shortcuts" → shows shortcuts modal (optional: just placeholder)
+- [ ] Dropdown closes on click outside or Escape
+- [ ] Smooth open/close animation
+- [ ] Dark mode support
+- [ ] Mobile responsive (smaller button on mobile)
+
+**Implementation Notes**:
+```tsx
+// FloatingHelpButton.tsx
+'use client';
+
+import { useState, useRef, useEffect } from 'react';
+import { HelpCircle, ExternalLink, Mail, Keyboard } from 'lucide-react';
+
+export default function FloatingHelpButton() {
+  const [isOpen, setIsOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  // Close on click outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  return (
+    <div ref={ref} className="fixed bottom-6 right-6 z-50">
+      {/* Dropdown */}
+      {isOpen && (
+        <div className="absolute bottom-14 right-0 w-48 bg-white dark:bg-gray-800
+                        rounded-lg shadow-lg border border-gray-200 dark:border-gray-700
+                        py-2 animate-fade-in-up">
+          <a href="#" className="flex items-center px-4 py-2 text-sm text-gray-700 dark:text-gray-200
+                                 hover:bg-gray-100 dark:hover:bg-gray-700">
+            <ExternalLink className="h-4 w-4 mr-2" />
+            Documentation
+          </a>
+          <a href="mailto:support@example.com" className="flex items-center px-4 py-2 text-sm
+                                 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700">
+            <Mail className="h-4 w-4 mr-2" />
+            Contact Support
+          </a>
+          <button className="flex items-center w-full px-4 py-2 text-sm text-gray-700
+                             dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700">
+            <Keyboard className="h-4 w-4 mr-2" />
+            Keyboard Shortcuts
+          </button>
+        </div>
+      )}
+
+      {/* FAB Button */}
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-12 h-12 rounded-full bg-emerald-600 text-white shadow-lg
+                   hover:bg-emerald-700 hover:shadow-xl transition-all duration-200
+                   flex items-center justify-center click-feedback"
+        aria-label="Help menu"
+      >
+        <HelpCircle className="h-6 w-6" />
+      </button>
+    </div>
+  );
+}
+```
 
 ---
 
 ## Task Summary
 
-| Phase | Task | Priority | Effort | Dependencies |
-|-------|------|----------|--------|--------------|
-| 1 | 1.1 KPI Stats Row | P1 | Low | None |
-| 1 | 1.2 Onboarding Checklist | P1 | Medium | None |
-| 1 | 1.3 Integrate P1 Components | P1 | Low | 1.1, 1.2 |
-| 2 | 2.1 Microinteraction CSS | P2 | Low | None |
-| 2 | 2.2 Feature Card CTAs | P2 | Low | 2.1 |
-| 2 | 2.3 Staggered Animations | P2 | Medium | 2.1 |
-| 3 | 3.1 Tooltip Component | P3 | Low | None |
-| 3 | 3.2 Add Tooltips | P3 | Low | 3.1 |
-| 3 | 3.3 Progressive Disclosure | P3 | Medium | None |
-| 4 | 4.1 Dark Mode Verification | P1 | Low | All above |
-| 4 | 4.2 Accessibility Audit | P1 | Low | All above |
-| 4 | 4.3 Build & PR | P1 | Low | All above |
+| Phase | Task | Priority | Effort | Status | Dependencies |
+|-------|------|----------|--------|--------|--------------|
+| 1 | 1.1 KPI Stats Row | P1 | Low | ✅ Done | None |
+| 1 | 1.2 Onboarding Checklist | P1 | Medium | ✅ Done | None |
+| 1 | 1.3 Integrate P1 Components | P1 | Low | ✅ Done | 1.1, 1.2 |
+| 2 | 2.1 Microinteraction CSS | P2 | Low | ✅ Done | None |
+| 2 | 2.2 Feature Card CTAs | P2 | Low | ✅ Done | 2.1 |
+| 2 | 2.3 Staggered Animations | P2 | Medium | ✅ Done | 2.1 |
+| 3 | 3.1 Tooltip Component | P3 | Low | ✅ Done | None |
+| 3 | 3.2 Add Tooltips | P3 | Low | ✅ Done | 3.1 |
+| 3 | 3.3 Progressive Disclosure | P3 | Medium | ✅ Done | None |
+| 4 | 4.1 Dark Mode Verification | P1 | Low | ✅ Done | All above |
+| 4 | 4.2 Accessibility Audit | P1 | Low | ✅ Done | All above |
+| 4 | 4.3 Build & PR | P1 | Low | ✅ Done | All above |
+| **5** | **5.1 Checklist Action Buttons** | **P1** | **Low** | ⏳ Pending | 1.2 |
+| **5** | **5.2 Auto-collapse Checklist** | **P1** | **Low** | ⏳ Pending | 1.2 |
+| **5** | **5.3 Tools Quick Actions** | **P1** | **Low** | ⏳ Pending | None |
+| **5** | **5.4 Read-Only Learn More** | **P1** | **Low** | ⏳ Pending | None |
+| **5** | **5.5 Floating Help Button** | **P1** | **Medium** | ⏳ Pending | None |
 
 ---
 
 ## Execution Order
 
 ```
-Phase 1 (P1 - Must Have)
-├── Task 1.1: KPI Stats Row
-├── Task 1.2: Onboarding Checklist
-└── Task 1.3: Integrate Components
+Phase 1-4 (v1.0 - COMPLETED ✅)
+├── Task 1.1: KPI Stats Row ✅
+├── Task 1.2: Onboarding Checklist ✅
+├── Task 1.3: Integrate Components ✅
+├── Task 2.1: Microinteraction CSS ✅
+├── Task 2.2: Feature Card CTAs ✅
+├── Task 2.3: Staggered Animations ✅
+├── Task 3.1: Tooltip Component ✅
+├── Task 3.2: Add Tooltips ✅
+├── Task 3.3: Progressive Disclosure ✅
+├── Task 4.1: Dark Mode Check ✅
+├── Task 4.2: Accessibility Audit ✅
+└── Task 4.3: Build & PR ✅
     │
     ▼
-Phase 2 (P2 - Polish)
-├── Task 2.1: Microinteraction CSS
-├── Task 2.2: Feature Card CTAs
-└── Task 2.3: Staggered Animations
+Phase 5 (v1.1 - Quick Wins - PENDING)
+├── Task 5.1: Checklist Action Buttons ⏳
+├── Task 5.2: Auto-collapse Checklist ⏳
+├── Task 5.3: Tools Quick Actions ⏳
+├── Task 5.4: Read-Only Learn More ⏳
+└── Task 5.5: Floating Help Button ⏳
     │
     ▼
-Phase 3 (P3 - Enhanced)
-├── Task 3.1: Tooltip Component
-├── Task 3.2: Add Tooltips
-└── Task 3.3: Progressive Disclosure
-    │
-    ▼
-Phase 4 (Verification)
-├── Task 4.1: Dark Mode Check
-├── Task 4.2: Accessibility Audit
-└── Task 4.3: Build & PR
+Build Verification & PR Update
 ```
 
 ---
 
 ## Estimated Total Effort
 
-| Priority | Tasks | Estimated Time |
-|----------|-------|----------------|
-| P1 | 3 tasks | ~2-3 hours |
-| P2 | 3 tasks | ~2-3 hours |
-| P3 | 3 tasks | ~2 hours |
-| Testing | 3 tasks | ~1 hour |
-| **Total** | **12 tasks** | **~7-9 hours** |
+### v1.0 (Completed)
+
+| Priority | Tasks | Status |
+|----------|-------|--------|
+| P1 | 3 tasks | ✅ Completed |
+| P2 | 3 tasks | ✅ Completed |
+| P3 | 3 tasks | ✅ Completed |
+| Testing | 3 tasks | ✅ Completed |
+| **Total** | **12 tasks** | **✅ Done** |
+
+### v1.1 (Quick Wins - Pending)
+
+| Task | Effort | Dependencies |
+|------|--------|--------------|
+| 5.1 Checklist Action Buttons | Low (~20 min) | None |
+| 5.2 Auto-collapse Checklist | Low (~20 min) | None |
+| 5.3 Tools Quick Actions | Low (~15 min) | None |
+| 5.4 Read-Only Learn More | Low (~10 min) | None |
+| 5.5 Floating Help Button | Medium (~30 min) | None |
+| **Total Phase 5** | **~1.5-2 hours** | |

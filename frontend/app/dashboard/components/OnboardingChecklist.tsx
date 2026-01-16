@@ -4,6 +4,10 @@
  * Guides new users through key setup steps.
  * State derived from existing data - no new API calls needed.
  * Uses localStorage for non-API trackable items.
+ *
+ * v1.1 Updates:
+ * - Added inline action buttons per step
+ * - Auto-collapse when all steps completed
  */
 
 'use client';
@@ -20,6 +24,7 @@ import {
   ChevronUp,
   X,
   Sparkles,
+  CheckCircle2,
 } from 'lucide-react';
 import { ROUTES } from '@/lib/constants';
 
@@ -45,6 +50,7 @@ interface ChecklistItem {
   isComplete: boolean;
   route: string;
   icon: React.ReactNode;
+  actionLabel: string; // v1.1: Button label for each step
 }
 
 function getChecklistItems(
@@ -67,6 +73,7 @@ function getChecklistItems(
       isComplete: connectionStatus?.schema_status === 'ready',
       route: ROUTES.SCHEMA_CONNECT,
       icon: <Database className="h-5 w-5" />,
+      actionLabel: 'View Schema',
     },
     {
       id: 'first_query',
@@ -75,6 +82,7 @@ function getChecklistItems(
       isComplete: hasFirstAIQuery,
       route: ROUTES.SCHEMA_AGENT,
       icon: <MessageSquare className="h-5 w-5" />,
+      actionLabel: 'Open Chat',
     },
     {
       id: 'connect_tool',
@@ -83,6 +91,7 @@ function getChecklistItems(
       isComplete: connectorsCount > 0,
       route: '/dashboard/settings',
       icon: <Wrench className="h-5 w-5" />,
+      actionLabel: 'Connect Tools',
     },
     {
       id: 'create_task',
@@ -91,6 +100,7 @@ function getChecklistItems(
       isComplete: hasFirstTask,
       route: ROUTES.SCHEDULER,
       icon: <CalendarClock className="h-5 w-5" />,
+      actionLabel: 'Create Task',
     },
   ];
 }
@@ -103,6 +113,7 @@ export default function OnboardingChecklist({
   const router = useRouter();
   const [isDismissed, setIsDismissed] = useState(true); // Start hidden to avoid flash
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isAutoCollapsed, setIsAutoCollapsed] = useState(false); // v1.1: Auto-collapse state
   const [items, setItems] = useState<ChecklistItem[]>([]);
 
   // Initialize state from localStorage on mount
@@ -111,7 +122,14 @@ export default function OnboardingChecklist({
     setIsDismissed(dismissed);
 
     // Get checklist items
-    setItems(getChecklistItems(connectionStatus, connectorsCount));
+    const checklistItems = getChecklistItems(connectionStatus, connectorsCount);
+    setItems(checklistItems);
+
+    // v1.1: Auto-collapse if all items complete (and not manually expanded before)
+    const allComplete = checklistItems.every(item => item.isComplete);
+    if (allComplete && !dismissed) {
+      setIsAutoCollapsed(true);
+    }
   }, [connectionStatus, connectorsCount]);
 
   // Handle dismiss
@@ -155,6 +173,37 @@ export default function OnboardingChecklist({
         <Sparkles className="h-4 w-4" />
         <span>Show Getting Started Guide</span>
       </button>
+    );
+  }
+
+  // v1.1: Auto-collapsed view when all steps are complete
+  if (isAutoCollapsed && allComplete) {
+    return (
+      <div
+        className={`
+          bg-emerald-50 dark:bg-emerald-900/30
+          border border-emerald-200 dark:border-emerald-800
+          rounded-xl p-4
+          flex items-center justify-between
+          ${className}
+        `}
+      >
+        <div className="flex items-center space-x-3">
+          <CheckCircle2 className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
+          <div>
+            <span className="font-semibold text-emerald-700 dark:text-emerald-300">All set!</span>
+            <span className="ml-2 text-sm text-emerald-600 dark:text-emerald-400">
+              You&apos;ve completed all setup steps
+            </span>
+          </div>
+        </div>
+        <button
+          onClick={() => setIsAutoCollapsed(false)}
+          className="text-sm text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 underline transition-colors"
+        >
+          Show details
+        </button>
+      </div>
     );
   }
 
@@ -221,61 +270,77 @@ export default function OnboardingChecklist({
       {!isCollapsed && (
         <div className="divide-y divide-gray-100 dark:divide-gray-700">
           {items.map((item) => (
-            <button
+            <div
               key={item.id}
-              onClick={() => handleItemClick(item)}
-              disabled={item.isComplete}
               className={`
-                w-full flex items-center space-x-4 px-4 py-3 text-left
+                flex items-center justify-between px-4 py-3
                 transition-colors
                 ${item.isComplete
-                  ? 'bg-gray-50 dark:bg-gray-800 cursor-default'
-                  : 'hover:bg-emerald-50 dark:hover:bg-emerald-900/20 cursor-pointer'
+                  ? 'bg-gray-50 dark:bg-gray-800'
+                  : 'hover:bg-emerald-50/50 dark:hover:bg-emerald-900/10'
                 }
               `}
             >
-              {/* Status icon */}
-              <div
+              {/* Left side: Status icon + Content (clickable) */}
+              <button
+                onClick={() => handleItemClick(item)}
+                disabled={item.isComplete}
                 className={`
-                  flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center
-                  ${item.isComplete
-                    ? 'bg-emerald-100 dark:bg-emerald-900/50 text-emerald-600 dark:text-emerald-400'
-                    : 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400'
-                  }
+                  flex items-center space-x-4 text-left flex-1 min-w-0
+                  ${item.isComplete ? 'cursor-default' : 'cursor-pointer'}
                 `}
               >
-                {item.isComplete ? (
-                  <Check className="h-5 w-5" />
-                ) : (
-                  item.icon
-                )}
-              </div>
-
-              {/* Content */}
-              <div className="flex-1 min-w-0">
-                <p
+                {/* Status icon */}
+                <div
                   className={`
-                    font-medium
+                    flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center
                     ${item.isComplete
-                      ? 'text-gray-500 dark:text-gray-500 line-through'
-                      : 'text-gray-900 dark:text-white'
+                      ? 'bg-emerald-100 dark:bg-emerald-900/50 text-emerald-600 dark:text-emerald-400'
+                      : 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400'
                     }
                   `}
                 >
-                  {item.label}
-                </p>
-                <p className="text-sm text-gray-500 dark:text-gray-400 truncate">
-                  {item.description}
-                </p>
-              </div>
-
-              {/* Arrow for incomplete items */}
-              {!item.isComplete && (
-                <div className="flex-shrink-0 text-emerald-600 dark:text-emerald-400">
-                  <ChevronDown className="h-5 w-5 -rotate-90" />
+                  {item.isComplete ? (
+                    <Check className="h-5 w-5" />
+                  ) : (
+                    item.icon
+                  )}
                 </div>
-              )}
-            </button>
+
+                {/* Content */}
+                <div className="flex-1 min-w-0">
+                  <p
+                    className={`
+                      font-medium
+                      ${item.isComplete
+                        ? 'text-gray-500 dark:text-gray-500 line-through'
+                        : 'text-gray-900 dark:text-white'
+                      }
+                    `}
+                  >
+                    {item.label}
+                  </p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400 truncate">
+                    {item.description}
+                  </p>
+                </div>
+              </button>
+
+              {/* v1.1: Action button on right side */}
+              <button
+                onClick={() => handleItemClick(item)}
+                className={`
+                  flex-shrink-0 ml-3 text-xs px-3 py-1.5 rounded-md
+                  font-medium transition-colors click-feedback
+                  ${item.isComplete
+                    ? 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'
+                    : 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-200 dark:hover:bg-emerald-900/60 border border-emerald-200 dark:border-emerald-800'
+                  }
+                `}
+              >
+                {item.actionLabel}
+              </button>
+            </div>
           ))}
         </div>
       )}
