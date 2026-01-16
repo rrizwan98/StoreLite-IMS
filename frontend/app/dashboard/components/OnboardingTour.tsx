@@ -10,6 +10,9 @@
  *   - Auto-scroll to target element
  *   - Multi-step coach marks with auto-trigger on action
  *   - Event-based tour advancement
+ * v1.6: Responsive Tour Cards + Centered Finish
+ *   - Responsive tooltip width for mobile/tablet/desktop
+ *   - Finish card centered on screen
  */
 
 'use client';
@@ -89,8 +92,20 @@ export default function OnboardingTour({ onComplete, onSkip, forceStart = false 
   const [currentStep, setCurrentStep] = useState(0);
   const [targetRect, setTargetRect] = useState<DOMRect | null>(null);
   const [showSkipConfirm, setShowSkipConfirm] = useState(false);
+  const [showFinishCard, setShowFinishCard] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
   const tooltipRef = useRef<HTMLDivElement>(null);
+
+  // Track screen size for responsive tooltip
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 640);
+    };
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   // Check if tour should start
   useEffect(() => {
@@ -281,7 +296,13 @@ export default function OnboardingTour({ onComplete, onSkip, forceStart = false 
   };
 
   const handleComplete = () => {
+    // Show centered finish card instead of immediately closing
+    setShowFinishCard(true);
+  };
+
+  const handleFinishClose = () => {
     localStorage.setItem(STORAGE_KEYS.COMPLETED, 'true');
+    setShowFinishCard(false);
     setIsActive(false);
     onComplete?.();
   };
@@ -297,19 +318,33 @@ export default function OnboardingTour({ onComplete, onSkip, forceStart = false 
     setShowSkipConfirm(false);
   };
 
+  // Get responsive tooltip width
+  const getTooltipWidth = useCallback(() => {
+    if (typeof window === 'undefined') return 320;
+    const vw = window.innerWidth;
+    if (vw < 400) return Math.min(vw - 32, 280); // Very small screens
+    if (vw < 640) return Math.min(vw - 32, 300); // Mobile
+    return 320; // Desktop
+  }, []);
+
   // Calculate tooltip position
   const getTooltipPosition = useCallback(() => {
-    if (!targetRect) return { top: 0, left: 0 };
+    if (!targetRect) return { top: 0, left: 0, width: getTooltipWidth() };
 
     const step = TOUR_STEPS[currentStep];
-    const padding = 16;
-    const tooltipWidth = 320;
+    const padding = isMobile ? 12 : 16;
+    const tooltipWidth = getTooltipWidth();
     const tooltipHeight = 180;
 
     let top = 0;
     let left = 0;
 
-    switch (step.position) {
+    // On mobile, prefer bottom/top positioning for better visibility
+    const effectivePosition = isMobile
+      ? (step.position === 'left' || step.position === 'right' ? 'bottom' : step.position)
+      : step.position;
+
+    switch (effectivePosition) {
       case 'top':
         top = targetRect.top - tooltipHeight - padding;
         left = targetRect.left + targetRect.width / 2 - tooltipWidth / 2;
@@ -341,8 +376,8 @@ export default function OnboardingTour({ onComplete, onSkip, forceStart = false 
       top = viewportHeight - tooltipHeight - padding;
     }
 
-    return { top, left };
-  }, [targetRect, currentStep]);
+    return { top, left, width: tooltipWidth };
+  }, [targetRect, currentStep, isMobile, getTooltipWidth]);
 
   // Don't render on server or if not active
   if (!mounted || !isActive) return null;
@@ -351,6 +386,7 @@ export default function OnboardingTour({ onComplete, onSkip, forceStart = false 
   const tooltipPosition = getTooltipPosition();
   const isFirstStep = currentStep === 0;
   const isLastStep = currentStep === TOUR_STEPS.length - 1;
+  const tooltipWidth = tooltipPosition.width;
 
   return createPortal(
     <div className="fixed inset-0 z-[100]" role="dialog" aria-modal="true" aria-label="Onboarding tour">
@@ -381,22 +417,23 @@ export default function OnboardingTour({ onComplete, onSkip, forceStart = false 
       </div>
 
       {/* Tooltip */}
-      {targetRect && (
+      {targetRect && !showFinishCard && (
         <div
           ref={tooltipRef}
-          className="absolute w-80 bg-white dark:bg-gray-800 rounded-xl shadow-2xl
+          className="absolute bg-white dark:bg-gray-800 rounded-xl shadow-2xl
                      border border-gray-200 dark:border-gray-700
                      transition-all duration-300 ease-out animate-fade-in-up"
           style={{
             top: tooltipPosition.top,
             left: tooltipPosition.left,
+            width: tooltipWidth,
           }}
         >
           {/* Header */}
-          <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-700">
+          <div className="flex items-center justify-between px-3 sm:px-5 py-3 sm:py-4 border-b border-gray-100 dark:border-gray-700">
             <div className="flex items-center space-x-2">
-              <Sparkles className="h-5 w-5 text-emerald-500" />
-              <h3 className="font-semibold text-gray-900 dark:text-white">
+              <Sparkles className="h-4 w-4 sm:h-5 sm:w-5 text-emerald-500 flex-shrink-0" />
+              <h3 className="font-semibold text-sm sm:text-base text-gray-900 dark:text-white truncate">
                 {step.title}
               </h3>
             </div>
@@ -404,7 +441,7 @@ export default function OnboardingTour({ onComplete, onSkip, forceStart = false 
               onClick={() => setShowSkipConfirm(true)}
               className="p-1 rounded-lg text-gray-400 hover:text-gray-600
                          dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700
-                         transition-colors"
+                         transition-colors flex-shrink-0"
               aria-label="Skip tour"
             >
               <X className="h-4 w-4" />
@@ -412,37 +449,37 @@ export default function OnboardingTour({ onComplete, onSkip, forceStart = false 
           </div>
 
           {/* Content */}
-          <div className="px-5 py-4">
-            <p className="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">
+          <div className="px-3 sm:px-5 py-3 sm:py-4">
+            <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-300 leading-relaxed">
               {step.description}
             </p>
           </div>
 
           {/* Footer */}
-          <div className="flex items-center justify-between px-5 py-4 bg-gray-50 dark:bg-gray-900/50 rounded-b-xl">
+          <div className="flex items-center justify-between px-3 sm:px-5 py-3 sm:py-4 bg-gray-50 dark:bg-gray-900/50 rounded-b-xl">
             {/* Progress */}
             <span className="text-xs text-gray-500 dark:text-gray-400">
-              {currentStep + 1} of {TOUR_STEPS.length}
+              {currentStep + 1} / {TOUR_STEPS.length}
             </span>
 
             {/* Navigation */}
-            <div className="flex items-center space-x-2">
+            <div className="flex items-center space-x-1 sm:space-x-2">
               {!isFirstStep && (
                 <button
                   onClick={handleBack}
-                  className="flex items-center px-3 py-1.5 text-sm font-medium
+                  className="flex items-center px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm font-medium
                              text-gray-600 dark:text-gray-300
                              hover:text-gray-900 dark:hover:text-white
                              transition-colors"
                 >
-                  <ChevronLeft className="h-4 w-4 mr-1" />
-                  Back
+                  <ChevronLeft className="h-3 w-3 sm:h-4 sm:w-4 mr-0.5 sm:mr-1" />
+                  <span className="hidden xs:inline">Back</span>
                 </button>
               )}
 
               <button
                 onClick={isLastStep ? handleComplete : handleNext}
-                className="flex items-center px-4 py-2 text-sm font-medium
+                className="flex items-center px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-medium
                            bg-emerald-600 text-white rounded-lg
                            hover:bg-emerald-700 transition-colors
                            click-feedback"
@@ -450,12 +487,12 @@ export default function OnboardingTour({ onComplete, onSkip, forceStart = false 
                 {isLastStep ? (
                   <>
                     Finish
-                    <Sparkles className="h-4 w-4 ml-1.5" />
+                    <Sparkles className="h-3 w-3 sm:h-4 sm:w-4 ml-1 sm:ml-1.5" />
                   </>
                 ) : (
                   <>
                     Next
-                    <ChevronRight className="h-4 w-4 ml-1" />
+                    <ChevronRight className="h-3 w-3 sm:h-4 sm:w-4 ml-0.5 sm:ml-1" />
                   </>
                 )}
               </button>
@@ -463,11 +500,11 @@ export default function OnboardingTour({ onComplete, onSkip, forceStart = false 
           </div>
 
           {/* Progress dots */}
-          <div className="absolute -bottom-6 left-1/2 transform -translate-x-1/2 flex space-x-1.5">
+          <div className="absolute -bottom-5 sm:-bottom-6 left-1/2 transform -translate-x-1/2 flex space-x-1 sm:space-x-1.5">
             {TOUR_STEPS.map((_, index) => (
               <div
                 key={index}
-                className={`w-2 h-2 rounded-full transition-colors duration-200
+                className={`w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full transition-colors duration-200
                   ${index === currentStep
                     ? 'bg-emerald-500'
                     : index < currentStep
@@ -487,14 +524,14 @@ export default function OnboardingTour({ onComplete, onSkip, forceStart = false 
             className="absolute inset-0 bg-black/50"
             onClick={handleCancelSkip}
           />
-          <div className="relative bg-white dark:bg-gray-800 rounded-xl shadow-2xl p-6 max-w-sm w-full animate-fade-in-up">
-            <h4 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+          <div className="relative bg-white dark:bg-gray-800 rounded-xl shadow-2xl p-4 sm:p-6 max-w-sm w-full mx-4 animate-fade-in-up">
+            <h4 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white mb-2">
               Skip the tour?
             </h4>
-            <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
+            <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 mb-4 sm:mb-6">
               You can always replay the tour from the Help menu if you change your mind.
             </p>
-            <div className="flex justify-end space-x-3">
+            <div className="flex flex-col-reverse sm:flex-row justify-end gap-2 sm:space-x-3 sm:gap-0">
               <button
                 onClick={handleCancelSkip}
                 className="px-4 py-2 text-sm font-medium text-gray-600 dark:text-gray-300
@@ -509,6 +546,63 @@ export default function OnboardingTour({ onComplete, onSkip, forceStart = false 
                            hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
               >
                 Skip for now
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Centered Finish Card - appears when tour completes */}
+      {showFinishCard && (
+        <div className="fixed inset-0 z-[101] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/60" />
+          <div className="relative bg-white dark:bg-gray-800 rounded-2xl shadow-2xl
+                          w-full max-w-xs sm:max-w-sm mx-4 animate-fade-in-up overflow-hidden">
+            {/* Success Header with gradient */}
+            <div className="bg-gradient-to-r from-emerald-500 to-teal-500 px-4 sm:px-6 py-6 sm:py-8 text-center">
+              <div className="inline-flex items-center justify-center w-12 h-12 sm:w-16 sm:h-16
+                              bg-white/20 rounded-full mb-3 sm:mb-4">
+                <Sparkles className="h-6 w-6 sm:h-8 sm:w-8 text-white" />
+              </div>
+              <h3 className="text-xl sm:text-2xl font-bold text-white mb-1 sm:mb-2">
+                You&apos;re all set!
+              </h3>
+              <p className="text-emerald-100 text-xs sm:text-sm">
+                Tour completed successfully
+              </p>
+            </div>
+
+            {/* Content */}
+            <div className="px-4 sm:px-6 py-4 sm:py-6 text-center">
+              <p className="text-sm sm:text-base text-gray-600 dark:text-gray-300 mb-4 sm:mb-6 leading-relaxed">
+                You&apos;ve seen all the key features. Start exploring and let the AI help you manage your data!
+              </p>
+
+              {/* Quick tips */}
+              <div className="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-3 sm:p-4 mb-4 sm:mb-6 text-left">
+                <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2 uppercase tracking-wide">
+                  Quick Tips
+                </p>
+                <ul className="space-y-1.5 sm:space-y-2 text-xs sm:text-sm text-gray-600 dark:text-gray-300">
+                  <li className="flex items-start gap-2">
+                    <span className="text-emerald-500 mt-0.5">•</span>
+                    <span>Press <kbd className="px-1.5 py-0.5 bg-gray-200 dark:bg-gray-700 rounded text-xs">?</kbd> for keyboard shortcuts</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-emerald-500 mt-0.5">•</span>
+                    <span>Replay tour anytime from Help menu</span>
+                  </li>
+                </ul>
+              </div>
+
+              <button
+                onClick={handleFinishClose}
+                className="w-full px-4 sm:px-6 py-2.5 sm:py-3 text-sm sm:text-base font-semibold
+                           bg-emerald-600 text-white rounded-xl
+                           hover:bg-emerald-700 transition-colors
+                           click-feedback shadow-lg shadow-emerald-500/25"
+              >
+                Start Exploring
               </button>
             </div>
           </div>
