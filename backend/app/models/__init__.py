@@ -55,6 +55,9 @@ ChatKitThread = _core.ChatKitThread
 ChatKitThreadItem = _core.ChatKitThreadItem
 UserFileSearchStore = _core.UserFileSearchStore
 UserFileDocument = _core.UserFileDocument
+SupportTicket = _core.SupportTicket
+SupportTicketCategory = _core.SupportTicketCategory
+SupportTicketStatus = _core.SupportTicketStatus
 
 __all__ = [
     # Core models
@@ -81,4 +84,8 @@ __all__ = [
     # New feature models
     "PublishedAgentConfig",
     "PublishedAgentUsage",
+    # Support ticket models
+    "SupportTicket",
+    "SupportTicketCategory",
+    "SupportTicketStatus",
 ]
