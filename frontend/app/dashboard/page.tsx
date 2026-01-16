@@ -20,6 +20,7 @@ import ConnectToolsSection from './components/ConnectToolsSection';
 import KPIStatsRow from './components/KPIStatsRow';
 import OnboardingChecklist from './components/OnboardingChecklist';
 import FloatingHelpButton from './components/FloatingHelpButton';
+import RecentActivityPanel from './components/RecentActivityPanel';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { InfoTooltip } from '@/components/ui/Tooltip';
 import { getConnectors } from '@/lib/connectors-api';
@@ -639,8 +640,11 @@ export default function DashboardPage() {
               tablesCount={connectionStatus?.tables_count ?? null}
               toolsConnected={connectorsCount}
               schemaStatus={connectionStatus?.schema_status as 'ready' | 'pending' | 'error' | null}
-              className="mb-8"
+              className="mb-6"
             />
+
+            {/* v1.2: Recent Activity Panel */}
+            <RecentActivityPanel className="mb-8" />
 
             {/* Feature Cards - Agent, Analytics, Scheduler, Connection */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">

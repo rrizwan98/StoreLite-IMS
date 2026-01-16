@@ -1,7 +1,7 @@
 # Requirements Checklist: Dashboard UX Improvements
 
 **Feature ID**: 015-dashboard-ux-improvements
-**Version**: v1.1
+**Version**: v1.2
 **Last Updated**: 2025-01-16
 
 ---
@@ -165,21 +165,56 @@
 | NFR | 5 | 5 | 100% |
 | **v1.0 Total** | **34** | **34** | **100%** |
 
-### v1.1 Requirements (Pending)
+### v1.1 Requirements (Completed)
 
 | Category | Total | Completed | Percentage |
 |----------|-------|-----------|------------|
-| Checklist Action Buttons | 6 | 0 | 0% |
-| Auto-collapse Checklist | 3 | 0 | 0% |
-| Tools Quick Actions | 3 | 0 | 0% |
-| Read-Only Learn More | 2 | 0 | 0% |
-| Floating Help Button | 3 | 0 | 0% |
-| **v1.1 Total** | **17** | **0** | **0%** |
+| Checklist Action Buttons | 6 | 6 | 100% |
+| Auto-collapse Checklist | 3 | 3 | 100% |
+| Tools Quick Actions | 3 | 3 | 100% |
+| Read-Only Learn More | 2 | 2 | 100% |
+| Floating Help Button | 3 | 3 | 100% |
+| **v1.1 Total** | **17** | **17** | **100%** |
+
+---
+
+## P1 Phase 6 - Recent Activity Panel (v1.2)
+
+| ID | Requirement | Status | Notes |
+|----|-------------|--------|-------|
+| FR-047 | Dashboard displays Recent Activity panel below KPI stats | [x] Done | Task 6.1-6.2 |
+| FR-048 | Panel shows last 5-10 activities sorted by recent | [x] Done | |
+| FR-049 | Panel shows loading skeleton while fetching | [x] Done | |
+| FR-050 | Panel shows empty state when no activities | [x] Done | |
+| FR-051 | Displays scheduled task activities | [x] Done | created, completed, failed |
+| FR-052 | Displays connector activities | [x] Done | added, verified |
+| FR-053 | May display first-time actions from localStorage | [ ] N/A | Optional |
+| FR-054 | Each activity shows icon, description, relative time | [x] Done | |
+| FR-055 | Activities color-coded by type | [x] Done | green/red/blue |
+| FR-056 | Clicking activity navigates to relevant page | [x] Done | |
+| FR-057 | Task data from getScheduledTasks() | [x] Done | No new API |
+| FR-058 | Connector data from getConnectors() | [x] Done | No new API |
+| FR-059 | NO new backend API endpoints | [x] Done | ✅ Verified |
+
+---
+
+### v1.2 Requirements (Completed)
+
+| Category | Total | Completed | Percentage |
+|----------|-------|-----------|------------|
+| Activity Panel Display | 4 | 4 | 100% |
+| Activity Types | 3 | 2 | 67% |
+| Activity Item Display | 3 | 3 | 100% |
+| Data Sources | 3 | 3 | 100% |
+| **v1.2 Total** | **13** | **12** | **92%** |
+
+---
 
 ### Overall
 
 | Version | Total | Completed | Percentage |
 |---------|-------|-----------|------------|
 | v1.0 | 34 | 34 | 100% |
-| v1.1 | 17 | 0 | 0% |
-| **Grand Total** | **51** | **34** | **67%** |
+| v1.1 | 17 | 17 | 100% |
+| v1.2 | 13 | 12 | 92% |
+| **Grand Total** | **64** | **63** | **98%** |

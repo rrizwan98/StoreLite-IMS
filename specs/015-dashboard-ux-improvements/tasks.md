@@ -1,7 +1,7 @@
 # Tasks: Dashboard UX Improvements
 
 **Feature ID**: 015-dashboard-ux-improvements
-**Version**: v1.1
+**Version**: v1.2
 **Created**: 2025-01-16
 **Updated**: 2025-01-16
 **Branch**: `feat/dashboard-ux-improvements`
@@ -12,6 +12,7 @@
 |---------|------|---------|
 | v1.0 | 2025-01-16 | Initial 12 tasks for Phases 1-4 |
 | v1.1 | 2025-01-16 | Added Phase 5: Quick Wins (5 new tasks) |
+| v1.2 | 2025-01-16 | Added Phase 6: Recent Activity Panel (2 new tasks) |
 
 ---
 
@@ -634,11 +635,88 @@ export default function FloatingHelpButton() {
 | 4 | 4.1 Dark Mode Verification | P1 | Low | ✅ Done | All above |
 | 4 | 4.2 Accessibility Audit | P1 | Low | ✅ Done | All above |
 | 4 | 4.3 Build & PR | P1 | Low | ✅ Done | All above |
-| **5** | **5.1 Checklist Action Buttons** | **P1** | **Low** | ⏳ Pending | 1.2 |
-| **5** | **5.2 Auto-collapse Checklist** | **P1** | **Low** | ⏳ Pending | 1.2 |
-| **5** | **5.3 Tools Quick Actions** | **P1** | **Low** | ⏳ Pending | None |
-| **5** | **5.4 Read-Only Learn More** | **P1** | **Low** | ⏳ Pending | None |
-| **5** | **5.5 Floating Help Button** | **P1** | **Medium** | ⏳ Pending | None |
+| 5 | 5.1 Checklist Action Buttons | P1 | Low | ✅ Done | 1.2 |
+| 5 | 5.2 Auto-collapse Checklist | P1 | Low | ✅ Done | 1.2 |
+| 5 | 5.3 Tools Quick Actions | P1 | Low | ✅ Done | None |
+| 5 | 5.4 Read-Only Learn More | P1 | Low | ✅ Done | None |
+| 5 | 5.5 Floating Help Button | P1 | Medium | ✅ Done | None |
+| **6** | **6.1 Recent Activity Panel** | **P1** | **Medium** | ⏳ Pending | None |
+| **6** | **6.2 Integrate Activity Panel** | **P1** | **Low** | ⏳ Pending | 6.1 |
+
+---
+
+## Phase 6: Recent Activity Panel (v1.2 Addition)
+
+### Task 6.1: Create RecentActivityPanel Component
+**Priority**: P1 | **Effort**: Medium | **Status**: [ ] Pending
+
+**Description**: Create a component that displays recent user activities aggregated from existing API data.
+
+**Files**:
+- CREATE: `frontend/app/dashboard/components/RecentActivityPanel.tsx`
+
+**Acceptance Criteria**:
+- [ ] Component fetches data from existing APIs (getScheduledTasks, getConnectors)
+- [ ] Shows last 5-10 activities sorted by timestamp (most recent first)
+- [ ] Each activity shows: icon, description, relative time ("2 hours ago")
+- [ ] Activities color-coded: success (green), error (red), info (blue)
+- [ ] Loading skeleton while fetching
+- [ ] Empty state when no activities
+- [ ] Click activity navigates to relevant page
+- [ ] Dark mode support
+
+**Activity Types**:
+| Type | Source | Icon | Color |
+|------|--------|------|-------|
+| Task Created | ScheduledTask.created_at | CalendarPlus | Blue |
+| Task Completed | ScheduledTask.executed_at + status=completed | CheckCircle | Green |
+| Task Failed | ScheduledTask.executed_at + status=failed | XCircle | Red |
+| Connector Added | Connector.created_at | Plug | Blue |
+| Connector Verified | Connector.last_verified_at | CheckCircle | Green |
+
+**Implementation Notes**:
+```typescript
+interface Activity {
+  id: string;
+  type: 'task_created' | 'task_completed' | 'task_failed' | 'connector_added' | 'connector_verified';
+  title: string;
+  description?: string;
+  timestamp: Date;
+  route?: string;
+}
+
+// Aggregate from existing APIs
+const activities: Activity[] = [
+  ...tasksToActivities(scheduledTasks),
+  ...connectorsToActivities(connectors),
+].sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime()).slice(0, 10);
+```
+
+---
+
+### Task 6.2: Integrate RecentActivityPanel into Dashboard
+**Priority**: P1 | **Effort**: Low | **Status**: [ ] Pending
+
+**Description**: Add RecentActivityPanel to the dashboard page below KPI stats.
+
+**Files**:
+- MODIFY: `frontend/app/dashboard/page.tsx`
+
+**Acceptance Criteria**:
+- [ ] Panel appears below KPI stats row for schema_query_only users
+- [ ] Data passed from existing state/API calls
+- [ ] No new API calls added (reuse existing data)
+- [ ] Layout balanced with other components
+
+**Integration Point**:
+```tsx
+{/* After KPIStatsRow */}
+<RecentActivityPanel
+  scheduledTasks={tasks}
+  connectors={connectors}
+  className="mt-6"
+/>
+```
 
 ---
 
@@ -660,12 +738,17 @@ Phase 1-4 (v1.0 - COMPLETED ✅)
 └── Task 4.3: Build & PR ✅
     │
     ▼
-Phase 5 (v1.1 - Quick Wins - PENDING)
-├── Task 5.1: Checklist Action Buttons ⏳
-├── Task 5.2: Auto-collapse Checklist ⏳
-├── Task 5.3: Tools Quick Actions ⏳
-├── Task 5.4: Read-Only Learn More ⏳
-└── Task 5.5: Floating Help Button ⏳
+Phase 5 (v1.1 - Quick Wins - COMPLETED ✅)
+├── Task 5.1: Checklist Action Buttons ✅
+├── Task 5.2: Auto-collapse Checklist ✅
+├── Task 5.3: Tools Quick Actions ✅
+├── Task 5.4: Read-Only Learn More ✅
+└── Task 5.5: Floating Help Button ✅
+    │
+    ▼
+Phase 6 (v1.2 - Recent Activity - PENDING)
+├── Task 6.1: Recent Activity Panel ⏳
+└── Task 6.2: Integrate Activity Panel ⏳
     │
     ▼
 Build Verification & PR Update

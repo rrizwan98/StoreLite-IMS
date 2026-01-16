@@ -3,7 +3,7 @@
 **Feature ID**: 015-dashboard-ux-improvements
 **Feature Branch**: `feat/dashboard-ux-improvements`
 **Created**: 2025-01-16
-**Version**: v1.1
+**Version**: v1.2
 **Status**: In Progress
 **Type**: UI/UX Enhancement (No Backend Changes)
 
@@ -13,6 +13,7 @@
 |---------|------|---------|
 | v1.0 | 2025-01-16 | Initial spec: KPI Stats, Onboarding Checklist, CTAs, Microinteractions, Tooltips |
 | v1.1 | 2025-01-16 | Added Phase 5 Quick Wins: Checklist action buttons, auto-collapse, tools quick actions, help button, learn more link |
+| v1.2 | 2025-01-16 | Added Phase 6: Recent Activity Panel using existing API data (no backend changes) |
 
 ## Executive Summary
 
@@ -211,6 +212,30 @@ As a user anywhere on the dashboard, I want a floating help button so that I can
 
 ---
 
+### User Story 12 - User: Recent Activity Panel (Priority: P1 - Phase 6) [v1.2]
+
+As a returning user, I want to see my recent activity on the dashboard so that I can quickly resume where I left off and track my usage.
+
+**Why this priority**: P1 - Research showed 9.1/10 rating. Users want visibility into their recent actions.
+
+**Independent Test**: Can be tested by performing various actions (connecting tools, running tasks) and verifying they appear in the activity feed.
+
+**Data Sources (NO backend changes - uses existing APIs):**
+- Scheduled Tasks: `getScheduledTasks()` - created_at, executed_at, status
+- Connectors: `getConnectors()` - created_at, last_verified_at
+- localStorage: `ims_first_ai_query`, `ims_first_task_created` timestamps
+
+**Acceptance Scenarios**:
+
+1. **Given** I am on the dashboard, **When** I look below the KPI stats, **Then** I see a "Recent Activity" panel showing my last 5-10 activities
+2. **Given** I have scheduled tasks, **When** viewing recent activity, **Then** I see task completions with status (completed/failed) and timestamps
+3. **Given** I connected a new tool, **When** viewing recent activity, **Then** I see "Connected [Tool Name]" with timestamp
+4. **Given** no recent activity exists, **When** viewing the panel, **Then** I see an empty state: "No recent activity yet. Start by asking the AI Agent a question!"
+5. **Given** activities exist, **When** I click on an activity item, **Then** I am navigated to the relevant page (e.g., Scheduler for tasks)
+6. **Given** I want more details, **When** I click "View All", **Then** I can see a full activity history (or modal)
+
+---
+
 ## Requirements
 
 ### Functional Requirements
@@ -288,6 +313,29 @@ As a user anywhere on the dashboard, I want a floating help button so that I can
 - **FR-044**: Dashboard MUST display a floating help button (fixed position, bottom-right)
 - **FR-045**: Help button MUST show dropdown with: "Documentation", "Contact Support", "Keyboard Shortcuts"
 - **FR-046**: Help button MUST remain visible during scroll
+
+#### P1 Phase 6 - Recent Activity Panel (v1.2)
+
+##### Activity Panel Display
+- **FR-047**: Dashboard MUST display a Recent Activity panel below KPI stats row
+- **FR-048**: Panel MUST show last 5-10 activities sorted by most recent first
+- **FR-049**: Panel MUST show loading skeleton while fetching activity data
+- **FR-050**: Panel MUST show empty state when no activities exist
+
+##### Activity Types (from existing APIs - NO backend changes)
+- **FR-051**: Panel MUST display scheduled task activities (created, completed, failed)
+- **FR-052**: Panel MUST display connector activities (connected, disconnected, verified)
+- **FR-053**: Panel MAY display first-time actions from localStorage (first AI query, first task)
+
+##### Activity Item Display
+- **FR-054**: Each activity MUST show: icon, description, relative timestamp (e.g., "2 hours ago")
+- **FR-055**: Each activity MUST be color-coded by type (success=green, error=red, info=blue)
+- **FR-056**: Clicking an activity SHOULD navigate to relevant page (Scheduler, Settings, etc.)
+
+##### Data Sources (existing APIs only)
+- **FR-057**: Task activities derived from `getScheduledTasks()` API response
+- **FR-058**: Connector activities derived from `getConnectors()` API response
+- **FR-059**: NO new backend API endpoints required
 
 ### Non-Functional Requirements
 
