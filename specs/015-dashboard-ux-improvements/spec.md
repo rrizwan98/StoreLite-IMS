@@ -3,7 +3,7 @@
 **Feature ID**: 015-dashboard-ux-improvements
 **Feature Branch**: `feat/dashboard-ux-improvements`
 **Created**: 2025-01-16
-**Version**: v1.3
+**Version**: v1.4
 **Status**: In Progress
 **Type**: UI/UX Enhancement (No Backend Changes)
 
@@ -15,6 +15,7 @@
 | v1.1 | 2025-01-16 | Added Phase 5 Quick Wins: Checklist action buttons, auto-collapse, tools quick actions, help button, learn more link |
 | v1.2 | 2025-01-16 | Added Phase 6: Recent Activity Panel using existing API data (no backend changes) |
 | v1.3 | 2025-01-16 | Added Phase 7: Interactive Onboarding Tour (custom build, no external libraries) |
+| v1.4 | 2025-01-16 | Added Phase 8: Customizable Dashboard Widgets (show/hide, reorder, persist to localStorage) |
 
 ## Executive Summary
 
@@ -271,6 +272,38 @@ As a new user, I want an interactive guided tour of the dashboard so that I can 
 
 ---
 
+### User Story 14 - Power User: Customizable Dashboard Widgets (Priority: P2 - Phase 8) [v1.4]
+
+As a power user, I want to customize my dashboard by showing/hiding widgets and reordering them so that I can focus on the information most relevant to me.
+
+**Why this priority**: P2 - Power users want control over their workspace. Customization increases engagement and reduces cognitive load by hiding unused sections.
+
+**Independent Test**: Can be tested by toggling widget visibility and reordering, then refreshing to verify persistence.
+
+**Technical Approach (NO backend changes):**
+- Widget visibility and order stored in localStorage (`ims_dashboard_widget_config`)
+- Drag-and-drop reordering using native HTML5 drag API (no external libraries)
+- Settings accessible via gear icon in dashboard header
+
+**Customizable Widgets:**
+1. **Onboarding Checklist** - Show/hide (auto-hides when completed)
+2. **KPI Stats Row** - Show/hide
+3. **Recent Activity Panel** - Show/hide
+4. **Feature Cards** - Always visible (core navigation)
+5. **Connected Tools Section** - Show/hide
+
+**Acceptance Scenarios**:
+
+1. **Given** I am on the dashboard, **When** I click the gear/settings icon, **Then** I see a "Customize Dashboard" panel/modal
+2. **Given** the customize panel is open, **When** I view the widget list, **Then** I see toggles to show/hide each customizable widget
+3. **Given** I toggle off "Recent Activity", **When** I close the panel, **Then** the Recent Activity panel is hidden from the dashboard
+4. **Given** I have hidden some widgets, **When** I refresh the page, **Then** my widget visibility preferences are preserved
+5. **Given** I want to reset to defaults, **When** I click "Reset to Default", **Then** all widgets are shown in original order
+6. **Given** I am in the customize panel, **When** I drag a widget item up/down, **Then** the widget order on dashboard changes accordingly
+7. **Given** I have reordered widgets, **When** I refresh the page, **Then** my custom order is preserved
+
+---
+
 ## Requirements
 
 ### Functional Requirements
@@ -407,6 +440,34 @@ As a new user, I want an interactive guided tour of the dashboard so that I can 
 - **FR-079**: Step 3: Connected Tools - Integration capabilities
 - **FR-080**: Step 4: Scheduler Card - Automation features
 - **FR-081**: Step 5: Help Button - Support resources
+
+#### P2 Phase 8 - Customizable Dashboard Widgets (v1.4)
+
+##### Customize Settings Access
+- **FR-082**: Dashboard header MUST include a settings/gear icon for customization
+- **FR-083**: Clicking settings icon MUST open a "Customize Dashboard" modal/panel
+- **FR-084**: Modal MUST list all customizable widgets with toggle switches
+
+##### Widget Visibility
+- **FR-085**: Each widget MUST have a toggle to show/hide
+- **FR-086**: Toggling off a widget MUST immediately hide it from dashboard
+- **FR-087**: Toggling on a widget MUST immediately show it on dashboard
+- **FR-088**: Feature Cards section MUST always be visible (not toggleable)
+
+##### Widget Ordering
+- **FR-089**: Widgets in customize panel MUST be draggable for reordering
+- **FR-090**: Dragging a widget MUST show visual feedback (drag handle, ghost)
+- **FR-091**: Dropping a widget MUST update the dashboard order immediately
+
+##### Persistence
+- **FR-092**: Widget configuration MUST be stored in localStorage (`ims_dashboard_widget_config`)
+- **FR-093**: Configuration MUST include: widget visibility states, widget order
+- **FR-094**: Configuration MUST persist across page refreshes and browser sessions
+- **FR-095**: "Reset to Default" button MUST restore original visibility and order
+
+##### Default Configuration
+- **FR-096**: Default order: Checklist, KPI Stats, Recent Activity, Feature Cards, Connected Tools
+- **FR-097**: Default visibility: All widgets visible
 
 ### Non-Functional Requirements
 

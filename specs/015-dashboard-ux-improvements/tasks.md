@@ -1,7 +1,7 @@
 # Tasks: Dashboard UX Improvements
 
 **Feature ID**: 015-dashboard-ux-improvements
-**Version**: v1.3
+**Version**: v1.4
 **Created**: 2025-01-16
 **Updated**: 2025-01-16
 **Branch**: `feat/dashboard-ux-improvements`
@@ -14,6 +14,7 @@
 | v1.1 | 2025-01-16 | Added Phase 5: Quick Wins (5 new tasks) |
 | v1.2 | 2025-01-16 | Added Phase 6: Recent Activity Panel (2 new tasks) |
 | v1.3 | 2025-01-16 | Added Phase 7: Interactive Onboarding Tour (2 new tasks) |
+| v1.4 | 2025-01-16 | Added Phase 8: Customizable Dashboard Widgets (3 new tasks) |
 
 ---
 
@@ -645,6 +646,9 @@ export default function FloatingHelpButton() {
 | 6 | 6.2 Integrate Activity Panel | P1 | Low | ✅ Done | 6.1 |
 | 7 | 7.1 Onboarding Tour Component | P1 | Medium | ✅ Done | None |
 | 7 | 7.2 Integrate Tour + Replay | P1 | Low | ✅ Done | 7.1 |
+| **8** | **8.1 Widget Config Hook** | **P2** | **Medium** | ⏳ Pending | None |
+| **8** | **8.2 Customize Dashboard Modal** | **P2** | **Medium** | ⏳ Pending | 8.1 |
+| **8** | **8.3 Integrate Widget System** | **P2** | **Low** | ⏳ Pending | 8.1, 8.2 |
 
 ---
 
@@ -823,6 +827,129 @@ const TOUR_STEPS = [
 
 ---
 
+## Phase 8: Customizable Dashboard Widgets (v1.4 Addition)
+
+### Task 8.1: Create Widget Configuration Hook
+**Priority**: P2 | **Effort**: Medium | **Status**: [x] Done
+
+**Description**: Create a custom React hook to manage widget visibility and order with localStorage persistence.
+
+**Files**:
+- CREATE: `frontend/app/dashboard/hooks/useWidgetConfig.ts`
+
+**Acceptance Criteria**:
+- [ ] Hook manages widget visibility states (show/hide)
+- [ ] Hook manages widget order (array of widget IDs)
+- [ ] Configuration persisted to localStorage (`ims_dashboard_widget_config`)
+- [ ] Provides `toggleWidget()`, `reorderWidgets()`, `resetToDefault()` functions
+- [ ] Loads saved config on mount, falls back to defaults if none
+- [ ] TypeScript types for widget config
+
+**Widget IDs**:
+```typescript
+type WidgetId = 'checklist' | 'kpiStats' | 'recentActivity' | 'featureCards' | 'connectedTools';
+
+interface WidgetConfig {
+  visibility: Record<WidgetId, boolean>;
+  order: WidgetId[];
+}
+
+const DEFAULT_CONFIG: WidgetConfig = {
+  visibility: {
+    checklist: true,
+    kpiStats: true,
+    recentActivity: true,
+    featureCards: true, // Always true, not toggleable
+    connectedTools: true,
+  },
+  order: ['checklist', 'kpiStats', 'recentActivity', 'featureCards', 'connectedTools'],
+};
+```
+
+**localStorage Key**: `ims_dashboard_widget_config`
+
+---
+
+### Task 8.2: Create Customize Dashboard Modal
+**Priority**: P2 | **Effort**: Medium | **Status**: [x] Done
+
+**Description**: Create a modal component for customizing dashboard widgets with toggles and drag-to-reorder.
+
+**Files**:
+- CREATE: `frontend/app/dashboard/components/CustomizeDashboardModal.tsx`
+
+**Acceptance Criteria**:
+- [ ] Modal opens from settings icon in dashboard
+- [ ] Lists all widgets with toggle switches
+- [ ] Feature Cards toggle is disabled (always visible)
+- [ ] Widgets are draggable for reordering (HTML5 drag API)
+- [ ] Drag handle icon visible on each widget row
+- [ ] Visual feedback during drag (ghost, drop indicator)
+- [ ] "Reset to Default" button at bottom
+- [ ] Changes apply immediately (no save button needed)
+- [ ] Dark mode support
+- [ ] Accessible (keyboard navigable, ARIA labels)
+
+**Implementation Notes**:
+```tsx
+// Draggable widget row
+<div
+  draggable
+  onDragStart={(e) => handleDragStart(e, widgetId)}
+  onDragOver={(e) => handleDragOver(e, widgetId)}
+  onDrop={(e) => handleDrop(e, widgetId)}
+  className="flex items-center p-3 bg-gray-50 dark:bg-gray-700 rounded-lg"
+>
+  <GripVertical className="h-4 w-4 text-gray-400 mr-3 cursor-grab" />
+  <span className="flex-1">{widget.label}</span>
+  <Switch checked={visibility[widgetId]} onChange={() => toggle(widgetId)} />
+</div>
+```
+
+---
+
+### Task 8.3: Integrate Widget System into Dashboard
+**Priority**: P2 | **Effort**: Low | **Status**: [x] Done
+
+**Description**: Add settings icon to dashboard header and integrate widget rendering based on configuration.
+
+**Files**:
+- MODIFY: `frontend/app/dashboard/page.tsx`
+
+**Acceptance Criteria**:
+- [ ] Settings/gear icon added to dashboard header (near title)
+- [ ] Clicking icon opens CustomizeDashboardModal
+- [ ] Widgets render in order specified by config
+- [ ] Hidden widgets are not rendered
+- [ ] Feature Cards always rendered regardless of config
+- [ ] Tour still works with reordered widgets
+
+**Integration Points**:
+```tsx
+// In dashboard page
+const { config, toggleWidget, reorderWidgets, resetConfig } = useWidgetConfig();
+
+// Render widgets in order
+{config.order.map((widgetId) => {
+  if (!config.visibility[widgetId]) return null;
+
+  switch (widgetId) {
+    case 'checklist':
+      return <OnboardingChecklist key={widgetId} ... />;
+    case 'kpiStats':
+      return <KPIStatsRow key={widgetId} ... />;
+    case 'recentActivity':
+      return <RecentActivityPanel key={widgetId} ... />;
+    case 'featureCards':
+      return <FeatureCardsGrid key={widgetId} ... />;
+    case 'connectedTools':
+      return <ConnectToolsSection key={widgetId} ... />;
+  }
+})}
+```
+
+---
+
 ## Execution Order
 
 ```
@@ -857,6 +984,12 @@ Phase 6 (v1.2 - Recent Activity - COMPLETED ✅)
 Phase 7 (v1.3 - Onboarding Tour - COMPLETED ✅)
 ├── Task 7.1: Onboarding Tour Component ✅
 └── Task 7.2: Integrate Tour + Replay ✅
+    │
+    ▼
+Phase 8 (v1.4 - Widget Customization - COMPLETED ✅)
+├── Task 8.1: Widget Config Hook ✅
+├── Task 8.2: Customize Dashboard Modal ✅
+└── Task 8.3: Integrate Widget System ✅
     │
     ▼
 Build Verification & PR Update

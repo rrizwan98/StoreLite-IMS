@@ -22,9 +22,12 @@ import OnboardingChecklist from './components/OnboardingChecklist';
 import FloatingHelpButton from './components/FloatingHelpButton';
 import RecentActivityPanel from './components/RecentActivityPanel';
 import OnboardingTour from './components/OnboardingTour';
+import CustomizeDashboardModal from './components/CustomizeDashboardModal';
+import { useWidgetConfig, WidgetId } from './hooks/useWidgetConfig';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { InfoTooltip } from '@/components/ui/Tooltip';
 import { getConnectors } from '@/lib/connectors-api';
+import { Settings } from 'lucide-react';
 
 export default function DashboardPage() {
   const {
@@ -56,6 +59,16 @@ export default function DashboardPage() {
 
   // Progressive disclosure: track if user is new (hasn't made AI query yet)
   const [isNewUser, setIsNewUser] = useState(false);
+
+  // v1.4: Widget configuration for customizable dashboard
+  const {
+    config: widgetConfig,
+    isLoaded: widgetConfigLoaded,
+    toggleWidget,
+    reorderWidgets,
+    resetToDefault: resetWidgetConfig,
+  } = useWidgetConfig();
+  const [isCustomizeModalOpen, setIsCustomizeModalOpen] = useState(false);
 
   // Check new user status on mount
   useEffect(() => {
@@ -617,9 +630,23 @@ export default function DashboardPage() {
           /* User with Schema Query Only (Agent + Analytics) */
           <div>
             <div className="flex justify-between items-center mb-6">
-              <div>
-                <h1 className="text-2xl font-bold text-gray-900 dark:text-white">AI Analytics Dashboard</h1>
-                <p className="text-gray-600 dark:text-gray-400">Query your database with natural language</p>
+              <div className="flex items-center space-x-3">
+                <div>
+                  <h1 className="text-2xl font-bold text-gray-900 dark:text-white">AI Analytics Dashboard</h1>
+                  <p className="text-gray-600 dark:text-gray-400">Query your database with natural language</p>
+                </div>
+                {/* v1.4: Customize Dashboard button */}
+                <button
+                  onClick={() => setIsCustomizeModalOpen(true)}
+                  className="p-2 rounded-lg text-gray-500 dark:text-gray-400
+                             hover:text-gray-700 dark:hover:text-gray-200
+                             hover:bg-gray-100 dark:hover:bg-gray-700
+                             transition-colors"
+                  title="Customize Dashboard"
+                  aria-label="Customize Dashboard"
+                >
+                  <Settings className="h-5 w-5" />
+                </button>
               </div>
               <button
                 onClick={handleDisconnect}
@@ -629,132 +656,152 @@ export default function DashboardPage() {
               </button>
             </div>
 
-            {/* Onboarding Checklist */}
-            <OnboardingChecklist
-              connectionStatus={connectionStatus}
-              connectorsCount={connectorsCount ?? 0}
-              className="mb-6"
-            />
+            {/* v1.4: Render widgets in configured order */}
+            {widgetConfigLoaded && widgetConfig.order.map((widgetId) => {
+              // Skip hidden widgets
+              if (!widgetConfig.visibility[widgetId]) return null;
 
-            {/* KPI Stats Row */}
-            <div data-tour="kpi-stats">
-              <KPIStatsRow
-                tablesCount={connectionStatus?.tables_count ?? null}
-                toolsConnected={connectorsCount}
-                schemaStatus={connectionStatus?.schema_status as 'ready' | 'pending' | 'error' | null}
-                className="mb-6"
-              />
-            </div>
+              switch (widgetId) {
+                case 'checklist':
+                  return (
+                    <OnboardingChecklist
+                      key={widgetId}
+                      connectionStatus={connectionStatus}
+                      connectorsCount={connectorsCount ?? 0}
+                      className="mb-6"
+                    />
+                  );
 
-            {/* v1.2: Recent Activity Panel */}
-            <RecentActivityPanel className="mb-8" />
+                case 'kpiStats':
+                  return (
+                    <div key={widgetId} data-tour="kpi-stats">
+                      <KPIStatsRow
+                        tablesCount={connectionStatus?.tables_count ?? null}
+                        toolsConnected={connectorsCount}
+                        schemaStatus={connectionStatus?.schema_status as 'ready' | 'pending' | 'error' | null}
+                        className="mb-6"
+                      />
+                    </div>
+                  );
 
-            {/* Feature Cards - Agent, Analytics, Scheduler, Connection */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-              {/* AI Agent Card - Primary Feature */}
-              <div
-                data-tour="ai-agent-card"
-                className={`bg-white dark:bg-gray-800 rounded-xl shadow-md dark:shadow-gray-900/50 p-6 hover-lift relative ${
-                  isNewUser
-                    ? 'border-2 border-emerald-400 dark:border-emerald-600 ring-2 ring-emerald-200 dark:ring-emerald-900'
-                    : 'border-2 border-emerald-300 dark:border-emerald-700'
-                }`}
-              >
-                {/* New user badge */}
-                {isNewUser && connectionStatus?.schema_status === 'ready' && (
-                  <span className="absolute -top-2 -right-2 bg-emerald-500 text-white text-xs font-medium px-2 py-1 rounded-full shadow-sm">
-                    Start here
-                  </span>
-                )}
-                <div className="text-4xl mb-4">🧠</div>
-                <h2 className="text-xl font-semibold mb-2 text-gray-900 dark:text-white">AI Agent</h2>
-                <p className="text-gray-600 dark:text-gray-400 text-sm mb-4">
-                  Ask questions about your data in natural language.
-                </p>
-                <Link href={connectionStatus.schema_status === 'ready' ? ROUTES.SCHEMA_AGENT : ROUTES.SCHEMA_CONNECT}>
-                  <button
-                    className={`w-full py-2.5 px-4 rounded-lg font-medium click-feedback transition-colors ${
-                      connectionStatus.schema_status === 'ready'
-                        ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
-                        : 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed'
-                    }`}
-                    title={connectionStatus.schema_status !== 'ready' ? 'Discover schema first' : undefined}
-                  >
-                    {connectionStatus.schema_status === 'ready' ? 'Open Chat' : 'Setup Required'}
-                  </button>
-                </Link>
-              </div>
+                case 'recentActivity':
+                  return <RecentActivityPanel key={widgetId} className="mb-8" />;
 
-              {/* Scheduler Card */}
-              <div
-                data-tour="scheduler-card"
-                className={`bg-white dark:bg-gray-800 rounded-xl shadow-md dark:shadow-gray-900/50 p-6 hover-lift border border-gray-200 dark:border-gray-700 transition-opacity ${
-                  isNewUser ? 'opacity-75 hover:opacity-100' : ''
-                }`}
-              >
-                <div className="text-4xl mb-4">⏰</div>
-                <h2 className="text-xl font-semibold mb-2 text-gray-900 dark:text-white">Scheduler</h2>
-                <p className="text-gray-600 dark:text-gray-400 text-sm mb-4">
-                  Schedule automated tasks to run at specific times.
-                </p>
-                <Link href={connectionStatus.schema_status === 'ready' ? ROUTES.SCHEDULER : ROUTES.SCHEMA_CONNECT}>
-                  <button
-                    className={`w-full py-2.5 px-4 rounded-lg font-medium click-feedback transition-colors ${
-                      connectionStatus.schema_status === 'ready'
-                        ? 'border border-purple-300 dark:border-purple-700 text-purple-700 dark:text-purple-300 hover:bg-purple-50 dark:hover:bg-purple-900/30'
-                        : 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed'
-                    }`}
-                    title={connectionStatus.schema_status !== 'ready' ? 'Discover schema first' : undefined}
-                  >
-                    {connectionStatus.schema_status === 'ready' ? 'View Tasks' : 'Setup Required'}
-                  </button>
-                </Link>
-              </div>
+                case 'featureCards':
+                  return (
+                    <div key={widgetId} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-8">
+                      {/* AI Agent Card - Primary Feature */}
+                      <div
+                        data-tour="ai-agent-card"
+                        className={`bg-white dark:bg-gray-800 rounded-xl shadow-md dark:shadow-gray-900/50 p-6 hover-lift relative ${
+                          isNewUser
+                            ? 'border-2 border-emerald-400 dark:border-emerald-600 ring-2 ring-emerald-200 dark:ring-emerald-900'
+                            : 'border-2 border-emerald-300 dark:border-emerald-700'
+                        }`}
+                      >
+                        {/* New user badge */}
+                        {isNewUser && connectionStatus?.schema_status === 'ready' && (
+                          <span className="absolute -top-2 -right-2 bg-emerald-500 text-white text-xs font-medium px-2 py-1 rounded-full shadow-sm">
+                            Start here
+                          </span>
+                        )}
+                        <div className="text-4xl mb-4">🧠</div>
+                        <h2 className="text-xl font-semibold mb-2 text-gray-900 dark:text-white">AI Agent</h2>
+                        <p className="text-gray-600 dark:text-gray-400 text-sm mb-4">
+                          Ask questions about your data in natural language.
+                        </p>
+                        <Link href={connectionStatus.schema_status === 'ready' ? ROUTES.SCHEMA_AGENT : ROUTES.SCHEMA_CONNECT}>
+                          <button
+                            className={`w-full py-2.5 px-4 rounded-lg font-medium click-feedback transition-colors ${
+                              connectionStatus.schema_status === 'ready'
+                                ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                                : 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed'
+                            }`}
+                            title={connectionStatus.schema_status !== 'ready' ? 'Discover schema first' : undefined}
+                          >
+                            {connectionStatus.schema_status === 'ready' ? 'Open Chat' : 'Setup Required'}
+                          </button>
+                        </Link>
+                      </div>
 
-              {/* Connection Card */}
-              <div className={`bg-white dark:bg-gray-800 rounded-xl shadow-md dark:shadow-gray-900/50 p-6 hover-lift border border-gray-200 dark:border-gray-700 transition-opacity ${
-                isNewUser ? 'opacity-75 hover:opacity-100' : ''
-              }`}>
-                <div className="text-4xl mb-4">🔌</div>
-                <h2 className="text-xl font-semibold mb-2 text-gray-900 dark:text-white">Connection</h2>
-                <p className="text-gray-600 dark:text-gray-400 text-sm mb-4">
-                  View schema, refresh metadata, or upgrade mode.
-                </p>
-                <Link href={ROUTES.SCHEMA_CONNECT}>
-                  <button className="w-full py-2.5 px-4 rounded-lg font-medium click-feedback transition-colors border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700">
-                    View Schema
-                  </button>
-                </Link>
-              </div>
+                      {/* Scheduler Card */}
+                      <div
+                        data-tour="scheduler-card"
+                        className={`bg-white dark:bg-gray-800 rounded-xl shadow-md dark:shadow-gray-900/50 p-6 hover-lift border border-gray-200 dark:border-gray-700 transition-opacity ${
+                          isNewUser ? 'opacity-75 hover:opacity-100' : ''
+                        }`}
+                      >
+                        <div className="text-4xl mb-4">⏰</div>
+                        <h2 className="text-xl font-semibold mb-2 text-gray-900 dark:text-white">Scheduler</h2>
+                        <p className="text-gray-600 dark:text-gray-400 text-sm mb-4">
+                          Schedule automated tasks to run at specific times.
+                        </p>
+                        <Link href={connectionStatus.schema_status === 'ready' ? ROUTES.SCHEDULER : ROUTES.SCHEMA_CONNECT}>
+                          <button
+                            className={`w-full py-2.5 px-4 rounded-lg font-medium click-feedback transition-colors ${
+                              connectionStatus.schema_status === 'ready'
+                                ? 'border border-purple-300 dark:border-purple-700 text-purple-700 dark:text-purple-300 hover:bg-purple-50 dark:hover:bg-purple-900/30'
+                                : 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed'
+                            }`}
+                            title={connectionStatus.schema_status !== 'ready' ? 'Discover schema first' : undefined}
+                          >
+                            {connectionStatus.schema_status === 'ready' ? 'View Tasks' : 'Setup Required'}
+                          </button>
+                        </Link>
+                      </div>
 
-              {/* Developer Tools Card */}
-              <div className={`bg-white dark:bg-gray-800 rounded-xl shadow-md dark:shadow-gray-900/50 p-6 hover-lift border border-gray-200 dark:border-gray-700 transition-opacity ${
-                isNewUser ? 'opacity-75 hover:opacity-100' : ''
-              }`}>
-                <div className="text-4xl mb-4">🛠️</div>
-                <h2 className="text-xl font-semibold mb-2 text-gray-900 dark:text-white">Developer Tools</h2>
-                <p className="text-gray-600 dark:text-gray-400 text-sm mb-4">
-                  Publish agents, get API keys, embed code.
-                </p>
-                <Link href={connectionStatus.schema_status === 'ready' ? ROUTES.DEVELOPER_TOOLS : ROUTES.SCHEMA_CONNECT}>
-                  <button
-                    className={`w-full py-2.5 px-4 rounded-lg font-medium click-feedback transition-colors ${
-                      connectionStatus.schema_status === 'ready'
-                        ? 'border border-orange-300 dark:border-orange-700 text-orange-700 dark:text-orange-300 hover:bg-orange-50 dark:hover:bg-orange-900/30'
-                        : 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed'
-                    }`}
-                    title={connectionStatus.schema_status !== 'ready' ? 'Discover schema first' : undefined}
-                  >
-                    {connectionStatus.schema_status === 'ready' ? 'Manage Agents' : 'Setup Required'}
-                  </button>
-                </Link>
-              </div>
-            </div>
+                      {/* Connection Card */}
+                      <div className={`bg-white dark:bg-gray-800 rounded-xl shadow-md dark:shadow-gray-900/50 p-6 hover-lift border border-gray-200 dark:border-gray-700 transition-opacity ${
+                        isNewUser ? 'opacity-75 hover:opacity-100' : ''
+                      }`}>
+                        <div className="text-4xl mb-4">🔌</div>
+                        <h2 className="text-xl font-semibold mb-2 text-gray-900 dark:text-white">Connection</h2>
+                        <p className="text-gray-600 dark:text-gray-400 text-sm mb-4">
+                          View schema, refresh metadata, or upgrade mode.
+                        </p>
+                        <Link href={ROUTES.SCHEMA_CONNECT}>
+                          <button className="w-full py-2.5 px-4 rounded-lg font-medium click-feedback transition-colors border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700">
+                            View Schema
+                          </button>
+                        </Link>
+                      </div>
 
-            {/* Connect Tools Section */}
-            <div data-tour="connected-tools">
-              <ConnectToolsSection className="mt-8" />
-            </div>
+                      {/* Developer Tools Card */}
+                      <div className={`bg-white dark:bg-gray-800 rounded-xl shadow-md dark:shadow-gray-900/50 p-6 hover-lift border border-gray-200 dark:border-gray-700 transition-opacity ${
+                        isNewUser ? 'opacity-75 hover:opacity-100' : ''
+                      }`}>
+                        <div className="text-4xl mb-4">🛠️</div>
+                        <h2 className="text-xl font-semibold mb-2 text-gray-900 dark:text-white">Developer Tools</h2>
+                        <p className="text-gray-600 dark:text-gray-400 text-sm mb-4">
+                          Publish agents, get API keys, embed code.
+                        </p>
+                        <Link href={connectionStatus.schema_status === 'ready' ? ROUTES.DEVELOPER_TOOLS : ROUTES.SCHEMA_CONNECT}>
+                          <button
+                            className={`w-full py-2.5 px-4 rounded-lg font-medium click-feedback transition-colors ${
+                              connectionStatus.schema_status === 'ready'
+                                ? 'border border-orange-300 dark:border-orange-700 text-orange-700 dark:text-orange-300 hover:bg-orange-50 dark:hover:bg-orange-900/30'
+                                : 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed'
+                            }`}
+                            title={connectionStatus.schema_status !== 'ready' ? 'Discover schema first' : undefined}
+                          >
+                            {connectionStatus.schema_status === 'ready' ? 'Manage Agents' : 'Setup Required'}
+                          </button>
+                        </Link>
+                      </div>
+                    </div>
+                  );
+
+                case 'connectedTools':
+                  return (
+                    <div key={widgetId} data-tour="connected-tools">
+                      <ConnectToolsSection className="mt-0" />
+                    </div>
+                  );
+
+                default:
+                  return null;
+              }
+            })}
 
             {/* Read-Only Notice with Tooltip and Learn More link (v1.1) */}
             <div className="mt-8 bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-800 rounded-lg p-4">
@@ -936,6 +983,18 @@ export default function DashboardPage() {
       {/* v1.3: Onboarding Tour for schema_query_only users */}
       {isSchemaQueryOnly && connectionStatus?.schema_status === 'ready' && (
         <OnboardingTour />
+      )}
+
+      {/* v1.4: Customize Dashboard Modal */}
+      {isSchemaQueryOnly && (
+        <CustomizeDashboardModal
+          isOpen={isCustomizeModalOpen}
+          onClose={() => setIsCustomizeModalOpen(false)}
+          config={widgetConfig}
+          onToggleWidget={toggleWidget}
+          onReorderWidgets={reorderWidgets}
+          onResetToDefault={resetWidgetConfig}
+        />
       )}
     </div>
   );

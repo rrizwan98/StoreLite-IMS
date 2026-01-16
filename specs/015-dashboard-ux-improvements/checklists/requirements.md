@@ -1,7 +1,7 @@
 # Requirements Checklist: Dashboard UX Improvements
 
 **Feature ID**: 015-dashboard-ux-improvements
-**Version**: v1.3
+**Version**: v1.4
 **Last Updated**: 2025-01-16
 
 ---
@@ -254,6 +254,51 @@
 
 ---
 
+## P2 Phase 8 - Customizable Dashboard Widgets (v1.4)
+
+### Customize Settings Access
+
+| ID | Requirement | Status | Notes |
+|----|-------------|--------|-------|
+| FR-082 | Settings/gear icon in dashboard header | [x] Done | Task 8.3 |
+| FR-083 | Settings icon opens Customize Dashboard modal | [x] Done | Task 8.2 |
+| FR-084 | Modal lists widgets with toggle switches | [x] Done | Task 8.2 |
+
+### Widget Visibility
+
+| ID | Requirement | Status | Notes |
+|----|-------------|--------|-------|
+| FR-085 | Each widget has show/hide toggle | [x] Done | Task 8.2 |
+| FR-086 | Toggling off hides widget immediately | [x] Done | Task 8.1 |
+| FR-087 | Toggling on shows widget immediately | [x] Done | Task 8.1 |
+| FR-088 | Feature Cards always visible (not toggleable) | [x] Done | Task 8.2 |
+
+### Widget Ordering
+
+| ID | Requirement | Status | Notes |
+|----|-------------|--------|-------|
+| FR-089 | Widgets draggable for reordering | [x] Done | Task 8.2 |
+| FR-090 | Drag shows visual feedback | [x] Done | Task 8.2 |
+| FR-091 | Drop updates dashboard order immediately | [x] Done | Task 8.1 |
+
+### Persistence
+
+| ID | Requirement | Status | Notes |
+|----|-------------|--------|-------|
+| FR-092 | Config stored in localStorage | [x] Done | Task 8.1 |
+| FR-093 | Config includes visibility and order | [x] Done | Task 8.1 |
+| FR-094 | Config persists across refreshes | [x] Done | Task 8.1 |
+| FR-095 | Reset to Default button works | [x] Done | Task 8.2 |
+
+### Default Configuration
+
+| ID | Requirement | Status | Notes |
+|----|-------------|--------|-------|
+| FR-096 | Default order: Checklist, KPI, Activity, Cards, Tools | [x] Done | Task 8.1 |
+| FR-097 | Default visibility: All widgets visible | [x] Done | Task 8.1 |
+
+---
+
 ### v1.2 Requirements (Completed)
 
 | Category | Total | Completed | Percentage |
@@ -280,6 +325,19 @@
 
 ---
 
+### v1.4 Requirements (Completed)
+
+| Category | Total | Completed | Percentage |
+|----------|-------|-----------|------------|
+| Customize Settings Access | 3 | 3 | 100% |
+| Widget Visibility | 4 | 4 | 100% |
+| Widget Ordering | 3 | 3 | 100% |
+| Persistence | 4 | 4 | 100% |
+| Default Configuration | 2 | 2 | 100% |
+| **v1.4 Total** | **16** | **16** | **100%** |
+
+---
+
 ### Overall
 
 | Version | Total | Completed | Percentage |
@@ -288,4 +346,5 @@
 | v1.1 | 17 | 17 | 100% |
 | v1.2 | 13 | 12 | 92% |
 | v1.3 | 22 | 22 | 100% |
-| **Grand Total** | **86** | **85** | **99%** |
+| v1.4 | 16 | 16 | 100% |
+| **Grand Total** | **102** | **101** | **99%** |
