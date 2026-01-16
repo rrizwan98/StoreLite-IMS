@@ -3,13 +3,17 @@
  *
  * Dashboard section showing connected tools summary.
  * Links to Settings page for managing all tools.
+ *
+ * v1.1 Updates:
+ * - Added Reconnect button for disconnected tools
+ * - Added Settings icon on hover for healthy tools
  */
 
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
-import { Settings, Check, Mail, BarChart3, Download, Server, ChevronRight, AlertTriangle, Loader2, HelpCircle } from 'lucide-react';
+import { Settings, Check, Mail, BarChart3, Download, Server, ChevronRight, AlertTriangle, Loader2, HelpCircle, RefreshCw } from 'lucide-react';
 import Tooltip from '@/components/ui/Tooltip';
 import { getAllTools, SystemTool } from '@/lib/tools-api';
 import { getConnectors, Connector, checkConnectorHealth, HealthCheckResult } from '@/lib/connectors-api';
@@ -185,7 +189,7 @@ export default function ConnectToolsSection({ className = '' }: ConnectToolsSect
                   return (
                     <div
                       key={connector.id}
-                      className={`flex items-center p-3 rounded-lg border animate-fade-in-up opacity-0 ${
+                      className={`group flex items-center p-3 rounded-lg border animate-fade-in-up opacity-0 ${
                         isHealthy
                           ? 'bg-gray-50 dark:bg-gray-700/50 border-gray-100 dark:border-gray-600'
                           : 'bg-red-50 dark:bg-red-900/30 border-red-200 dark:border-red-800'
@@ -222,6 +226,39 @@ export default function ConnectToolsSection({ className = '' }: ConnectToolsSect
                           </p>
                         )}
                       </div>
+
+                      {/* v1.1: Quick actions */}
+                      {!isCheckingHealth && (
+                        <div className="flex-shrink-0 ml-2">
+                          {!isHealthy ? (
+                            /* Reconnect button for disconnected tools */
+                            <Link
+                              href={`/dashboard/settings?connector=${connector.id}`}
+                              className="flex items-center text-xs px-2.5 py-1.5 rounded-md
+                                         bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300
+                                         hover:bg-red-200 dark:hover:bg-red-900/60
+                                         border border-red-200 dark:border-red-800
+                                         transition-colors click-feedback font-medium"
+                            >
+                              <RefreshCw className="w-3 h-3 mr-1" />
+                              Reconnect
+                            </Link>
+                          ) : (
+                            /* Settings icon on hover for healthy tools */
+                            <Link
+                              href={`/dashboard/settings?connector=${connector.id}`}
+                              className="p-1.5 rounded-lg text-gray-400 dark:text-gray-500
+                                         hover:text-gray-600 dark:hover:text-gray-300
+                                         hover:bg-gray-100 dark:hover:bg-gray-600
+                                         opacity-0 group-hover:opacity-100
+                                         transition-all"
+                              aria-label={`Manage ${connector.name}`}
+                            >
+                              <Settings className="w-4 h-4" />
+                            </Link>
+                          )}
+                        </div>
+                      )}
                     </div>
                   );
                 })}

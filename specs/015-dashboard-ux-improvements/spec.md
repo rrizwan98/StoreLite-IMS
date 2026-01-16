@@ -3,9 +3,19 @@
 **Feature ID**: 015-dashboard-ux-improvements
 **Feature Branch**: `feat/dashboard-ux-improvements`
 **Created**: 2025-01-16
-**Version**: v1.0
-**Status**: Draft
+**Version**: v1.4
+**Status**: In Progress
 **Type**: UI/UX Enhancement (No Backend Changes)
+
+## Change History
+
+| Version | Date | Changes |
+|---------|------|---------|
+| v1.0 | 2025-01-16 | Initial spec: KPI Stats, Onboarding Checklist, CTAs, Microinteractions, Tooltips |
+| v1.1 | 2025-01-16 | Added Phase 5 Quick Wins: Checklist action buttons, auto-collapse, tools quick actions, help button, learn more link |
+| v1.2 | 2025-01-16 | Added Phase 6: Recent Activity Panel using existing API data (no backend changes) |
+| v1.3 | 2025-01-16 | Added Phase 7: Interactive Onboarding Tour (custom build, no external libraries) |
+| v1.4 | 2025-01-16 | Added Phase 8: Customizable Dashboard Widgets (show/hide, reorder, persist to localStorage) |
 
 ## Executive Summary
 
@@ -123,6 +133,177 @@ As a user, I want contextual help tooltips so that I can understand features wit
 
 ---
 
+### User Story 7 - User: Checklist Action Buttons (Priority: P1 - Quick Win) [v1.1]
+
+As a user viewing the onboarding checklist, I want inline action buttons on each step so that I can directly take action without guessing where to click.
+
+**Why this priority**: P1 - Research showed 9.2/10 rating improvement when adding direct action buttons. Reduces friction significantly.
+
+**Independent Test**: Can be tested by viewing the checklist and verifying each item has a contextual action button.
+
+**Acceptance Scenarios**:
+
+1. **Given** I see "Connect your database" step, **When** I look at the item, **Then** I see a "View Schema" button on the right
+2. **Given** I see "Ask your first AI question" step, **When** I look at the item, **Then** I see an "Open Chat" button
+3. **Given** I see "Connect a tool" step, **When** I look at the item, **Then** I see a "Connect Tools" button
+4. **Given** I see "Create a scheduled task" step, **When** I look at the item, **Then** I see a "Create Task" button
+5. **Given** I click any action button, **When** I click, **Then** I am navigated to the corresponding page
+
+---
+
+### User Story 8 - User: Auto-collapse Completed Checklist (Priority: P1 - Quick Win) [v1.1]
+
+As a returning user who has completed all onboarding steps, I want the checklist to automatically collapse so that I don't see clutter from completed items.
+
+**Why this priority**: P1 - Research showed 9.0/10 rating. Reduces visual noise for power users.
+
+**Independent Test**: Can be tested by completing all 4 steps and verifying the checklist auto-collapses.
+
+**Acceptance Scenarios**:
+
+1. **Given** I have completed all 4 checklist items, **When** I land on the dashboard, **Then** the checklist is collapsed to a minimal "All set! ✓" state
+2. **Given** the checklist is auto-collapsed, **When** I want to see my progress, **Then** I can expand it by clicking
+3. **Given** I previously dismissed the checklist, **When** I complete all items later, **Then** the auto-collapse respects the dismissed state
+
+---
+
+### User Story 9 - User: Tools Quick Actions (Priority: P1 - Quick Win) [v1.1]
+
+As a user viewing my connected tools, I want quick action buttons (Reconnect/Disconnect) inline so that I can manage tools without navigating away.
+
+**Why this priority**: P1 - Research showed 9.3/10 rating. Users frequently need to reconnect unhealthy connectors.
+
+**Independent Test**: Can be tested by viewing a disconnected tool and clicking the Reconnect button.
+
+**Acceptance Scenarios**:
+
+1. **Given** a tool shows as "Disconnected" (health check failed), **When** I view the tool card, **Then** I see a "Reconnect" button
+2. **Given** I click "Reconnect" on a disconnected tool, **When** I click, **Then** I am navigated to Settings page with that tool highlighted
+3. **Given** a tool is healthy, **When** I hover over the tool card, **Then** I see a subtle "..." menu or settings icon for management
+
+---
+
+### User Story 10 - User: Read-Only Learn More Link (Priority: P1 - Quick Win) [v1.1]
+
+As a user seeing the Read-Only banner, I want a "Learn more" link so that I can understand what read-only mode means in detail.
+
+**Why this priority**: P1 - Research showed 9.1/10 rating. New users often don't understand the security implications.
+
+**Independent Test**: Can be tested by clicking the Learn More link and verifying it opens documentation.
+
+**Acceptance Scenarios**:
+
+1. **Given** the Read-Only banner is displayed, **When** I look at the banner, **Then** I see a "Learn more" link next to the text
+2. **Given** I click "Learn more", **When** I click, **Then** documentation about read-only mode opens (either in-app or external docs)
+
+---
+
+### User Story 11 - User: Floating Help Button (Priority: P1 - Quick Win) [v1.1]
+
+As a user anywhere on the dashboard, I want a floating help button so that I can access help resources quickly.
+
+**Why this priority**: P1 - Research showed 9.0/10 rating. Users need persistent access to help.
+
+**Independent Test**: Can be tested by verifying the help button appears on dashboard and clicking it.
+
+**Acceptance Scenarios**:
+
+1. **Given** I am on the dashboard page, **When** I look at the bottom-right corner, **Then** I see a floating help button (? icon)
+2. **Given** I click the help button, **When** I click, **Then** a dropdown shows options: "Documentation", "Contact Support", "Keyboard Shortcuts"
+3. **Given** the help button is visible, **When** I scroll the page, **Then** the button remains fixed in position
+
+---
+
+### User Story 12 - User: Recent Activity Panel (Priority: P1 - Phase 6) [v1.2]
+
+As a returning user, I want to see my recent activity on the dashboard so that I can quickly resume where I left off and track my usage.
+
+**Why this priority**: P1 - Research showed 9.1/10 rating. Users want visibility into their recent actions.
+
+**Independent Test**: Can be tested by performing various actions (connecting tools, running tasks) and verifying they appear in the activity feed.
+
+**Data Sources (NO backend changes - uses existing APIs):**
+- Scheduled Tasks: `getScheduledTasks()` - created_at, executed_at, status
+- Connectors: `getConnectors()` - created_at, last_verified_at
+- localStorage: `ims_first_ai_query`, `ims_first_task_created` timestamps
+
+**Acceptance Scenarios**:
+
+1. **Given** I am on the dashboard, **When** I look below the KPI stats, **Then** I see a "Recent Activity" panel showing my last 5-10 activities
+2. **Given** I have scheduled tasks, **When** viewing recent activity, **Then** I see task completions with status (completed/failed) and timestamps
+3. **Given** I connected a new tool, **When** viewing recent activity, **Then** I see "Connected [Tool Name]" with timestamp
+4. **Given** no recent activity exists, **When** viewing the panel, **Then** I see an empty state: "No recent activity yet. Start by asking the AI Agent a question!"
+5. **Given** activities exist, **When** I click on an activity item, **Then** I am navigated to the relevant page (e.g., Scheduler for tasks)
+6. **Given** I want more details, **When** I click "View All", **Then** I can see a full activity history (or modal)
+
+---
+
+### User Story 13 - New User: Interactive Onboarding Tour (Priority: P1 - Phase 7) [v1.3]
+
+As a new user, I want an interactive guided tour of the dashboard so that I can quickly understand how to use the key features without reading documentation.
+
+**Why this priority**: P1 - Interactive tours increase feature discovery by 60% and reduce time-to-first-value. First-time users need visual guidance.
+
+**Independent Test**: Can be tested by clearing localStorage and verifying the tour starts automatically for new users.
+
+**Technical Approach (Custom Build - NO external libraries):**
+- Uses existing Framer Motion for animations
+- Uses existing Tailwind for styling
+- localStorage for tour completion tracking (`ims_onboarding_tour_completed`)
+
+**Acceptance Scenarios**:
+
+1. **Given** I am a first-time user (no localStorage flag), **When** I land on the dashboard, **Then** the tour starts automatically after 1 second delay
+2. **Given** the tour is active, **When** viewing a step, **Then** I see a spotlight on the target element with a tooltip explaining its purpose
+3. **Given** I am on a tour step, **When** I click "Next", **Then** the spotlight and tooltip animate smoothly to the next target
+4. **Given** I am on the first step, **When** I view controls, **Then** I see "Skip" and "Next" buttons (no "Back" on first step)
+5. **Given** I am on any step after first, **When** I view controls, **Then** I see "Back", "Skip", and "Next" buttons
+6. **Given** I am on the last step, **When** I click "Finish", **Then** the tour completes, localStorage is set, and a celebration animation plays
+7. **Given** I click "Skip" at any point, **When** prompted, **Then** I can choose to skip or continue (prevent accidental skip)
+8. **Given** I have completed the tour, **When** I return to dashboard, **Then** the tour does not start again
+9. **Given** I want to replay the tour, **When** I click "Replay Tour" in help menu, **Then** the tour starts from the beginning
+
+**Tour Steps**:
+1. **AI Agent Card** - "Start here! Ask questions about your data in natural language."
+2. **KPI Stats Row** - "Quick overview of your connected tables and tools."
+3. **Connected Tools** - "Extend AI capabilities by connecting Gmail, Slack, and more."
+4. **Scheduler Card** - "Automate recurring queries on a schedule."
+5. **Help Button** - "Need help? Find documentation and shortcuts here."
+
+---
+
+### User Story 14 - Power User: Customizable Dashboard Widgets (Priority: P2 - Phase 8) [v1.4]
+
+As a power user, I want to customize my dashboard by showing/hiding widgets and reordering them so that I can focus on the information most relevant to me.
+
+**Why this priority**: P2 - Power users want control over their workspace. Customization increases engagement and reduces cognitive load by hiding unused sections.
+
+**Independent Test**: Can be tested by toggling widget visibility and reordering, then refreshing to verify persistence.
+
+**Technical Approach (NO backend changes):**
+- Widget visibility and order stored in localStorage (`ims_dashboard_widget_config`)
+- Drag-and-drop reordering using native HTML5 drag API (no external libraries)
+- Settings accessible via gear icon in dashboard header
+
+**Customizable Widgets:**
+1. **Onboarding Checklist** - Show/hide (auto-hides when completed)
+2. **KPI Stats Row** - Show/hide
+3. **Recent Activity Panel** - Show/hide
+4. **Feature Cards** - Always visible (core navigation)
+5. **Connected Tools Section** - Show/hide
+
+**Acceptance Scenarios**:
+
+1. **Given** I am on the dashboard, **When** I click the gear/settings icon, **Then** I see a "Customize Dashboard" panel/modal
+2. **Given** the customize panel is open, **When** I view the widget list, **Then** I see toggles to show/hide each customizable widget
+3. **Given** I toggle off "Recent Activity", **When** I close the panel, **Then** the Recent Activity panel is hidden from the dashboard
+4. **Given** I have hidden some widgets, **When** I refresh the page, **Then** my widget visibility preferences are preserved
+5. **Given** I want to reset to defaults, **When** I click "Reset to Default", **Then** all widgets are shown in original order
+6. **Given** I am in the customize panel, **When** I drag a widget item up/down, **Then** the widget order on dashboard changes accordingly
+7. **Given** I have reordered widgets, **When** I refresh the page, **Then** my custom order is preserved
+
+---
+
 ## Requirements
 
 ### Functional Requirements
@@ -171,6 +352,122 @@ As a user, I want contextual help tooltips so that I can understand features wit
 - **FR-027**: Tool connection status MUST have tooltip explaining current state
 - **FR-028**: Read-Only banner MUST have tooltip explaining security implications
 - **FR-029**: Connected Tools section header MAY have tooltip explaining purpose
+
+#### P1 Quick Wins - v1.1 Additions
+
+##### Checklist Action Buttons
+- **FR-030**: Each checklist item MUST have an inline action button on the right side
+- **FR-031**: "Connect your database" step MUST show "View Schema" button
+- **FR-032**: "Ask your first AI question" step MUST show "Open Chat" button
+- **FR-033**: "Connect a tool" step MUST show "Connect Tools" button
+- **FR-034**: "Create a scheduled task" step MUST show "Create Task" button
+- **FR-035**: Clicking action buttons MUST navigate to the corresponding feature page
+
+##### Auto-collapse Checklist
+- **FR-036**: Checklist MUST auto-collapse when all 4 steps are completed
+- **FR-037**: Collapsed state MUST show "All set! ✓" with expand option
+- **FR-038**: Auto-collapse MUST respect previously dismissed state
+
+##### Tools Quick Actions
+- **FR-039**: Disconnected tools MUST show a "Reconnect" button inline
+- **FR-040**: Clicking "Reconnect" MUST navigate to Settings page with tool query param
+- **FR-041**: Healthy tools MAY show a subtle settings icon on hover
+
+##### Read-Only Learn More
+- **FR-042**: Read-Only banner MUST include a "Learn more" link
+- **FR-043**: "Learn more" link SHOULD open help documentation (external or modal)
+
+##### Floating Help Button
+- **FR-044**: Dashboard MUST display a floating help button (fixed position, bottom-right)
+- **FR-045**: Help button MUST show dropdown with: "Documentation", "Contact Support", "Keyboard Shortcuts"
+- **FR-046**: Help button MUST remain visible during scroll
+
+#### P1 Phase 6 - Recent Activity Panel (v1.2)
+
+##### Activity Panel Display
+- **FR-047**: Dashboard MUST display a Recent Activity panel below KPI stats row
+- **FR-048**: Panel MUST show last 5-10 activities sorted by most recent first
+- **FR-049**: Panel MUST show loading skeleton while fetching activity data
+- **FR-050**: Panel MUST show empty state when no activities exist
+
+##### Activity Types (from existing APIs - NO backend changes)
+- **FR-051**: Panel MUST display scheduled task activities (created, completed, failed)
+- **FR-052**: Panel MUST display connector activities (connected, disconnected, verified)
+- **FR-053**: Panel MAY display first-time actions from localStorage (first AI query, first task)
+
+##### Activity Item Display
+- **FR-054**: Each activity MUST show: icon, description, relative timestamp (e.g., "2 hours ago")
+- **FR-055**: Each activity MUST be color-coded by type (success=green, error=red, info=blue)
+- **FR-056**: Clicking an activity SHOULD navigate to relevant page (Scheduler, Settings, etc.)
+
+##### Data Sources (existing APIs only)
+- **FR-057**: Task activities derived from `getScheduledTasks()` API response
+- **FR-058**: Connector activities derived from `getConnectors()` API response
+- **FR-059**: NO new backend API endpoints required
+
+#### P1 Phase 7 - Interactive Onboarding Tour (v1.3)
+
+##### Tour Initialization
+- **FR-060**: Tour MUST start automatically for first-time users (no `ims_onboarding_tour_completed` in localStorage)
+- **FR-061**: Tour MUST have a 1-second delay before starting (allow page to settle)
+- **FR-062**: Tour MUST NOT start if user has completed or skipped it before
+
+##### Tour Display
+- **FR-063**: Tour MUST display a spotlight overlay highlighting the target element
+- **FR-064**: Tour MUST display a tooltip with title, description, and navigation controls
+- **FR-065**: Spotlight MUST dim the rest of the page (semi-transparent overlay)
+- **FR-066**: Tooltip MUST be positioned automatically (avoid viewport edges)
+
+##### Tour Navigation
+- **FR-067**: Tour MUST show "Next" button on all steps except last
+- **FR-068**: Tour MUST show "Back" button on all steps except first
+- **FR-069**: Tour MUST show "Skip" button on all steps
+- **FR-070**: Tour MUST show "Finish" button on last step
+- **FR-071**: Progress indicator MUST show current step (e.g., "2 of 5")
+
+##### Tour Completion
+- **FR-072**: Completing tour MUST set `ims_onboarding_tour_completed` in localStorage
+- **FR-073**: Skipping tour MUST set `ims_onboarding_tour_skipped` in localStorage
+- **FR-074**: Skip action MUST show confirmation (prevent accidental skip)
+
+##### Tour Replay
+- **FR-075**: Help menu MUST include "Replay Tour" option
+- **FR-076**: Clicking "Replay Tour" MUST clear tour flags and restart tour
+
+##### Tour Steps (5 total)
+- **FR-077**: Step 1: AI Agent Card - Primary feature introduction
+- **FR-078**: Step 2: KPI Stats Row - Dashboard metrics overview
+- **FR-079**: Step 3: Connected Tools - Integration capabilities
+- **FR-080**: Step 4: Scheduler Card - Automation features
+- **FR-081**: Step 5: Help Button - Support resources
+
+#### P2 Phase 8 - Customizable Dashboard Widgets (v1.4)
+
+##### Customize Settings Access
+- **FR-082**: Dashboard header MUST include a settings/gear icon for customization
+- **FR-083**: Clicking settings icon MUST open a "Customize Dashboard" modal/panel
+- **FR-084**: Modal MUST list all customizable widgets with toggle switches
+
+##### Widget Visibility
+- **FR-085**: Each widget MUST have a toggle to show/hide
+- **FR-086**: Toggling off a widget MUST immediately hide it from dashboard
+- **FR-087**: Toggling on a widget MUST immediately show it on dashboard
+- **FR-088**: Feature Cards section MUST always be visible (not toggleable)
+
+##### Widget Ordering
+- **FR-089**: Widgets in customize panel MUST be draggable for reordering
+- **FR-090**: Dragging a widget MUST show visual feedback (drag handle, ghost)
+- **FR-091**: Dropping a widget MUST update the dashboard order immediately
+
+##### Persistence
+- **FR-092**: Widget configuration MUST be stored in localStorage (`ims_dashboard_widget_config`)
+- **FR-093**: Configuration MUST include: widget visibility states, widget order
+- **FR-094**: Configuration MUST persist across page refreshes and browser sessions
+- **FR-095**: "Reset to Default" button MUST restore original visibility and order
+
+##### Default Configuration
+- **FR-096**: Default order: Checklist, KPI Stats, Recent Activity, Feature Cards, Connected Tools
+- **FR-097**: Default visibility: All widgets visible
 
 ### Non-Functional Requirements
 
