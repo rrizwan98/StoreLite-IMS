@@ -3,12 +3,13 @@
  *
  * A comprehensive in-app documentation system with:
  * - Sidebar navigation with sections
- * - Screenshot placeholders for visual guides
+ * - Animated illustrations for visual guides
  * - Search functionality
  * - Dark mode support
  * - Responsive design
  *
  * v1.0: Initial implementation
+ * v2.0: Replaced static placeholders with animated illustrations
  */
 
 'use client';
@@ -38,6 +39,18 @@ import {
   FileText,
   Zap,
 } from 'lucide-react';
+
+// Import animated illustrations
+import {
+  DashboardDemo,
+  AIAgentDemo,
+  SchedulerDemo,
+  ConnectedToolsDemo,
+  KeyboardShortcutsDemo,
+  GettingStartedDemo,
+  DatabaseConnectionDemo,
+  SettingsDemo,
+} from './DocAnimations';
 
 interface DocumentationSection {
   id: string;
@@ -603,10 +616,9 @@ function WelcomeSection() {
         </div>
       </div>
 
-      <ScreenshotPlaceholder
-        title="Dashboard Overview Screenshot"
-        description="Shows the main dashboard with all key features"
-      />
+      <div className="my-6">
+        <GettingStartedDemo />
+      </div>
     </div>
   );
 }
@@ -633,10 +645,9 @@ function QuickStartSection() {
         and ensure you have set up all features.
       </InfoBox>
 
-      <ScreenshotPlaceholder
-        title="Onboarding Checklist Screenshot"
-        description="Shows the step-by-step onboarding process"
-      />
+      <div className="my-6">
+        <DashboardDemo />
+      </div>
     </div>
   );
 }
@@ -699,10 +710,9 @@ function DashboardOverviewSection() {
         accessing all features.
       </p>
 
-      <ScreenshotPlaceholder
-        title="Full Dashboard Screenshot"
-        description="Annotated view of all dashboard components"
-      />
+      <div className="my-6">
+        <DashboardDemo />
+      </div>
 
       <h3 className="text-lg font-semibold text-gray-900 dark:text-white mt-6 mb-3">
         Dashboard Components
@@ -749,10 +759,9 @@ function KPIStatsSection() {
         The KPI Stats row provides a quick summary of your data at a glance.
       </p>
 
-      <ScreenshotPlaceholder
-        title="KPI Stats Row Screenshot"
-        description="Shows the metrics displayed in the stats row"
-      />
+      <div className="my-6">
+        <DashboardDemo />
+      </div>
 
       <h3 className="text-lg font-semibold text-gray-900 dark:text-white mt-6 mb-3">
         Available Metrics
@@ -788,10 +797,9 @@ function OnboardingChecklistSection() {
         StoreLite IMS.
       </p>
 
-      <ScreenshotPlaceholder
-        title="Onboarding Checklist Screenshot"
-        description="Shows the checklist with progress tracking"
-      />
+      <div className="my-6">
+        <GettingStartedDemo />
+      </div>
 
       <h3 className="text-lg font-semibold text-gray-900 dark:text-white mt-6 mb-3">
         Checklist Steps
@@ -822,10 +830,9 @@ function HowToAskSection() {
         type your question as you would ask a colleague.
       </p>
 
-      <ScreenshotPlaceholder
-        title="AI Agent Chat Interface"
-        description="Shows the chat input and response area"
-      />
+      <div className="my-6">
+        <AIAgentDemo />
+      </div>
 
       <h3 className="text-lg font-semibold text-gray-900 dark:text-white mt-6 mb-3">
         Tips for Better Results
@@ -896,10 +903,9 @@ function UnderstandingResultsSection() {
         context.
       </p>
 
-      <ScreenshotPlaceholder
-        title="Query Results Screenshot"
-        description="Shows how results are displayed"
-      />
+      <div className="my-6">
+        <AIAgentDemo />
+      </div>
 
       <h3 className="text-lg font-semibold text-gray-900 dark:text-white mt-6 mb-3">
         Result Components
@@ -950,10 +956,9 @@ function SchemaQueryModeSection() {
         ]}
       />
 
-      <ScreenshotPlaceholder
-        title="Schema Discovery Process"
-        description="Shows the schema connection flow"
-      />
+      <div className="my-6">
+        <DatabaseConnectionDemo />
+      </div>
     </div>
   );
 }
@@ -982,10 +987,9 @@ function ConnectingDBSection() {
         MySQL: mysql://user:password@host:port/database
       </InfoBox>
 
-      <ScreenshotPlaceholder
-        title="Database Connection Form"
-        description="Shows the connection configuration interface"
-      />
+      <div className="my-6">
+        <DatabaseConnectionDemo />
+      </div>
     </div>
   );
 }
@@ -998,10 +1002,9 @@ function CreatingTasksSection() {
         schedule.
       </p>
 
-      <ScreenshotPlaceholder
-        title="Create Task Interface"
-        description="Shows the task creation form"
-      />
+      <div className="my-6">
+        <SchedulerDemo />
+      </div>
 
       <StepList
         steps={[
@@ -1052,10 +1055,9 @@ function RecurringSchedulesSection() {
         </li>
       </ul>
 
-      <ScreenshotPlaceholder
-        title="Schedule Configuration"
-        description="Shows the recurring schedule options"
-      />
+      <div className="my-6">
+        <SchedulerDemo />
+      </div>
     </div>
   );
 }
@@ -1105,6 +1107,10 @@ function AvailableIntegrationsSection() {
           </p>
         </div>
       </div>
+
+      <div className="my-6">
+        <ConnectedToolsDemo />
+      </div>
     </div>
   );
 }
@@ -1132,10 +1138,9 @@ function ConnectingGmailSection() {
         your behalf without explicit action.
       </InfoBox>
 
-      <ScreenshotPlaceholder
-        title="Gmail OAuth Flow"
-        description="Shows the Google sign-in process"
-      />
+      <div className="my-6">
+        <ConnectedToolsDemo />
+      </div>
     </div>
   );
 }
@@ -1158,10 +1163,9 @@ function ConnectingNotionSection() {
         ]}
       />
 
-      <ScreenshotPlaceholder
-        title="Notion Connection"
-        description="Shows the Notion authorization process"
-      />
+      <div className="my-6">
+        <ConnectedToolsDemo />
+      </div>
     </div>
   );
 }
@@ -1192,10 +1196,9 @@ function UserPreferencesSection() {
         </li>
       </ul>
 
-      <ScreenshotPlaceholder
-        title="Settings Page"
-        description="Shows the user preferences interface"
-      />
+      <div className="my-6">
+        <SettingsDemo />
+      </div>
     </div>
   );
 }
@@ -1234,6 +1237,10 @@ function ThemeSettingsSection() {
 function NavigationShortcutsSection() {
   return (
     <div className="prose dark:prose-invert max-w-none">
+      <div className="my-6">
+        <KeyboardShortcutsDemo />
+      </div>
+
       <p className="text-gray-600 dark:text-gray-300 mb-6">
         Use these keyboard shortcuts to navigate quickly through the
         application.
