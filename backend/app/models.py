@@ -627,3 +627,70 @@ class ScheduledTask(Base):
 
     def __repr__(self):
         return f"<ScheduledTask(id={self.id}, user_id={self.user_id}, status={self.status}, scheduled={self.scheduled_time})>"
+
+
+# ============================================================================
+# Support Ticket Models (Feature 016 - Documentation & Support System)
+# ============================================================================
+
+class SupportTicketCategory(enum.Enum):
+    """Category of support ticket"""
+    BUG_REPORT = "bug_report"
+    FEATURE_REQUEST = "feature_request"
+    QUESTION = "question"
+    OTHER = "other"
+
+
+class SupportTicketStatus(enum.Enum):
+    """Status of support ticket"""
+    OPEN = "open"
+    IN_PROGRESS = "in_progress"
+    RESOLVED = "resolved"
+    CLOSED = "closed"
+
+
+class SupportTicket(Base):
+    """
+    Support ticket for user feedback and issue reporting.
+    Stores tickets with email notification to support team.
+    """
+    __tablename__ = "support_tickets"
+
+    id = Column(Integer, primary_key=True, index=True)
+    ticket_id = Column(String(20), unique=True, nullable=False, index=True)  # e.g., "IMS-2025-001234"
+    user_id = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True
+    )
+    subject = Column(String(255), nullable=False)
+    category = Column(String(50), nullable=False, index=True)  # bug_report, feature_request, question, other
+    description = Column(Text, nullable=False)
+    email = Column(String(255), nullable=True)  # Contact email for response
+    status = Column(String(20), default="open", nullable=False, index=True)  # open, in_progress, resolved, closed
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    __table_args__ = (
+        CheckConstraint(
+            "category IN ('bug_report', 'feature_request', 'question', 'other')",
+            name="support_ticket_category_check"
+        ),
+        CheckConstraint(
+            "status IN ('open', 'in_progress', 'resolved', 'closed')",
+            name="support_ticket_status_check"
+        ),
+        {"extend_existing": True},
+    )
+
+    # Relationships
+    user = relationship("User", backref="support_tickets")
+
+    @property
+    def is_open(self) -> bool:
+        """Check if ticket is still open."""
+        return self.status == "open"
+
+    def __repr__(self):
+        return f"<SupportTicket(id={self.ticket_id}, subject={self.subject[:30]}, status={self.status})>"
