@@ -250,6 +250,23 @@ export default function DocumentationModal({
       ],
     },
     {
+      id: 'developer-tools',
+      title: 'For Developers',
+      icon: <ExternalLink className="h-4 w-4" />,
+      subsections: [
+        {
+          id: 'published-agents',
+          title: 'Published Agents',
+          content: <PublishedAgentsSection />,
+        },
+        {
+          id: 'api-integration',
+          title: 'API Integration',
+          content: <APIIntegrationSection />,
+        },
+      ],
+    },
+    {
       id: 'keyboard-shortcuts',
       title: 'Keyboard Shortcuts',
       icon: <Keyboard className="h-4 w-4" />,
@@ -569,49 +586,78 @@ function WelcomeSection() {
   return (
     <div className="prose dark:prose-invert max-w-none">
       <p className="text-lg text-gray-600 dark:text-gray-300 leading-relaxed">
-        Welcome to <strong>StoreLite IMS</strong> - your AI-powered inventory
-        management system. This documentation will help you get the most out of
-        our platform.
+        Welcome to <strong>StoreLite IMS</strong> - Your personal AI-powered inventory
+        assistant that automates your business operations, saving you hours of manual work every day.
       </p>
+
+      <InfoBox type="tip" title="No Personal AI Agent Needed">
+        You don&apos;t need to build your own AI solution. IMS provides a pre-configured,
+        business-ready assistant that works immediately — no coding, no complex setup.
+      </InfoBox>
+
+      {/* Time Savings Highlight */}
+      <div className="my-6 p-4 bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-900/20 dark:to-teal-900/20 rounded-xl border border-emerald-200 dark:border-emerald-800">
+        <h3 className="text-lg font-bold text-emerald-700 dark:text-emerald-400 mb-3">
+          Estimated Daily Time Saved: 2-4 Hours
+        </h3>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+          <div className="text-center p-2 bg-white/50 dark:bg-gray-800/50 rounded-lg">
+            <div className="text-2xl font-bold text-emerald-600">25 min</div>
+            <div className="text-gray-600 dark:text-gray-400">Adding Items</div>
+          </div>
+          <div className="text-center p-2 bg-white/50 dark:bg-gray-800/50 rounded-lg">
+            <div className="text-2xl font-bold text-emerald-600">14 min</div>
+            <div className="text-gray-600 dark:text-gray-400">Reports</div>
+          </div>
+          <div className="text-center p-2 bg-white/50 dark:bg-gray-800/50 rounded-lg">
+            <div className="text-2xl font-bold text-emerald-600">20 min</div>
+            <div className="text-gray-600 dark:text-gray-400">Alerts</div>
+          </div>
+          <div className="text-center p-2 bg-white/50 dark:bg-gray-800/50 rounded-lg">
+            <div className="text-2xl font-bold text-emerald-600">8 min</div>
+            <div className="text-gray-600 dark:text-gray-400">Invoicing</div>
+          </div>
+        </div>
+      </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 my-6">
         <div className="p-4 rounded-lg bg-gradient-to-br from-emerald-50 to-teal-50 dark:from-emerald-900/20 dark:to-teal-900/20 border border-emerald-200 dark:border-emerald-800">
           <Sparkles className="h-8 w-8 text-emerald-600 dark:text-emerald-400 mb-3" />
           <h3 className="font-semibold text-gray-900 dark:text-white mb-2">
-            AI-Powered Queries
+            Natural Language Commands
           </h3>
           <p className="text-sm text-gray-600 dark:text-gray-400">
-            Ask questions about your data in natural language
+            Just say &quot;Add 50 kg rice at Rs. 120&quot; — done!
           </p>
         </div>
 
         <div className="p-4 rounded-lg bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 border border-blue-200 dark:border-blue-800">
           <Shield className="h-8 w-8 text-blue-600 dark:text-blue-400 mb-3" />
           <h3 className="font-semibold text-gray-900 dark:text-white mb-2">
-            Read-Only Security
+            Secure & Private
           </h3>
           <p className="text-sm text-gray-600 dark:text-gray-400">
-            Your data is safe - we only read, never modify
+            Your data stays yours. User isolation & encryption.
           </p>
         </div>
 
         <div className="p-4 rounded-lg bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 border border-purple-200 dark:border-purple-800">
           <Clock className="h-8 w-8 text-purple-600 dark:text-purple-400 mb-3" />
           <h3 className="font-semibold text-gray-900 dark:text-white mb-2">
-            Scheduled Tasks
+            Set It & Forget It
           </h3>
           <p className="text-sm text-gray-600 dark:text-gray-400">
-            Automate recurring queries on your schedule
+            Schedule automated reports, alerts & emails.
           </p>
         </div>
 
         <div className="p-4 rounded-lg bg-gradient-to-br from-orange-50 to-amber-50 dark:from-orange-900/20 dark:to-amber-900/20 border border-orange-200 dark:border-orange-800">
           <Plug className="h-8 w-8 text-orange-600 dark:text-orange-400 mb-3" />
           <h3 className="font-semibold text-gray-900 dark:text-white mb-2">
-            Tool Integrations
+            Connect Everything
           </h3>
           <p className="text-sm text-gray-600 dark:text-gray-400">
-            Connect Gmail, Notion, Google Drive and more
+            Gmail, Drive, Notion + custom MCP servers.
           </p>
         </div>
       </div>
@@ -627,22 +673,32 @@ function QuickStartSection() {
   return (
     <div className="prose dark:prose-invert max-w-none">
       <p className="text-gray-600 dark:text-gray-300">
-        Get up and running with StoreLite IMS in just a few minutes.
+        Get up and running in under 5 minutes!
       </p>
 
       <StepList
         steps={[
           'Sign up or log in to your account',
-          'Connect your database from the Schema Connect page',
-          'Wait for schema discovery to complete',
-          'Start asking questions to the AI Agent',
-          'Optionally connect additional tools like Gmail',
+          'Choose your connection type (Our Database / Your Database)',
+          'Start talking to the AI — try "Show my inventory"',
+          'Connect Gmail for automated emails (optional)',
+          'Schedule your first automated task (optional)',
         ]}
       />
 
-      <InfoBox type="tip" title="Pro Tip">
-        Use the onboarding checklist on your dashboard to track your progress
-        and ensure you have set up all features.
+      {/* Try These First */}
+      <div className="my-4 p-4 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg border border-emerald-200 dark:border-emerald-700">
+        <h4 className="font-semibold text-emerald-700 dark:text-emerald-400 mb-2">Try These Commands First</h4>
+        <div className="space-y-1 text-sm font-mono">
+          <p className="text-gray-600 dark:text-gray-400">&quot;Show me my inventory overview&quot;</p>
+          <p className="text-gray-600 dark:text-gray-400">&quot;Add a test item: Sample Product, Rs. 100, 10 pcs&quot;</p>
+          <p className="text-gray-600 dark:text-gray-400">&quot;What&apos;s my best selling item?&quot;</p>
+        </div>
+      </div>
+
+      <InfoBox type="tip" title="No Setup for Basic Use">
+        Choose &quot;Use Our Database&quot; to start immediately — no database setup needed.
+        You can connect your own database later!
       </InfoBox>
 
       <div className="my-6">
@@ -826,28 +882,55 @@ function HowToAskSection() {
   return (
     <div className="prose dark:prose-invert max-w-none">
       <p className="text-gray-600 dark:text-gray-300">
-        The AI Agent understands natural language queries about your data. Just
-        type your question as you would ask a colleague.
+        The AI Agent understands natural language — just talk to it like you would to a colleague.
+        No special syntax needed!
       </p>
+
+      {/* Time Savings */}
+      <div className="my-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-700">
+        <h4 className="font-semibold text-blue-700 dark:text-blue-400 mb-2">Time Comparison</h4>
+        <div className="grid grid-cols-2 gap-4 text-sm">
+          <div>
+            <span className="text-gray-500">Manual (20 items):</span>
+            <span className="font-bold text-red-600 ml-2">30 min</span>
+          </div>
+          <div>
+            <span className="text-gray-500">With AI Agent:</span>
+            <span className="font-bold text-emerald-600 ml-2">5 min</span>
+          </div>
+        </div>
+      </div>
 
       <div className="my-6">
         <AIAgentDemo />
       </div>
 
       <h3 className="text-lg font-semibold text-gray-900 dark:text-white mt-6 mb-3">
-        Tips for Better Results
+        What You Can Do
       </h3>
 
-      <ul className="space-y-2 text-gray-600 dark:text-gray-300">
-        <li>Be specific about what data you want</li>
-        <li>Mention table names when relevant</li>
-        <li>Specify time ranges for date-based queries</li>
-        <li>Ask for summaries, counts, or specific records</li>
-      </ul>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 my-4">
+        <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg text-sm">
+          <strong className="text-emerald-600">Inventory:</strong>
+          <span className="text-gray-600 dark:text-gray-400 ml-2">&quot;Add 50 shirts at Rs. 350&quot;</span>
+        </div>
+        <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg text-sm">
+          <strong className="text-emerald-600">Billing:</strong>
+          <span className="text-gray-600 dark:text-gray-400 ml-2">&quot;Create bill for Ahmed&quot;</span>
+        </div>
+        <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg text-sm">
+          <strong className="text-emerald-600">Reports:</strong>
+          <span className="text-gray-600 dark:text-gray-400 ml-2">&quot;Show last week&apos;s sales&quot;</span>
+        </div>
+        <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg text-sm">
+          <strong className="text-emerald-600">Alerts:</strong>
+          <span className="text-gray-600 dark:text-gray-400 ml-2">&quot;Low stock items?&quot;</span>
+        </div>
+      </div>
 
-      <InfoBox type="warning" title="Read-Only Mode">
-        All queries are read-only (SELECT only). The AI cannot modify, delete,
-        or insert data into your database.
+      <InfoBox type="tip" title="Context Awareness">
+        The AI remembers your conversation! Say &quot;same for last month&quot; or
+        &quot;update that to 100&quot; — it understands context.
       </InfoBox>
     </div>
   );
@@ -857,39 +940,81 @@ function ExampleQueriesSection() {
   return (
     <div className="prose dark:prose-invert max-w-none">
       <p className="text-gray-600 dark:text-gray-300">
-        Here are some example queries to help you get started.
+        Copy these examples to get started quickly!
       </p>
 
-      <div className="space-y-4 my-6">
-        <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg border-l-4 border-emerald-500">
+      {/* Inventory Examples */}
+      <h4 className="text-md font-semibold text-gray-900 dark:text-white mt-4 mb-2">
+        Inventory Management
+      </h4>
+      <div className="space-y-2 my-3">
+        <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg border-l-4 border-emerald-500">
           <p className="font-mono text-sm text-gray-700 dark:text-gray-300">
-            &quot;Show me the top 10 products by sales&quot;
+            &quot;Add 100 Samsung Galaxy cases at Rs. 450 each&quot;
           </p>
         </div>
+        <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg border-l-4 border-emerald-500">
+          <p className="font-mono text-sm text-gray-700 dark:text-gray-300">
+            &quot;Update rice stock to 200 kg&quot;
+          </p>
+        </div>
+        <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg border-l-4 border-emerald-500">
+          <p className="font-mono text-sm text-gray-700 dark:text-gray-300">
+            &quot;Show all items under Rs. 500&quot;
+          </p>
+        </div>
+      </div>
 
-        <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg border-l-4 border-emerald-500">
+      {/* Billing Examples */}
+      <h4 className="text-md font-semibold text-gray-900 dark:text-white mt-4 mb-2">
+        Billing & Invoices
+      </h4>
+      <div className="space-y-2 my-3">
+        <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg border-l-4 border-blue-500">
           <p className="font-mono text-sm text-gray-700 dark:text-gray-300">
-            &quot;What items are low in stock?&quot;
+            &quot;Create bill for 5 shirts and 2 pants for Ahmed&quot;
           </p>
         </div>
+        <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg border-l-4 border-blue-500">
+          <p className="font-mono text-sm text-gray-700 dark:text-gray-300">
+            &quot;Show today&apos;s bills&quot;
+          </p>
+        </div>
+      </div>
 
-        <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg border-l-4 border-emerald-500">
+      {/* Analytics Examples */}
+      <h4 className="text-md font-semibold text-gray-900 dark:text-white mt-4 mb-2">
+        Reports & Analytics
+      </h4>
+      <div className="space-y-2 my-3">
+        <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg border-l-4 border-purple-500">
           <p className="font-mono text-sm text-gray-700 dark:text-gray-300">
-            &quot;List all customers who ordered last month&quot;
+            &quot;Show last week&apos;s sales with top items&quot;
           </p>
         </div>
+        <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg border-l-4 border-purple-500">
+          <p className="font-mono text-sm text-gray-700 dark:text-gray-300">
+            &quot;Compare this month vs last month revenue&quot;
+          </p>
+        </div>
+        <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg border-l-4 border-purple-500">
+          <p className="font-mono text-sm text-gray-700 dark:text-gray-300">
+            &quot;Which items haven&apos;t sold in 30 days?&quot;
+          </p>
+        </div>
+      </div>
 
-        <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg border-l-4 border-emerald-500">
-          <p className="font-mono text-sm text-gray-700 dark:text-gray-300">
-            &quot;What is the total revenue this week?&quot;
-          </p>
-        </div>
-
-        <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg border-l-4 border-emerald-500">
-          <p className="font-mono text-sm text-gray-700 dark:text-gray-300">
-            &quot;Show me inventory for the Grocery category&quot;
-          </p>
-        </div>
+      {/* Multi-step Examples */}
+      <h4 className="text-md font-semibold text-gray-900 dark:text-white mt-4 mb-2">
+        Multi-Step Tasks
+      </h4>
+      <div className="p-3 bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 rounded-lg border-l-4 border-amber-500">
+        <p className="font-mono text-sm text-gray-700 dark:text-gray-300">
+          &quot;Check low stock items, create reorder list, and email to supplier@vendor.com&quot;
+        </p>
+        <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+          AI executes multiple steps automatically!
+        </p>
       </div>
     </div>
   );
@@ -998,29 +1123,48 @@ function CreatingTasksSection() {
   return (
     <div className="prose dark:prose-invert max-w-none">
       <p className="text-gray-600 dark:text-gray-300">
-        The Scheduler allows you to create automated tasks that run on a
-        schedule.
+        Automate repetitive tasks and never forget a report again. Set it once, and IMS handles it forever.
       </p>
+
+      {/* Time Savings */}
+      <div className="my-4 p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-200 dark:border-purple-700">
+        <h4 className="font-semibold text-purple-700 dark:text-purple-400 mb-2">Monthly Time Saved</h4>
+        <div className="grid grid-cols-2 gap-3 text-sm">
+          <div className="p-2 bg-white/50 dark:bg-gray-800/50 rounded">
+            <div className="text-lg font-bold text-purple-600">25 hrs</div>
+            <div className="text-gray-500 text-xs">Daily reports automated</div>
+          </div>
+          <div className="p-2 bg-white/50 dark:bg-gray-800/50 rounded">
+            <div className="text-lg font-bold text-purple-600">6 hrs</div>
+            <div className="text-gray-500 text-xs">Weekly tasks automated</div>
+          </div>
+        </div>
+      </div>
 
       <div className="my-6">
         <SchedulerDemo />
       </div>
 
-      <StepList
-        steps={[
-          'Navigate to Scheduler from the dashboard',
-          'Click "Create Task" button',
-          'Enter a name and description for your task',
-          'Write the query or instruction for the AI',
-          'Set the schedule (one-time or recurring)',
-          'Configure email notifications if needed',
-          'Click "Create" to save the task',
-        ]}
-      />
+      <h4 className="text-md font-semibold text-gray-900 dark:text-white mb-2">Example Automated Tasks</h4>
 
-      <InfoBox type="info" title="Email Results">
-        Enable email delivery to receive task results directly in your inbox
-        when scheduled queries complete.
+      <div className="space-y-2 my-3">
+        <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg text-sm">
+          <span className="font-semibold text-emerald-600">Daily 8:30 AM:</span>
+          <span className="text-gray-600 dark:text-gray-400 ml-2">&quot;Send inventory summary to manager@company.com&quot;</span>
+        </div>
+        <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg text-sm">
+          <span className="font-semibold text-blue-600">Every Monday 9 AM:</span>
+          <span className="text-gray-600 dark:text-gray-400 ml-2">&quot;Create restock list and email to supplier&quot;</span>
+        </div>
+        <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg text-sm">
+          <span className="font-semibold text-amber-600">Every 4 Hours:</span>
+          <span className="text-gray-600 dark:text-gray-400 ml-2">&quot;Check for items below 10 units, alert if found&quot;</span>
+        </div>
+      </div>
+
+      <InfoBox type="tip" title="No Manual Work">
+        Once scheduled, tasks run automatically. You&apos;ll receive results
+        via email or view them in task history — no daily login needed!
       </InfoBox>
     </div>
   );
@@ -1066,24 +1210,27 @@ function AvailableIntegrationsSection() {
   return (
     <div className="prose dark:prose-invert max-w-none">
       <p className="text-gray-600 dark:text-gray-300">
-        Extend your AI agent&apos;s capabilities by connecting external tools
-        and services.
+        Extend your AI assistant&apos;s capabilities. More tools = more automation = more time saved!
       </p>
+
+      {/* Time Savings with Gmail */}
+      <div className="my-4 p-4 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-700">
+        <h4 className="font-semibold text-red-700 dark:text-red-400 mb-2">Gmail Integration Saves</h4>
+        <div className="text-sm text-gray-600 dark:text-gray-400">
+          <span className="font-bold text-red-600">34 min/day</span> — No manual email composing,
+          reports auto-sent, invoices delivered instantly
+        </div>
+      </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 my-6">
         <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
           <Mail className="h-6 w-6 text-red-500 mb-2" />
           <h4 className="font-medium text-gray-900 dark:text-white">Gmail</h4>
-          <p className="text-sm text-gray-600 dark:text-gray-400">
-            Search emails, send messages, manage drafts
+          <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+            Send reports, invoices, alerts automatically
           </p>
-        </div>
-
-        <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
-          <FileText className="h-6 w-6 text-gray-700 dark:text-gray-300 mb-2" />
-          <h4 className="font-medium text-gray-900 dark:text-white">Notion</h4>
-          <p className="text-sm text-gray-600 dark:text-gray-400">
-            Access pages, databases, and documents
+          <p className="text-xs text-emerald-600 font-medium">
+            &quot;Email daily report to manager@company.com&quot;
           </p>
         </div>
 
@@ -1092,21 +1239,43 @@ function AvailableIntegrationsSection() {
           <h4 className="font-medium text-gray-900 dark:text-white">
             Google Drive
           </h4>
-          <p className="text-sm text-gray-600 dark:text-gray-400">
-            Search and access files from your Drive
+          <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+            Backup data, store reports, share files
+          </p>
+          <p className="text-xs text-emerald-600 font-medium">
+            &quot;Save inventory backup to Drive&quot;
+          </p>
+        </div>
+
+        <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
+          <FileText className="h-6 w-6 text-gray-700 dark:text-gray-300 mb-2" />
+          <h4 className="font-medium text-gray-900 dark:text-white">Notion</h4>
+          <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+            Sync inventory, create pages, update databases
+          </p>
+          <p className="text-xs text-emerald-600 font-medium">
+            &quot;Sync inventory to my Notion database&quot;
           </p>
         </div>
 
         <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
           <Zap className="h-6 w-6 text-amber-500 mb-2" />
           <h4 className="font-medium text-gray-900 dark:text-white">
-            More Coming
+            Custom MCP Servers
           </h4>
-          <p className="text-sm text-gray-600 dark:text-gray-400">
-            Slack, Airtable, and more integrations planned
+          <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+            Add any MCP-compatible service
+          </p>
+          <p className="text-xs text-emerald-600 font-medium">
+            ERP, CRM, Accounting software & more
           </p>
         </div>
       </div>
+
+      <InfoBox type="info" title="No API Coding Needed">
+        Connect with OAuth (one-click). The AI automatically discovers
+        available tools and uses them in your conversations.
+      </InfoBox>
 
       <div className="my-6">
         <ConnectedToolsDemo />
@@ -1316,42 +1485,52 @@ function CommonQuestionsSection() {
       <div className="space-y-6">
         <div>
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+            Do I need to build my own AI agent?
+          </h3>
+          <p className="text-gray-600 dark:text-gray-400">
+            <strong>No!</strong> IMS provides a pre-configured AI assistant that works immediately.
+            Building your own would take 3-6 months and cost Rs. 50,000+/month in API fees.
+            With IMS, you get it included.
+          </p>
+        </div>
+
+        <div>
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
             Is my data secure?
           </h3>
           <p className="text-gray-600 dark:text-gray-400">
-            Yes. We use read-only connections and never store your actual data.
-            All queries are executed directly against your database through a
-            secure connection.
+            Yes. Your data is completely isolated from other users. We use encryption at rest,
+            JWT authentication, and never share your inventory data with anyone.
           </p>
         </div>
 
         <div>
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-            Can the AI modify my data?
+            How much time will I actually save?
           </h3>
           <p className="text-gray-600 dark:text-gray-400">
-            No. The AI can only execute SELECT queries. INSERT, UPDATE, DELETE,
-            and DDL operations are blocked at the database level.
+            Based on typical operations: <strong>2-4 hours daily</strong>. That&apos;s 60-120 hours per month.
+            Adding 20 items takes 5 min vs 30 min manually. Reports are instant vs 15+ min.
           </p>
         </div>
 
         <div>
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-            What databases are supported?
+            Can I use my existing database?
           </h3>
           <p className="text-gray-600 dark:text-gray-400">
-            Currently we support PostgreSQL, MySQL, and SQLite. More database
-            types are planned.
+            Yes! Connect your PostgreSQL database and the AI will understand your schema.
+            Or use our database to start immediately — no setup required.
           </p>
         </div>
 
         <div>
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-            How do scheduled tasks work?
+            What if I&apos;m not technical?
           </h3>
           <p className="text-gray-600 dark:text-gray-400">
-            Scheduled tasks run your queries automatically at specified times.
-            Results can be sent to your email or viewed in the task history.
+            Perfect! IMS uses natural language — just type what you need like you&apos;re texting
+            a colleague. No coding, no complex menus, no learning curve.
           </p>
         </div>
       </div>
@@ -1408,6 +1587,116 @@ function TroubleshootingSection() {
       <InfoBox type="info" title="Need More Help?">
         Can&apos;t find what you&apos;re looking for? Use the Contact Support
         option in the help menu to submit a ticket.
+      </InfoBox>
+    </div>
+  );
+}
+
+// ============================================
+// Developer Sections
+// ============================================
+
+function PublishedAgentsSection() {
+  return (
+    <div className="prose dark:prose-invert max-w-none">
+      <p className="text-gray-600 dark:text-gray-300">
+        Create AI-powered chat widgets for your customers — without building AI infrastructure!
+      </p>
+
+      {/* Time Savings for Developers */}
+      <div className="my-4 p-4 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg border border-indigo-200 dark:border-indigo-700">
+        <h4 className="font-semibold text-indigo-700 dark:text-indigo-400 mb-2">Developer Time Saved</h4>
+        <div className="grid grid-cols-2 gap-3 text-sm">
+          <div>
+            <span className="text-gray-500">Build from scratch:</span>
+            <span className="font-bold text-red-600 ml-2">10-15 weeks</span>
+          </div>
+          <div>
+            <span className="text-gray-500">With Published Agents:</span>
+            <span className="font-bold text-emerald-600 ml-2">15 minutes</span>
+          </div>
+        </div>
+      </div>
+
+      <h4 className="text-md font-semibold text-gray-900 dark:text-white mt-4 mb-2">What Are Published Agents?</h4>
+      <p className="text-gray-600 dark:text-gray-400 text-sm">
+        Create AI chat widgets that your customers can use to query their data.
+        Embed on any website with a simple code snippet.
+      </p>
+
+      <h4 className="text-md font-semibold text-gray-900 dark:text-white mt-4 mb-2">Features</h4>
+      <ul className="space-y-1 text-sm text-gray-600 dark:text-gray-400">
+        <li className="flex items-center gap-2">
+          <CheckCircle className="h-4 w-4 text-emerald-500" />
+          Rate limiting (configurable queries/minute)
+        </li>
+        <li className="flex items-center gap-2">
+          <CheckCircle className="h-4 w-4 text-emerald-500" />
+          Domain restrictions (allowed origins)
+        </li>
+        <li className="flex items-center gap-2">
+          <CheckCircle className="h-4 w-4 text-emerald-500" />
+          Table access control (whitelist specific tables)
+        </li>
+        <li className="flex items-center gap-2">
+          <CheckCircle className="h-4 w-4 text-emerald-500" />
+          Read-only or read-write modes
+        </li>
+        <li className="flex items-center gap-2">
+          <CheckCircle className="h-4 w-4 text-emerald-500" />
+          Usage statistics and monitoring
+        </li>
+      </ul>
+
+      <InfoBox type="tip" title="No AI Expertise Required">
+        You don&apos;t need to know ML, LLMs, or AI APIs. Just configure your agent,
+        get the embed code, and add it to your website!
+      </InfoBox>
+    </div>
+  );
+}
+
+function APIIntegrationSection() {
+  return (
+    <div className="prose dark:prose-invert max-w-none">
+      <p className="text-gray-600 dark:text-gray-300">
+        Full REST API for building custom integrations.
+      </p>
+
+      <h4 className="text-md font-semibold text-gray-900 dark:text-white mt-4 mb-2">Available Endpoints</h4>
+
+      <div className="space-y-2 my-3">
+        <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg text-sm font-mono">
+          <span className="text-emerald-600">GET</span>
+          <span className="text-gray-600 dark:text-gray-400 ml-2">/api/items</span>
+          <span className="text-gray-500 ml-2">— List inventory</span>
+        </div>
+        <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg text-sm font-mono">
+          <span className="text-blue-600">POST</span>
+          <span className="text-gray-600 dark:text-gray-400 ml-2">/api/items</span>
+          <span className="text-gray-500 ml-2">— Create item</span>
+        </div>
+        <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg text-sm font-mono">
+          <span className="text-blue-600">POST</span>
+          <span className="text-gray-600 dark:text-gray-400 ml-2">/api/billing</span>
+          <span className="text-gray-500 ml-2">— Create bill</span>
+        </div>
+        <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg text-sm font-mono">
+          <span className="text-emerald-600">GET</span>
+          <span className="text-gray-600 dark:text-gray-400 ml-2">/api/analytics/*</span>
+          <span className="text-gray-500 ml-2">— Analytics</span>
+        </div>
+      </div>
+
+      <h4 className="text-md font-semibold text-gray-900 dark:text-white mt-4 mb-2">Authentication</h4>
+      <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg text-sm font-mono">
+        <span className="text-gray-500">Authorization:</span>
+        <span className="text-gray-700 dark:text-gray-300 ml-2">Bearer YOUR_JWT_TOKEN</span>
+      </div>
+
+      <InfoBox type="info" title="API Documentation">
+        Full Swagger documentation available at <code>/docs</code> endpoint.
+        OpenAPI spec at <code>/openapi.json</code>.
       </InfoBox>
     </div>
   );
